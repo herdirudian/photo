@@ -24,7 +24,8 @@ WORKDIR /app
 
 # Install Python package dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir "setuptools<81" wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install offline model weights for face_recognition
