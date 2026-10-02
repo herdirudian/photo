@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+env/
+venv/
+.venv/
+ENV/
+
+# Project Data & Persistent volumes (do not push raw user photos or database to GitHub)
+data/raw/*
+!data/raw/.gitkeep
+data/results/*
+!data/results/.gitkeep
+data/db/*
+!data/db/.gitkeep
+
+# Environment secrets
+.env
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

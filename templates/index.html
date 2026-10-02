@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Theme Park Photo Retrieval Desk</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom scrollbar and focus rings */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .focus-ring:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- Top Navigation & System Status Bar -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-inner">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-white">ParkPhoto Retrieval</h1>
+          <p class="text-xs text-slate-400">Front Desk & Samba Export Terminal</p>
+        </div>
+      </div>
+
+      <!-- Real-time Metrics & Ingestion Indicator -->
+      <div class="flex items-center space-x-4 text-xs">
+        <div class="hidden md:flex items-center space-x-3 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+          <div class="flex items-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-slate-300 font-medium">Watchdog:</span>
+            <span class="text-white font-semibold" id="stat-photos">{{ stats.total_photos }} photos</span>
+          </div>
+          <span class="text-slate-600">|</span>
+          <div class="flex items-center space-x-1.5">
+            <span class="text-slate-300 font-medium">Indexed Faces:</span>
+            <span class="text-white font-semibold" id="stat-faces">{{ stats.total_faces }}</span>
+          </div>
+        </div>
+
+        <button 
+          id="btn-reindex" 
+          onclick="triggerReindex()"
+          title="Scan raw directory for new ride photos"
+          class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition focus-ring min-h-[36px]"
+        >
+          <svg class="w-4 h-4 text-slate-300" id="reindex-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span class="font-medium">Rescan Folder</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Operational Workspace -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+    
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Reference Image Upload & Search Parameters (5 cols) -->
+      <section class="lg:col-span-5 space-y-6">
+
+        <!-- Search Card -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <div class="border-b border-slate-100 pb-4 mb-5">
+            <h2 class="text-lg font-semibold text-slate-900">Guest Photo Lookup</h2>
+            <p class="text-sm text-slate-500 mt-0.5">Upload guest reference photo to locate ride pictures.</p>
+          </div>
+
+          <form id="search-form" onsubmit="executeSearch(event)" class="space-y-5">
+
+            <!-- Drag and Drop Upload Area -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                Reference Image
+              </label>
+
+              <div 
+                id="drop-zone"
+                onclick="document.getElementById('file-input').click()"
+                ondragover="handleDragOver(event)"
+                ondragleave="handleDragLeave(event)"
+                ondrop="handleDrop(event)"
+                class="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/50 hover:bg-blue-50/30 rounded-xl p-6 text-center cursor-pointer transition relative group"
+              >
+                <input 
+                  type="file" 
+                  id="file-input" 
+                  accept="image/jpeg,image/png,image/webp" 
+                  class="hidden" 
+                  onchange="handleFileSelect(event)"
+                />
+
+                <!-- Placeholder Preview -->
+                <div id="upload-placeholder" class="space-y-3">
+                  <div class="w-12 h-12 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-105 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span class="text-sm font-semibold text-blue-700">Select guest photo</span>
+                    <span class="text-sm text-slate-500"> or drag file here</span>
+                  </div>
+                  <p class="text-xs text-slate-400">JPEG, PNG, or WebP</p>
+                </div>
+
+                <!-- Active Image Preview -->
+                <div id="image-preview-container" class="hidden space-y-3">
+                  <div class="relative w-36 h-36 mx-auto rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-900">
+                    <img id="image-preview" src="#" alt="Guest Reference" class="w-full h-full object-cover" />
+                    <button 
+                      type="button" 
+                      onclick="clearSelectedFile(event)" 
+                      title="Clear photo"
+                      class="absolute top-1.5 right-1.5 w-6 h-6 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full flex items-center justify-center transition"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                  <div class="text-xs text-slate-600 font-medium" id="selected-file-name">filename.jpg</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Match Similarity Threshold Slider -->
+            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
+              <div class="flex items-center justify-between">
+                <label for="threshold-slider" class="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Similarity Threshold
+                </label>
+                <span id="threshold-val" class="text-sm font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded">
+                  75%
+                </span>
+              </div>
+
+              <input 
+                type="range" 
+                id="threshold-slider" 
+                min="0.50" 
+                max="0.95" 
+                step="0.01" 
+                value="0.75" 
+                oninput="updateThresholdDisplay(this.value)"
+                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+
+              <div class="flex justify-between text-[11px] text-slate-500">
+                <span>50% (Broad / Low light)</span>
+                <span class="font-medium text-slate-700">75% (Standard)</span>
+                <span>95% (Strict match)</span>
+              </div>
+            </div>
+
+            <!-- Top Results Limit -->
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-xs font-medium text-slate-600">Maximum ride photos to return:</span>
+              <select id="top-k-select" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus-ring">
+                <option value="25">25 photos</option>
+                <option value="50" selected>50 photos</option>
+                <option value="100">100 photos</option>
+              </select>
+            </div>
+
+            <!-- Submit Button -->
+            <button 
+              type="submit" 
+              id="submit-btn" 
+              class="w-full min-h-[46px] bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-lg px-4 py-2.5 shadow-sm transition flex items-center justify-center space-x-2 focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg class="w-5 h-5 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>Scan Face & Locate Photos</span>
+            </button>
+
+          </form>
+        </div>
+
+        <!-- System Architecture Information Card -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 text-xs text-slate-600">
+          <div class="font-semibold text-slate-800 uppercase tracking-wider text-[11px]">System Workflow</div>
+          <div class="space-y-2">
+            <div class="flex items-start space-x-2">
+              <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0">1</span>
+              <p><strong class="text-slate-800">Raw Ingestion:</strong> Photos dropped in <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-800">/app/data/raw</code> are automatically processed by Watchdog into FAISS vectors.</p>
+            </div>
+            <div class="flex items-start space-x-2">
+              <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0">2</span>
+              <p><strong class="text-slate-800">Vector Search:</strong> Front desk uploads reference face, FAISS finds cosine matches in milliseconds.</p>
+            </div>
+            <div class="flex items-start space-x-2">
+              <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center shrink-0">3</span>
+              <p><strong class="text-slate-800">Virtual Symlinks:</strong> System generates Linux symlinks in <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-800">/app/data/results/Customer_{ID}</code> ready for Samba copy.</p>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Column: Results & Matched Photos Gallery (7 cols) -->
+      <section class="lg:col-span-7 space-y-6">
+
+        <!-- Default Empty State -->
+        <div id="state-empty" class="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center space-y-4">
+          <div class="w-16 h-16 mx-auto bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-slate-800">No Query Submitted Yet</h3>
+            <p class="text-sm text-slate-500 max-w-sm mx-auto mt-1">Upload a guest reference photo to scan park ride images and generate a customer retrieval folder.</p>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="state-loading" class="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center space-y-4">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+          <div>
+            <h3 class="text-base font-semibold text-slate-800">Searching Photo Database</h3>
+            <p class="text-sm text-slate-500 max-w-sm mx-auto mt-1">Extracting facial landmarks and calculating FAISS cosine vector similarities...</p>
+          </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="state-error" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 space-y-2">
+          <div class="flex items-center space-x-2">
+            <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h4 class="font-semibold text-sm" id="error-title">Search Failed</h4>
+          </div>
+          <p class="text-xs text-rose-700" id="error-message">Unable to locate face in image.</p>
+          <div class="pt-2">
+            <button onclick="dismissError()" class="text-xs font-semibold text-rose-800 hover:text-rose-950 underline">Try again</button>
+          </div>
+        </div>
+
+        <!-- Success Results Container -->
+        <div id="state-results" class="hidden space-y-6">
+
+          <!-- Customer Folder Header & Samba Network Path Card -->
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <span class="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200" id="res-customer-id">
+                  Customer_00000000
+                </span>
+                <h3 class="text-lg font-bold text-slate-900 mt-1">Matched Ride Photos</h3>
+              </div>
+              <div class="flex items-center space-x-3 text-xs text-slate-500">
+                <span id="res-match-count" class="font-semibold text-slate-900 text-sm">0 photos found</span>
+                <span>in <strong id="res-query-time" class="text-slate-700">0 ms</strong></span>
+              </div>
+            </div>
+
+            <!-- Samba Network Path with 1-Click Copy -->
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Samba Virtual Folder (Symlinks)
+              </label>
+              <div class="flex items-center space-x-2">
+                <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-800 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
+                  \\samba-server\park-photos\results\Customer_XXXX
+                </div>
+                <button 
+                  type="button" 
+                  onclick="copySambaPath()" 
+                  id="btn-copy-samba"
+                  class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-white font-medium text-xs rounded-lg transition focus-ring shrink-0 flex items-center space-x-1.5"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  <span id="copy-btn-text">Copy Path</span>
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500">
+                Staff can paste this network path directly into Windows File Explorer or Mac Finder to copy photos.
+              </p>
+            </div>
+
+            <!-- Download ZIP Option -->
+            <div class="pt-2 flex justify-end">
+              <a 
+                id="btn-download-zip" 
+                href="#" 
+                class="inline-flex items-center space-x-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition focus-ring shadow-sm"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Download All as ZIP</span>
+              </a>
+            </div>
+
+          </div>
+
+          <!-- Matched Photos Gallery Grid -->
+          <div class="space-y-3">
+            <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Results Gallery</h4>
+            <div id="photos-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Dynamically populated photo cards -->
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- Photo Lightbox Modal for Inspection -->
+  <div id="lightbox-modal" class="fixed inset-0 z-50 bg-slate-900/90 hidden items-center justify-center p-4">
+    <div class="relative max-w-4xl w-full bg-slate-950 rounded-xl overflow-hidden shadow-2xl border border-slate-800">
+      <div class="p-3 bg-slate-900 border-b border-slate-800 flex justify-between items-center text-white">
+        <span class="text-xs font-medium font-mono" id="modal-filename">photo.jpg</span>
+        <button onclick="closeLightbox()" class="text-slate-400 hover:text-white text-lg font-bold px-2 py-1">&times;</button>
+      </div>
+      <div class="p-2 flex items-center justify-center bg-black min-h-[300px]">
+        <img id="modal-image" src="" alt="Enlarged photo preview" class="max-h-[75vh] w-auto object-contain rounded" />
+      </div>
+      <div class="p-3 bg-slate-900 text-xs text-slate-300 flex justify-between items-center">
+        <span id="modal-info">Match Confidence: 85%</span>
+        <a id="modal-download-link" href="#" target="_blank" class="text-blue-400 hover:underline">Open Full Res</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operational JavaScript -->
+  <script>
+    let currentSelectedFile = null;
+    let currentCustomerId = null;
+
+    function updateThresholdDisplay(val) {
+      const percentage = Math.round(parseFloat(val) * 100);
+      document.getElementById('threshold-val').textContent = `${percentage}%`;
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.add('border-blue-500', 'bg-blue-50/50');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.remove('border-blue-500', 'bg-blue-50/50');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.remove('border-blue-500', 'bg-blue-50/50');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        processSelectedFile(e.dataTransfer.files[0]);
+      }
+    }
+
+    function handleFileSelect(e) {
+      if (e.target.files && e.target.files.length > 0) {
+        processSelectedFile(e.target.files[0]);
+      }
+    }
+
+    function processSelectedFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please choose an image file (JPEG, PNG, or WebP).');
+        return;
+      }
+      currentSelectedFile = file;
+      document.getElementById('selected-file-name').textContent = file.name;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('image-preview').src = e.target.result;
+        document.getElementById('upload-placeholder').classList.add('hidden');
+        document.getElementById('image-preview-container').classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearSelectedFile(e) {
+      if (e) e.stopPropagation();
+      currentSelectedFile = null;
+      document.getElementById('file-input').value = '';
+      document.getElementById('upload-placeholder').classList.remove('hidden');
+      document.getElementById('image-preview-container').classList.add('hidden');
+    }
+
+    function showState(state) {
+      document.getElementById('state-empty').classList.add('hidden');
+      document.getElementById('state-loading').classList.add('hidden');
+      document.getElementById('state-error').classList.add('hidden');
+      document.getElementById('state-results').classList.add('hidden');
+
+      if (state === 'empty') document.getElementById('state-empty').classList.remove('hidden');
+      if (state === 'loading') document.getElementById('state-loading').classList.remove('hidden');
+      if (state === 'error') document.getElementById('state-error').classList.remove('hidden');
+      if (state === 'results') document.getElementById('state-results').classList.remove('hidden');
+    }
+
+    function dismissError() {
+      showState('empty');
+    }
+
+    async function executeSearch(e) {
+      e.preventDefault();
+
+      if (!currentSelectedFile) {
+        alert('Please select or drop a guest reference photo first.');
+        return;
+      }
+
+      const threshold = document.getElementById('threshold-slider').value;
+      const topK = document.getElementById('top-k-select').value;
+
+      const formData = new FormData();
+      formData.append('file', currentSelectedFile);
+      formData.append('threshold', threshold);
+      formData.append('top_k', topK);
+
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.disabled = true;
+      showState('loading');
+
+      try {
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          showState('error');
+          document.getElementById('error-title').textContent = data.error || 'Face Detection Alert';
+          document.getElementById('error-message').textContent = data.suggestion || data.detail || 'Could not find a valid face in the provided reference photo.';
+          submitBtn.disabled = false;
+          return;
+        }
+
+        renderResults(data);
+      } catch (err) {
+        console.error(err);
+        showState('error');
+        document.getElementById('error-title').textContent = 'Network or Processing Error';
+        document.getElementById('error-message').textContent = 'Server could not complete request. Please verify server status.';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    function renderResults(data) {
+      currentCustomerId = data.customer_id;
+      document.getElementById('res-customer-id').textContent = data.customer_id;
+      document.getElementById('res-match-count').textContent = `${data.match_count} photos found`;
+      document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
+      document.getElementById('res-samba-path').textContent = data.samba_path;
+      document.getElementById('btn-download-zip').href = `/api/results/${data.customer_id}/download-zip`;
+
+      const grid = document.getElementById('photos-grid');
+      grid.innerHTML = '';
+
+      if (data.matches.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center text-amber-900">
+            <p class="font-semibold text-sm">No photos matched this face at threshold ${(data.threshold * 100).toFixed(0)}%</p>
+            <p class="text-xs text-amber-700 mt-1">Try lowering the similarity threshold slider to 65% or 70% to detect matches under different lighting or angles.</p>
+          </div>
+        `;
+      } else {
+        data.matches.forEach(item => {
+          const matchPercent = Math.round(item.max_score * 100);
+          const card = document.createElement('div');
+          card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow transition flex flex-col group";
+
+          card.innerHTML = `
+            <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%')">
+              <img src="${item.preview_url}" alt="${item.file_name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              <div class="absolute top-2 right-2 bg-emerald-500 text-white font-bold text-xs px-2 py-0.5 rounded shadow">
+                ${matchPercent}% Match
+              </div>
+              <div class="absolute bottom-2 left-2 bg-slate-950/80 text-white text-[11px] px-2 py-0.5 rounded font-mono truncate max-w-[85%]">
+                ${item.file_name}
+              </div>
+            </div>
+            <div class="p-3 flex justify-between items-center text-xs bg-slate-50 border-t border-slate-100">
+              <span class="text-slate-500">${item.num_faces} face(s) in photo</span>
+              <button 
+                type="button" 
+                onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%')"
+                class="text-blue-600 hover:text-blue-800 font-semibold focus-ring"
+              >
+                Inspect Photo
+              </button>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      }
+
+      showState('results');
+    }
+
+    function copySambaPath() {
+      const pathText = document.getElementById('res-samba-path').textContent.trim();
+      navigator.clipboard.writeText(pathText).then(() => {
+        const btnText = document.getElementById('copy-btn-text');
+        btnText.textContent = "Copied!";
+        setTimeout(() => {
+          btnText.textContent = "Copy Path";
+        }, 2000);
+      }).catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
+    }
+
+    function openLightbox(imgUrl, filename, matchInfo) {
+      document.getElementById('modal-image').src = imgUrl;
+      document.getElementById('modal-filename').textContent = filename;
+      document.getElementById('modal-info').textContent = `Match Confidence: ${matchInfo}`;
+      document.getElementById('modal-download-link').href = imgUrl;
+      const modal = document.getElementById('lightbox-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeLightbox() {
+      const modal = document.getElementById('lightbox-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeLightbox();
+    });
+
+    async function triggerReindex() {
+      const btn = document.getElementById('btn-reindex');
+      const icon = document.getElementById('reindex-icon');
+      btn.disabled = true;
+      icon.classList.add('animate-spin');
+
+      try {
+        const res = await fetch('/api/reindex', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          refreshStats();
+        }
+      } catch (e) {
+        console.error("Reindex error:", e);
+      } finally {
+        setTimeout(() => {
+          icon.classList.remove('animate-spin');
+          btn.disabled = false;
+        }, 800);
+      }
+    }
+
+    async function refreshStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        document.getElementById('stat-photos').textContent = `${data.total_photos} photos`;
+        document.getElementById('stat-faces').textContent = data.total_faces;
+      } catch (e) {
+        console.error("Stats refresh error:", e);
+      }
+    }
+
+    // Auto-refresh stats every 15 seconds
+    setInterval(refreshStats, 15000);
+  </script>
+
+</body>
+</html>

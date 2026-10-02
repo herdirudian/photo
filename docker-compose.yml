@@ -1,0 +1,28 @@
+services:
+  photo-retrieval:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: theme_park_photo_retrieval
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Raw park ride photos dropped here by staff or automated cameras
+      - ./data/raw:/app/data/raw
+      # Virtual result folders with customer symlinks generated here
+      - ./data/results:/app/data/results
+      # SQLite database and FAISS binary index cache
+      - ./data/db:/app/data/db
+    environment:
+      - RAW_DIR=/app/data/raw
+      - RESULTS_DIR=/app/data/results
+      - DB_DIR=/app/data/db
+      - DEFAULT_SIMILARITY_THRESHOLD=0.75
+      - FACE_DETECTION_MODEL=hog
+      # Optional Samba host mount prefix displayed in operator UI
+      - SAMBA_NETWORK_PREFIX=/mnt/samba/results
+    deploy:
+      resources:
+        limits:
+          memory: 4G
