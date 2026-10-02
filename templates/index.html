@@ -116,8 +116,62 @@
                 </div>
               </div>
 
-              <!-- Live Webcam Scanning Panel -->
+              <!-- Live Webcam Scanning Panel with Multi-Camera / USB Support -->
               <div id="camera-panel" class="hidden bg-slate-900 rounded-xl overflow-hidden border border-slate-300 relative shadow-sm">
+                
+                <!-- Camera Header with Device Selector & Options -->
+                <div class="p-2.5 bg-slate-950 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
+                  <div class="flex items-center space-x-2 flex-1 min-w-[200px]">
+                    <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <select 
+                      id="camera-select" 
+                      onchange="onCameraDeviceSelect(this.value)"
+                      class="flex-1 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none truncate"
+                      title="Pilih Kamera Bawaan Laptop atau Kamera USB"
+                    >
+                      <option value="">Memuat daftar kamera...</option>
+                    </select>
+                  </div>
+
+                  <div class="flex items-center space-x-1.5 shrink-0">
+                    <button 
+                      type="button" 
+                      onclick="refreshCameraDevicesList(true)" 
+                      title="Perbarui / Deteksi Ulang Kamera USB"
+                      class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                    
+                    <button 
+                      type="button" 
+                      id="btn-toggle-mirror"
+                      onclick="toggleCameraMirror()" 
+                      title="Balik Cermin (Mirror on/off)"
+                      class="px-2 py-1 bg-blue-600 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                      <span>Mirror</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onclick="openCameraGuideModal()" 
+                      title="Bantuan Izin Kamera"
+                      class="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs font-bold transition flex items-center justify-center"
+                    >
+                      ?
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Video Viewport -->
                 <div class="relative w-full aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
                   <video id="webcam-feed" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
                   
@@ -128,21 +182,23 @@
                       Posisikan wajah tamu di dalam oval
                     </span>
                   </div>
+
+                  <!-- Toast Notification for USB Plug & Play -->
+                  <div id="camera-toast" class="hidden absolute top-3 bg-slate-900/90 text-emerald-400 border border-emerald-500/30 text-xs px-3 py-1.5 rounded-lg shadow-lg transition duration-300">
+                    Kamera baru terdeteksi!
+                  </div>
                 </div>
 
                 <!-- Camera Controls -->
                 <div class="p-3 bg-slate-950 flex items-center justify-between gap-2 border-t border-slate-800">
                   <button 
                     type="button" 
-                    onclick="switchCameraFacing()" 
-                    id="btn-switch-cam"
-                    class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
-                    title="Ganti Kamera Depan/Belakang"
+                    onclick="switchInputMode('upload')" 
+                    class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
+                    Batal
                   </button>
+
                   <button 
                     type="button" 
                     onclick="captureSnapshot()" 
@@ -152,13 +208,6 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     </svg>
                     <span>Ambil Foto Tamu</span>
-                  </button>
-                  <button 
-                    type="button" 
-                    onclick="switchInputMode('upload')" 
-                    class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
-                  >
-                    Batal
                   </button>
                 </div>
               </div>
@@ -420,12 +469,152 @@
     </div>
   </div>
 
+  <!-- Modal Panduan Izin Akses Kamera (Chrome / Edge HTTP) -->
+  <div id="modal-camera-guide" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="relative max-w-xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-blue-700 to-indigo-800 p-5 text-white flex justify-between items-start">
+        <div class="space-y-1">
+          <div class="inline-flex items-center space-x-1.5 bg-blue-500/30 px-2.5 py-0.5 rounded text-[11px] font-semibold text-blue-100">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>Izin Akses Kamera Jaringan Lokal (HTTP)</span>
+          </div>
+          <h3 class="text-base font-bold">Cara Mengaktifkan Kamera di Google Chrome / Edge</h3>
+        </div>
+        <button onclick="closeCameraGuideModal()" class="text-blue-200 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+      </div>
+
+      <!-- Body / Steps -->
+      <div class="p-6 space-y-4 text-xs text-slate-700 leading-relaxed">
+        <div class="bg-amber-50 border border-amber-200 p-3.5 rounded-xl text-xs space-y-1">
+          <p class="font-bold text-amber-900">Mengapa popup error ini muncul?</p>
+          <p class="text-amber-800">
+            Browser modern (Chrome/Edge) membatasi akses webcam pada alamat IP jaringan lokal non-HTTPS. Agar kamera laptop dan webcam USB Plug & Play dapat digunakan, cukup berikan izin 1 kali pada komputer operator ini:
+          </p>
+        </div>
+
+        <div class="space-y-3">
+          <!-- Step 1 -->
+          <div class="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            <span class="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow">1</span>
+            <div class="flex-1 space-y-1.5">
+              <p class="font-semibold text-slate-900">Buka pengaturan Flags di tab baru browser:</p>
+              <div class="flex items-center space-x-2">
+                <input 
+                  type="text" 
+                  readonly 
+                  id="flag-url-input" 
+                  value="chrome://flags/#unsafely-treat-insecure-origin-as-secure" 
+                  class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-[11px] font-mono select-all text-slate-800"
+                />
+                <button 
+                  type="button" 
+                  onclick="copyTextFromElement('flag-url-input', this)" 
+                  class="shrink-0 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition"
+                >
+                  Salin
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-500">*(Jika memakai Microsoft Edge, buka: <code class="font-mono bg-slate-200/70 px-1 py-0.5 rounded">edge://flags/#unsafely-treat-insecure-origin-as-secure</code>)</p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            <span class="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow">2</span>
+            <div class="flex-1 space-y-1.5">
+              <p class="font-semibold text-slate-900">Aktifkan opsi & masukkan alamat IP server ini:</p>
+              <p class="text-slate-600">Ubah dropdown dari <strong>Disabled</strong> menjadi <strong>Enabled</strong>, lalu isi kotak teks dengan:</p>
+              <div class="flex items-center space-x-2">
+                <input 
+                  type="text" 
+                  readonly 
+                  id="server-url-input" 
+                  value="http://192.168.100.90:8000" 
+                  class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-[11px] font-mono select-all font-bold text-blue-700"
+                />
+                <button 
+                  type="button" 
+                  onclick="copyTextFromElement('server-url-input', this)" 
+                  class="shrink-0 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition"
+                >
+                  Salin
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            <span class="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow">3</span>
+            <div class="flex-1 space-y-1">
+              <p class="font-semibold text-slate-900">Klik tombol "Relaunch" di pojok kanan bawah Chrome</p>
+              <p class="text-slate-600">Browser akan me-restart seketika. Buka kembali halaman ini, lalu klik tombol <strong>"Buka Kamera"</strong> dan pilih <strong>"Allow"</strong>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="closeCameraGuideModal()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-lg text-xs transition">
+          Saya Mengerti / Tutup
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Operational JavaScript -->
   <script>
     let currentSelectedFile = null;
     let currentCustomerId = null;
     let activeMediaStream = null;
-    let currentFacingMode = 'user';
+    let currentSelectedDeviceId = null;
+    let isCameraMirrored = true;
+    let toastTimeout = null;
+
+    function openCameraGuideModal() {
+      document.getElementById('modal-camera-guide').classList.remove('hidden');
+      document.getElementById('modal-camera-guide').classList.add('flex');
+    }
+
+    function closeCameraGuideModal() {
+      document.getElementById('modal-camera-guide').classList.add('hidden');
+      document.getElementById('modal-camera-guide').classList.remove('flex');
+    }
+
+    function copyTextFromElement(elementId, btnElement) {
+      const input = document.getElementById(elementId);
+      if (!input) return;
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(() => {
+        const origText = btnElement.textContent;
+        btnElement.textContent = "Disalin!";
+        btnElement.classList.add('bg-emerald-600');
+        setTimeout(() => {
+          btnElement.textContent = origText;
+          btnElement.classList.remove('bg-emerald-600');
+        }, 1800);
+      }).catch(err => {
+        console.error("Gagal menyalin: ", err);
+      });
+    }
+
+    function showCameraToast(msg) {
+      const toast = document.getElementById('camera-toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 3000);
+    }
 
     async function switchInputMode(mode) {
       if (mode === 'camera') {
@@ -435,7 +624,7 @@
         document.getElementById('btn-mode-camera').classList.remove('bg-slate-100', 'text-slate-600');
         document.getElementById('btn-mode-upload').classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-200');
         document.getElementById('btn-mode-upload').classList.add('bg-slate-100', 'text-slate-600');
-        await startCamera();
+        await startCamera(currentSelectedDeviceId);
       } else {
         closeCamera();
         document.getElementById('drop-zone').classList.remove('hidden');
@@ -447,33 +636,146 @@
       }
     }
 
-    async function startCamera() {
+    async function startCamera(deviceId = null) {
+      // Periksa apakah browser mengizinkan mediaDevices (Secure Context check)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        openCameraGuideModal();
+        switchInputMode('upload');
+        return;
+      }
+
       try {
         if (activeMediaStream) {
           activeMediaStream.getTracks().forEach(t => t.stop());
+          activeMediaStream = null;
         }
+
+        let videoConstraint = true;
+        if (deviceId) {
+          videoConstraint = { deviceId: { exact: deviceId } };
+        } else if (currentSelectedDeviceId) {
+          videoConstraint = { deviceId: { exact: currentSelectedDeviceId } };
+        } else {
+          videoConstraint = { width: { ideal: 1280 }, height: { ideal: 720 } };
+        }
+
         const constraints = {
-          video: {
-            facingMode: currentFacingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
+          video: videoConstraint,
           audio: false
         };
+
         activeMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         const video = document.getElementById('webcam-feed');
         video.srcObject = activeMediaStream;
         await video.play();
+
+        // Refresh daftar kamera setelah izin kamera aktif (agar label nama perangkat USB / bawaan laptop muncul)
+        await refreshCameraDevicesList();
+
       } catch (err) {
         console.error("Camera access error:", err);
-        alert("Tidak dapat mengakses kamera. Pastikan browser diizinkan mengakses kamera atau kamera USB terhubung dengan baik.");
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError' || !window.isSecureContext) {
+          openCameraGuideModal();
+        } else if (err.name === 'OverconstrainedError') {
+          // Jika deviceId lama tidak valid lagi (misal USB dicabut), fallback ke kamera apa pun
+          currentSelectedDeviceId = null;
+          await startCamera(null);
+          return;
+        } else {
+          alert("Tidak dapat mengakses kamera: " + (err.message || err.name) + "\nPastikan kamera USB terpasang atau tidak sedang digunakan oleh aplikasi lain.");
+        }
         switchInputMode('upload');
       }
     }
 
-    function switchCameraFacing() {
-      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-      startCamera();
+    async function refreshCameraDevicesList(userTriggered = false) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        const select = document.getElementById('camera-select');
+        if (!select) return;
+
+        select.innerHTML = '';
+
+        if (videoDevices.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'Tidak ada kamera ditemukan';
+          select.appendChild(opt);
+          return;
+        }
+
+        // Cari active deviceId dari stream yang sedang berjalan
+        let activeDeviceId = null;
+        if (activeMediaStream) {
+          const track = activeMediaStream.getVideoTracks()[0];
+          if (track && track.getSettings) {
+            activeDeviceId = track.getSettings().deviceId || null;
+          }
+        }
+
+        videoDevices.forEach((dev, idx) => {
+          const opt = document.createElement('option');
+          opt.value = dev.deviceId;
+          let label = dev.label;
+          if (!label || label.trim() === '') {
+            label = `Kamera ${idx + 1}`;
+          }
+
+          // Berikan icon & petunjuk apakah ini USB Camera atau Kamera Laptop
+          const lower = label.toLowerCase();
+          if (lower.includes('usb') || lower.includes('uvc') || lower.includes('plug')) {
+            label = `🔌 ${label} (USB Plug & Play)`;
+          } else if (lower.includes('integrated') || lower.includes('internal') || lower.includes('facetime') || lower.includes('front') || lower.includes('hd web')) {
+            label = `💻 ${label} (Kamera Bawaan Laptop)`;
+          } else {
+            label = `📷 ${label}`;
+          }
+
+          opt.textContent = label;
+
+          if (activeDeviceId && dev.deviceId === activeDeviceId) {
+            opt.selected = true;
+            currentSelectedDeviceId = dev.deviceId;
+          } else if (!activeDeviceId && (!currentSelectedDeviceId || dev.deviceId === currentSelectedDeviceId)) {
+            opt.selected = true;
+            currentSelectedDeviceId = dev.deviceId;
+          }
+
+          select.appendChild(opt);
+        });
+
+        if (userTriggered) {
+          showCameraToast(`${videoDevices.length} kamera terdeteksi`);
+        }
+
+      } catch (err) {
+        console.warn("Gagal merefresh perangkat kamera:", err);
+      }
+    }
+
+    async function onCameraDeviceSelect(deviceId) {
+      if (!deviceId || deviceId === currentSelectedDeviceId) return;
+      currentSelectedDeviceId = deviceId;
+      await startCamera(deviceId);
+    }
+
+    function toggleCameraMirror() {
+      isCameraMirrored = !isCameraMirrored;
+      const video = document.getElementById('webcam-feed');
+      const btn = document.getElementById('btn-toggle-mirror');
+      
+      if (isCameraMirrored) {
+        video.classList.add('-scale-x-100');
+        btn.classList.add('bg-blue-600', 'text-white');
+        btn.classList.remove('bg-slate-800', 'text-slate-300');
+      } else {
+        video.classList.remove('-scale-x-100');
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('bg-slate-800', 'text-slate-300');
+      }
     }
 
     function closeCamera() {
@@ -497,8 +799,8 @@
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
 
-      // Mirror snapshot jika kamera depan
-      if (currentFacingMode === 'user') {
+      // Mirror snapshot jika opsi cermin aktif
+      if (isCameraMirrored) {
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
       }
@@ -517,6 +819,15 @@
         // Tutup feed kamera dan kembali ke tampilan preview
         switchInputMode('upload');
       }, 'image/jpeg', 0.92);
+    }
+
+    // Listener otomatis saat USB Webcam dicolokkan atau dicabut (Plug & Play)
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', async () => {
+        console.log("Device change detected (USB Plug/Unplug)");
+        showCameraToast("Perangkat kamera berubah (Plug & Play)...");
+        await refreshCameraDevicesList();
+      });
     }
 
     function updateThresholdDisplay(val) {
