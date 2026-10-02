@@ -952,7 +952,12 @@
       document.getElementById('res-customer-id').textContent = data.customer_id;
       document.getElementById('res-match-count').textContent = `${data.match_count} photos found`;
       document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
-      document.getElementById('res-samba-path').textContent = data.samba_path;
+      let sambaPath = data.samba_path || '';
+      if (!sambaPath.startsWith('\\\\')) {
+        const host = window.location.hostname || '192.168.100.90';
+        sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
+      }
+      document.getElementById('res-samba-path').textContent = sambaPath;
       document.getElementById('btn-download-zip').href = `/api/results/${data.customer_id}/download-zip`;
 
       const grid = document.getElementById('photos-grid');

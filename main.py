@@ -75,7 +75,6 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
-    """Serve the primary front-desk operator dashboard."""
     stats = db_manager.get_stats()
     context = {
         "request": request,
@@ -135,6 +134,7 @@ async def trigger_reindex():
 
 @app.post("/api/search")
 async def search_guest_photos(
+    request: Request,
     file: UploadFile = File(...),
     threshold: float = Form(DEFAULT_THRESHOLD),
     top_k: int = Form(50)
@@ -216,25 +216,24 @@ async def search_guest_photos(
 
         link_dest = os.path.join(customer_dir, target_name)
 
-        # Generate symlink (using relative path for seamless Samba/network share portability)
+        # Generate native file entry (prefer hardlink: 0 bytes disk overhead, native file for Windows Samba Explorer)
         try:
-            rel_src = os.path.relpath(src_path, customer_dir)
             if os.path.exists(link_dest) or os.path.islink(link_dest):
                 os.remove(link_dest)
-            os.symlink(rel_src, link_dest)
+            os.link(src_path, link_dest)
             created_symlinks.append(link_dest)
         except OSError:
-            # Fallback to absolute symlink or copy if relative symlink not supported on OS
+            # Fallback to direct file copy so Windows Explorer can always copy and preview
             try:
-                os.symlink(src_path, link_dest)
+                shutil.copy2(src_path, link_dest)
                 created_symlinks.append(link_dest)
             except OSError:
                 try:
-                    os.link(src_path, link_dest)
+                    rel_src = os.path.relpath(src_path, customer_dir)
+                    os.symlink(rel_src, link_dest)
                     created_symlinks.append(link_dest)
                 except OSError:
-                    shutil.copy2(src_path, link_dest)
-                    created_symlinks.append(link_dest)
+                    pass
 
         # Attach preview URL
         item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
@@ -258,8 +257,15 @@ async def search_guest_photos(
     with open(os.path.join(customer_dir, "search_summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary_data, f, indent=2)
 
-    # Format Samba path for front-desk operators
-    samba_path = os.path.join(SAMBA_PREFIX, customer_folder_name).replace("/", "\\")
+    # Format Samba path dynamically using the accessed server IP / hostname
+    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
+    samba_prefix = SAMBA_PREFIX
+    if not samba_prefix or samba_prefix.startswith("/mnt") or "samba-server" in samba_prefix or not samba_prefix.startswith(r"\\"):
+        samba_path = rf"\\{host}\park-photos\results\{customer_folder_name}"
+    else:
+        samba_path = os.path.join(samba_prefix, customer_folder_name).replace("/", "\\")
+        if not samba_path.startswith(r"\\"):
+            samba_path = rf"\\{host}\park-photos\results\{customer_folder_name}"
 
     return {
         "success": True,

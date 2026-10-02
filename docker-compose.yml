@@ -26,8 +26,8 @@ services:
       - DB_DIR=/app/data/db
       - DEFAULT_SIMILARITY_THRESHOLD=0.75
       - FACE_DETECTION_MODEL=hog
-      # Optional Samba host mount prefix displayed in operator UI
-      - SAMBA_NETWORK_PREFIX=/mnt/samba/results
+      # Samba network path displayed to operators for one-click copy-paste
+      - SAMBA_NETWORK_PREFIX=\\\\192.168.100.90\\park-photos\\results
     deploy:
       resources:
         limits:
