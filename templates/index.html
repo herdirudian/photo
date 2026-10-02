@@ -264,30 +264,36 @@
             <!-- Match Similarity Threshold Slider -->
             <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
               <div class="flex items-center justify-between">
-                <label for="threshold-slider" class="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Similarity Threshold
-                </label>
-                <span id="threshold-val" class="text-sm font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded">
-                  75%
+                <div>
+                  <label for="threshold-slider" class="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                    Similarity Threshold (Tingkat Akurasi)
+                  </label>
+                  <span class="text-[11px] text-slate-500">Mencegah muka orang lain ikut muncul</span>
+                </div>
+                <span id="threshold-val" class="text-sm font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded">
+                  82%
                 </span>
               </div>
 
               <input 
                 type="range" 
                 id="threshold-slider" 
-                min="0.50" 
+                min="0.65" 
                 max="0.95" 
                 step="0.01" 
-                value="0.75" 
+                value="0.82" 
                 oninput="updateThresholdDisplay(this.value)"
-                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
               />
 
               <div class="flex justify-between text-[11px] text-slate-500">
-                <span>50% (Broad / Low light)</span>
-                <span class="font-medium text-slate-700">75% (Standard)</span>
-                <span>95% (Strict match)</span>
+                <span>65% (Rentan salah orang)</span>
+                <span class="font-bold text-emerald-700">82% (Standar Akurat)</span>
+                <span>95% (Sangat Ketat)</span>
               </div>
+              <p class="text-[11px] text-slate-500 bg-white p-2 rounded border border-slate-200/80">
+                💡 <strong>Tips:</strong> Gunakan <strong>82% - 88%</strong> untuk wahana yang ramai orang. Turunkan ke <strong>75%</strong> hanya jika foto wahana redup atau posisi wajah tamu agak miring.
+              </p>
             </div>
 
             <!-- Top Results Limit -->
@@ -950,7 +956,7 @@
     function renderResults(data) {
       currentCustomerId = data.customer_id;
       document.getElementById('res-customer-id').textContent = data.customer_id;
-      document.getElementById('res-match-count').textContent = `${data.match_count} photos found`;
+      document.getElementById('res-match-count').textContent = `${data.match_count} foto cocok ditemukan`;
       document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
       let sambaPath = data.samba_path || '';
       if (!sambaPath.startsWith('\\\\')) {
@@ -966,8 +972,8 @@
       if (data.matches.length === 0) {
         grid.innerHTML = `
           <div class="col-span-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center text-amber-900">
-            <p class="font-semibold text-sm">No photos matched this face at threshold ${(data.threshold * 100).toFixed(0)}%</p>
-            <p class="text-xs text-amber-700 mt-1">Try lowering the similarity threshold slider to 65% or 70% to detect matches under different lighting or angles.</p>
+            <p class="font-semibold text-sm">Tidak ada foto yang cocok pada akurasi ${(data.threshold * 100).toFixed(0)}%</p>
+            <p class="text-xs text-amber-700 mt-1">Coba turunkan slider akurasi ke 75% jika foto wahana redup atau posisi wajah tamu agak miring.</p>
           </div>
         `;
       } else {
@@ -979,21 +985,23 @@
           card.innerHTML = `
             <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%')">
               <img src="${item.preview_url}" alt="${item.file_name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
-              <div class="absolute top-2 right-2 bg-emerald-500 text-white font-bold text-xs px-2 py-0.5 rounded shadow">
-                ${matchPercent}% Match
+              <div class="absolute top-2 right-2 bg-emerald-600 text-white font-bold text-xs px-2.5 py-0.5 rounded shadow flex items-center space-x-1">
+                <span>✓ ${matchPercent}% Cocok</span>
               </div>
               <div class="absolute bottom-2 left-2 bg-slate-950/80 text-white text-[11px] px-2 py-0.5 rounded font-mono truncate max-w-[85%]">
                 ${item.file_name}
               </div>
             </div>
             <div class="p-3 flex justify-between items-center text-xs bg-slate-50 border-t border-slate-100">
-              <span class="text-slate-500">${item.num_faces} face(s) in photo</span>
+              <span class="text-slate-600 font-medium">
+                ${item.num_faces > 1 ? `👥 ${item.num_faces} orang (Kotak Hijau = Tamu)` : '👤 1 orang'}
+              </span>
               <button 
                 type="button" 
                 onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%')"
                 class="text-blue-600 hover:text-blue-800 font-semibold focus-ring"
               >
-                Inspect Photo
+                Perbesar Foto
               </button>
             </div>
           `;

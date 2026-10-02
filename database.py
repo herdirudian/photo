@@ -53,15 +53,36 @@ class FaceEngine:
             return []
 
         # Find all face locations (top, right, bottom, left)
-        locations = face_recognition.face_locations(image, model=self.model)
+        locations = face_recognition.face_locations(image, number_of_times_to_upsample=1, model=self.model)
+        # If no faces found, retry with upsample=2 for small/distant faces in crowds (if image size is reasonable)
+        if not locations:
+            h, w = image.shape[:2]
+            if max(h, w) <= 2500:
+                try:
+                    locations = face_recognition.face_locations(image, number_of_times_to_upsample=2, model=self.model)
+                except Exception:
+                    pass
+
         if not locations:
             return []
 
-        # Compute 128-d encodings for each location
-        encodings = face_recognition.face_encodings(image, known_face_locations=locations)
+        # Filter out tiny blurry false detections (< 30px) that cause random false matches
+        filtered_locations = []
+        for loc in locations:
+            top, right, bottom, left = loc
+            face_w = right - left
+            face_h = bottom - top
+            if face_w >= 28 and face_h >= 28:
+                filtered_locations.append(loc)
+
+        if not filtered_locations:
+            filtered_locations = locations
+
+        # Compute 128-d encodings using the high-accuracy 68-landmark model
+        encodings = face_recognition.face_encodings(image, known_face_locations=filtered_locations, num_jitters=1, model="large")
 
         results = []
-        for loc, enc in zip(locations, encodings):
+        for loc, enc in zip(filtered_locations, encodings):
             # Normalize vector to unit length for cosine similarity via inner product
             norm = np.linalg.norm(enc)
             if norm > 0:
@@ -77,7 +98,7 @@ class FaceEngine:
         return results
 
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
-        """Extract face locations and encodings from in-memory bytes."""
+        """Extract face locations and encodings from in-memory bytes with jittering for high query accuracy."""
         if not FACE_REC_AVAILABLE:
             raise RuntimeError("face_recognition is not available in current environment")
 
@@ -90,11 +111,15 @@ class FaceEngine:
             image_obj = image_obj.convert("RGB")
         image_np = np.array(image_obj)
 
-        locations = face_recognition.face_locations(image_np, model=self.model)
+        locations = face_recognition.face_locations(image_np, number_of_times_to_upsample=1, model=self.model)
+        if not locations:
+            locations = face_recognition.face_locations(image_np, number_of_times_to_upsample=2, model=self.model)
+
         if not locations:
             return []
 
-        encodings = face_recognition.face_encodings(image_np, known_face_locations=locations)
+        # For the query guest photo, use num_jitters=2 and model="large" to produce an ultra-stable embedding
+        encodings = face_recognition.face_encodings(image_np, known_face_locations=locations, num_jitters=2, model="large")
         results = []
         for loc, enc in zip(locations, encodings):
             norm = np.linalg.norm(enc)
@@ -411,12 +436,14 @@ class DatabaseManager:
                         "created_at": r["created_at"],
                         "num_faces": r["num_faces"],
                         "max_score": round(score, 4),
+                        "best_vector_id": vid,
                         "matched_faces": [face_info]
                     }
                 else:
                     results_by_photo[photo_id]["matched_faces"].append(face_info)
                     if score > results_by_photo[photo_id]["max_score"]:
                         results_by_photo[photo_id]["max_score"] = round(score, 4)
+                        results_by_photo[photo_id]["best_vector_id"] = vid
 
             # Sort results descending by highest similarity score
             sorted_results = sorted(

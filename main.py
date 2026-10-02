@@ -33,7 +33,7 @@ RAW_DIR = os.getenv("RAW_DIR", os.path.abspath("./data/raw"))
 RESULTS_DIR = os.getenv("RESULTS_DIR", os.path.abspath("./data/results"))
 DB_DIR = os.getenv("DB_DIR", os.path.abspath("./data/db"))
 SAMBA_PREFIX = os.getenv("SAMBA_NETWORK_PREFIX", r"\\samba-server\park-photos\results")
-DEFAULT_THRESHOLD = float(os.getenv("DEFAULT_SIMILARITY_THRESHOLD", "0.75"))
+DEFAULT_THRESHOLD = float(os.getenv("DEFAULT_SIMILARITY_THRESHOLD", "0.82"))
 FACE_MODEL = os.getenv("FACE_DETECTION_MODEL", "hog")
 
 # Ensure required directories exist
@@ -235,8 +235,12 @@ async def search_guest_photos(
                 except OSError:
                     pass
 
-        # Attach preview URL
-        item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
+        # Attach preview URL pointing specifically to the matched customer face
+        best_vid = item.get("best_vector_id")
+        if best_vid:
+            item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={best_vid}"
+        else:
+            item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
 
     # Write audit summary into the customer result folder
     summary_data = {
@@ -282,11 +286,12 @@ async def search_guest_photos(
 @app.get("/api/photos/{photo_id}/preview")
 async def preview_photo(
     photo_id: int,
-    highlight: bool = Query(True, description="Draw bounding boxes on detected faces")
+    highlight: bool = Query(True, description="Draw bounding boxes on detected faces"),
+    matched_vid: Optional[int] = Query(None, description="Vector ID of the specifically matched customer face")
 ):
     """
-    Serve a lightweight thumbnail preview of the photo with optional bounding boxes drawn
-    around detected faces so operators can verify the match.
+    Serve a lightweight thumbnail preview of the photo with high-visibility bounding box
+    specifically on the matched customer's face, and subtle indicator on other passengers.
     """
     with db_manager._get_connection() as conn:
         p_row = conn.execute("SELECT file_path, file_name FROM photos WHERE id = ?", (photo_id,)).fetchone()
@@ -294,7 +299,7 @@ async def preview_photo(
             raise HTTPException(status_code=404, detail="Photo file not found on disk.")
 
         faces_rows = conn.execute(
-            "SELECT bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
+            "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
             (photo_id,)
         ).fetchall()
 
@@ -318,12 +323,30 @@ async def preview_photo(
                 right = int(f["bbox_right"] * scale_x)
                 bottom = int(f["bbox_bottom"] * scale_y)
                 left = int(f["bbox_left"] * scale_x)
+                vid = f["vector_id"]
 
-                # Draw high-visibility green bounding box with padding
-                for width_offset in range(3):
+                is_customer = (matched_vid is not None and vid == matched_vid)
+
+                if is_customer or matched_vid is None:
+                    # BOLD VIBRANT GREEN BOX FOR MATCHED GUEST
+                    for width_offset in range(3):
+                        draw.rectangle(
+                            [left - width_offset, top - width_offset, right + width_offset, bottom + width_offset],
+                            outline=(16, 185, 129)  # Emerald-500
+                        )
+                    # "TAMU" badge banner above box
+                    badge_h = 16
+                    badge_w = 46
+                    draw.rectangle([left, max(0, top - badge_h), left + badge_w, top], fill=(16, 185, 129))
+                    try:
+                        draw.text((left + 4, max(0, top - badge_h) + 1), "TAMU", fill=(255, 255, 255))
+                    except Exception:
+                        pass
+                else:
+                    # SUBTLE THIN SLATE BOX FOR OTHER PEOPLE IN RIDE (Clearly shows they are recognized as other people)
                     draw.rectangle(
-                        [left - width_offset, top - width_offset, right + width_offset, bottom + width_offset],
-                        outline=(34, 197, 94)  # Tailwind green-500
+                        [left, top, right, bottom],
+                        outline=(148, 163, 184)  # Slate-400
                     )
 
         output_buf = io.BytesIO()
