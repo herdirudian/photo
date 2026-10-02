@@ -64,27 +64,38 @@ app = FastAPI(
 )
 
 # Static and Templates
-os.makedirs("templates", exist_ok=True)
-os.makedirs("static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(TEMPLATES_DIR, exist_ok=True)
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
     """Serve the primary front-desk operator dashboard."""
     stats = db_manager.get_stats()
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "stats": stats,
-            "default_threshold": DEFAULT_THRESHOLD,
-            "samba_prefix": SAMBA_PREFIX,
-            "raw_dir": RAW_DIR,
-            "results_dir": RESULTS_DIR
-        }
-    )
+    context = {
+        "request": request,
+        "stats": stats,
+        "default_threshold": DEFAULT_THRESHOLD,
+        "samba_prefix": SAMBA_PREFIX,
+        "raw_dir": RAW_DIR,
+        "results_dir": RESULTS_DIR
+    }
+    try:
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context=context
+        )
+    except TypeError:
+        return templates.TemplateResponse(
+            "index.html",
+            context
+        )
 
 
 @app.get("/api/health")

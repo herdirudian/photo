@@ -15,6 +15,11 @@ services:
       - ./data/results:/app/data/results
       # SQLite database and FAISS binary index cache
       - ./data/db:/app/data/db
+      # Application source files mounted directly for seamless updates
+      - ./main.py:/app/main.py
+      - ./database.py:/app/database.py
+      - ./indexer.py:/app/indexer.py
+      - ./templates:/app/templates
     environment:
       - RAW_DIR=/app/data/raw
       - RESULTS_DIR=/app/data/results
