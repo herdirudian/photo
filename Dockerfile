@@ -26,6 +26,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
+# Install offline model weights for face_recognition
+RUN pip install --no-cache-dir face-recognition-models
+
 # Create application directories for storage, database, and symlink results
 RUN mkdir -p /app/data/raw /app/data/results /app/data/db /app/templates /app/static
 
