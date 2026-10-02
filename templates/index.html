@@ -88,10 +88,82 @@
 
             <!-- Drag and Drop Upload Area -->
             <div>
-              <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                Reference Image
-              </label>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Foto Referensi Tamu
+                </label>
+                <div class="flex items-center space-x-1.5">
+                  <button 
+                    type="button" 
+                    id="btn-mode-upload"
+                    onclick="switchInputMode('upload')"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-100 text-blue-700 border border-blue-200 transition"
+                  >
+                    Unggah Berkas
+                  </button>
+                  <button 
+                    type="button" 
+                    id="btn-mode-camera"
+                    onclick="switchInputMode('camera')"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center space-x-1"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Buka Kamera</span>
+                  </button>
+                </div>
+              </div>
 
+              <!-- Live Webcam Scanning Panel -->
+              <div id="camera-panel" class="hidden bg-slate-900 rounded-xl overflow-hidden border border-slate-300 relative shadow-sm">
+                <div class="relative w-full aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+                  <video id="webcam-feed" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
+                  
+                  <!-- Oval Face Framing Guide -->
+                  <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                    <div class="w-36 h-48 border-2 border-dashed border-emerald-400 rounded-full opacity-85 shadow-[0_0_15px_rgba(52,211,153,0.3)]"></div>
+                    <span class="mt-2 text-[11px] text-white/95 bg-slate-900/80 px-2.5 py-0.5 rounded font-medium shadow">
+                      Posisikan wajah tamu di dalam oval
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Camera Controls -->
+                <div class="p-3 bg-slate-950 flex items-center justify-between gap-2 border-t border-slate-800">
+                  <button 
+                    type="button" 
+                    onclick="switchCameraFacing()" 
+                    id="btn-switch-cam"
+                    class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
+                    title="Ganti Kamera Depan/Belakang"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                  <button 
+                    type="button" 
+                    onclick="captureSnapshot()" 
+                    class="flex-1 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    </svg>
+                    <span>Ambil Foto Tamu</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    onclick="switchInputMode('upload')" 
+                    class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </div>
+
+              <!-- Drag and Drop File Upload Area -->
               <div 
                 id="drop-zone"
                 onclick="document.getElementById('file-input').click()"
@@ -116,10 +188,10 @@
                     </svg>
                   </div>
                   <div>
-                    <span class="text-sm font-semibold text-blue-700">Select guest photo</span>
-                    <span class="text-sm text-slate-500"> or drag file here</span>
+                    <span class="text-sm font-semibold text-blue-700">Pilih foto tamu</span>
+                    <span class="text-sm text-slate-500"> atau seret file ke sini</span>
                   </div>
-                  <p class="text-xs text-slate-400">JPEG, PNG, or WebP</p>
+                  <p class="text-xs text-slate-400">JPEG, PNG, atau WebP</p>
                 </div>
 
                 <!-- Active Image Preview -->
@@ -352,6 +424,100 @@
   <script>
     let currentSelectedFile = null;
     let currentCustomerId = null;
+    let activeMediaStream = null;
+    let currentFacingMode = 'user';
+
+    async function switchInputMode(mode) {
+      if (mode === 'camera') {
+        document.getElementById('drop-zone').classList.add('hidden');
+        document.getElementById('camera-panel').classList.remove('hidden');
+        document.getElementById('btn-mode-camera').classList.add('bg-blue-100', 'text-blue-700', 'border-blue-200');
+        document.getElementById('btn-mode-camera').classList.remove('bg-slate-100', 'text-slate-600');
+        document.getElementById('btn-mode-upload').classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-200');
+        document.getElementById('btn-mode-upload').classList.add('bg-slate-100', 'text-slate-600');
+        await startCamera();
+      } else {
+        closeCamera();
+        document.getElementById('drop-zone').classList.remove('hidden');
+        document.getElementById('camera-panel').classList.add('hidden');
+        document.getElementById('btn-mode-upload').classList.add('bg-blue-100', 'text-blue-700', 'border-blue-200');
+        document.getElementById('btn-mode-upload').classList.remove('bg-slate-100', 'text-slate-600');
+        document.getElementById('btn-mode-camera').classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-200');
+        document.getElementById('btn-mode-camera').classList.add('bg-slate-100', 'text-slate-600');
+      }
+    }
+
+    async function startCamera() {
+      try {
+        if (activeMediaStream) {
+          activeMediaStream.getTracks().forEach(t => t.stop());
+        }
+        const constraints = {
+          video: {
+            facingMode: currentFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        };
+        activeMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const video = document.getElementById('webcam-feed');
+        video.srcObject = activeMediaStream;
+        await video.play();
+      } catch (err) {
+        console.error("Camera access error:", err);
+        alert("Tidak dapat mengakses kamera. Pastikan browser diizinkan mengakses kamera atau kamera USB terhubung dengan baik.");
+        switchInputMode('upload');
+      }
+    }
+
+    function switchCameraFacing() {
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      startCamera();
+    }
+
+    function closeCamera() {
+      if (activeMediaStream) {
+        activeMediaStream.getTracks().forEach(t => t.stop());
+        activeMediaStream = null;
+      }
+      const video = document.getElementById('webcam-feed');
+      if (video) video.srcObject = null;
+    }
+
+    function captureSnapshot() {
+      const video = document.getElementById('webcam-feed');
+      if (!video || !video.videoWidth) {
+        alert("Kamera belum siap. Mohon tunggu sesaat.");
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      // Mirror snapshot jika kamera depan
+      if (currentFacingMode === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(blob => {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `guest_scan_${timestamp}.jpg`;
+        currentSelectedFile = new File([blob], filename, { type: 'image/jpeg' });
+
+        document.getElementById('image-preview').src = canvas.toDataURL('image/jpeg', 0.9);
+        document.getElementById('selected-file-name').textContent = `Foto Kamera (${filename})`;
+        document.getElementById('upload-placeholder').classList.add('hidden');
+        document.getElementById('image-preview-container').classList.remove('hidden');
+
+        // Tutup feed kamera dan kembali ke tampilan preview
+        switchInputMode('upload');
+      }, 'image/jpeg', 0.92);
+    }
 
     function updateThresholdDisplay(val) {
       const percentage = Math.round(parseFloat(val) * 100);
