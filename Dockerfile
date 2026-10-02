@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,7 +28,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install offline model weights for face_recognition
-RUN pip install --no-cache-dir face-recognition-models
+RUN pip install --no-cache-dir git+https://github.com/ageitgey/face_recognition_models
 
 # Create application directories for storage, database, and symlink results
 RUN mkdir -p /app/data/raw /app/data/results /app/data/db /app/templates /app/static
