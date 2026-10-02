@@ -23,9 +23,9 @@ except ImportError:
 try:
     import face_recognition
     FACE_REC_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception, SystemExit, BaseException) as e:
     FACE_REC_AVAILABLE = False
-    logger.warning("face_recognition library not installed. Face extraction will be disabled.")
+    logger.error(f"face_recognition library could not be initialized: {e}")
 
 
 class FaceEngine:
