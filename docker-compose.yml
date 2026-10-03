@@ -28,7 +28,7 @@ services:
       - DEFAULT_SIMILARITY_THRESHOLD=0.82
       - FACE_DETECTION_MODEL=hog
       # Samba network path displayed to operators for one-click copy-paste
-      - SAMBA_NETWORK_PREFIX=\\\\192.168.100.90\\park-photos\\results
+      - SAMBA_NETWORK_PREFIX=\\192.168.100.90\park-photos\results
     deploy:
       resources:
         limits:

@@ -80,6 +80,26 @@ if os.path.exists(IMG_DIR):
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
+def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.168.100.90") -> str:
+    """
+    Produce a strictly valid Windows UNC network path (e.g. \\192.168.100.90\park-photos\results\Customer_XXXX).
+    Guarantees exactly two leading backslashes and single backslashes in between.
+    """
+    import re
+    if not prefix or prefix.startswith("/mnt") or "samba-server" in prefix:
+        prefix = rf"\\{fallback_host}\park-photos\results"
+
+    clean_p = re.sub(r"^[\\/]+", "", prefix.strip())
+    clean_p = re.sub(r"[\\/]+", r"\\", clean_p)
+
+    clean_sub = re.sub(r"^[\\/]+", "", subpath.strip()) if subpath else ""
+    clean_sub = re.sub(r"[\\/]+", r"\\", clean_sub)
+
+    if clean_sub:
+        return rf"\\{clean_p}\{clean_sub}"
+    return rf"\\{clean_p}"
+
+
 def get_logo_file_path() -> Optional[str]:
     candidates = [
         os.path.join(IMG_DIR, "logotlm.png"),
@@ -304,13 +324,7 @@ async def search_guest_photos(
 
     # Format Samba path dynamically using the accessed server IP / hostname
     host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
-    samba_prefix = SAMBA_PREFIX
-    if not samba_prefix or samba_prefix.startswith("/mnt") or "samba-server" in samba_prefix or not samba_prefix.startswith(r"\\"):
-        samba_path = rf"\\{host}\park-photos\results\{customer_folder_name}"
-    else:
-        samba_path = os.path.join(samba_prefix, customer_folder_name).replace("/", "\\")
-        if not samba_path.startswith(r"\\"):
-            samba_path = rf"\\{host}\park-photos\results\{customer_folder_name}"
+    samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
 
     return {
         "success": True,
@@ -424,3 +438,58 @@ async def download_results_zip(customer_id: str):
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={customer_id}_Photos.zip"}
     )
+
+
+@app.get("/api/results/{customer_id}/open-folder")
+async def open_customer_folder(customer_id: str, request: Request):
+    """
+    Generate and serve a Windows Internet Shortcut (.url) that opens the customer results folder
+    directly in Windows File Explorer when clicked.
+    """
+    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
+    unc_path = format_samba_unc(SAMBA_PREFIX, customer_id, fallback_host=host)
+    file_uri = "file:" + unc_path.replace("\\", "/")
+
+    content = (
+        "[InternetShortcut]\r\n"
+        f"URL={file_uri}\r\n"
+        "IconIndex=0\r\n"
+        "IconFile=explorer.exe\r\n"
+    )
+
+    filename = f"Buka_Folder_{customer_id}.url"
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="application/x-mswinurl",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@app.get("/api/results/{customer_id}/open-file/{file_name}")
+async def open_customer_file(customer_id: str, file_name: str, request: Request):
+    """
+    Generate and serve a Windows Internet Shortcut (.url) that opens the specific matched photo
+    directly in Windows File Explorer or Photo Viewer.
+    """
+    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
+    unc_path = format_samba_unc(SAMBA_PREFIX, f"{customer_id}/{file_name}", fallback_host=host)
+    file_uri = "file:" + unc_path.replace("\\", "/")
+
+    content = (
+        "[InternetShortcut]\r\n"
+        f"URL={file_uri}\r\n"
+        "IconIndex=0\r\n"
+        "IconFile=explorer.exe\r\n"
+    )
+
+    filename = f"Buka_Foto_{file_name}.url"
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="application/x-mswinurl",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
