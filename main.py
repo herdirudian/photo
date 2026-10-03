@@ -301,8 +301,10 @@ async def search_guest_photos(
         best_vid = item.get("best_vector_id")
         if best_vid:
             item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={best_vid}"
+            item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
         else:
             item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
+            item["crop_url"] = f"/api/photos/{item['photo_id']}/crop"
 
     # Write audit summary into the customer result folder
     summary_data = {
@@ -417,6 +419,98 @@ async def preview_photo(
 
     except Exception as e:
         logger.error(f"Error generating preview for photo {photo_id}: {e}")
+        return FileResponse(p_row["file_path"], media_type="image/jpeg")
+
+
+@app.get("/api/photos/{photo_id}/crop")
+async def crop_matched_face(
+    photo_id: int,
+    matched_vid: Optional[int] = Query(None, description="Vector ID of the specifically matched customer face")
+):
+    """
+    Serve a crisp, high-resolution zoomed close-up crop of the customer's face from the original photo.
+    Enables operators and guests to instantly verify distant or crowded background faces with 100% clarity.
+    """
+    with db_manager._get_connection() as conn:
+        p_row = conn.execute("SELECT file_path, file_name FROM photos WHERE id = ?", (photo_id,)).fetchone()
+        if not p_row or not os.path.exists(p_row["file_path"]):
+            raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+
+        faces_rows = conn.execute(
+            "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
+            (photo_id,)
+        ).fetchall()
+
+    if not faces_rows:
+        return FileResponse(p_row["file_path"], media_type="image/jpeg")
+
+    # Find the target face
+    target_face = None
+    if matched_vid is not None:
+        for f in faces_rows:
+            if f["vector_id"] == matched_vid:
+                target_face = f
+                break
+    if target_face is None:
+        target_face = faces_rows[0]
+
+    try:
+        img = Image.open(p_row["file_path"])
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        orig_w, orig_h = img.size
+        top = target_face["bbox_top"]
+        right = target_face["bbox_right"]
+        bottom = target_face["bbox_bottom"]
+        left = target_face["bbox_left"]
+
+        face_w = right - left
+        face_h = bottom - top
+
+        # Calculate generous context padding (60% margin around face to include hair, head, and upper chest)
+        pad_x = int(face_w * 0.65)
+        pad_y_top = int(face_h * 0.55)
+        pad_y_bottom = int(face_h * 0.75)
+
+        crop_left = max(0, left - pad_x)
+        crop_top = max(0, top - pad_y_top)
+        crop_right = min(orig_w, right + pad_x)
+        crop_bottom = min(orig_h, bottom + pad_y_bottom)
+
+        cropped = img.crop((crop_left, crop_top, crop_right, crop_bottom))
+
+        # Make crop square by padding or centered expanding for neat UI avatar display
+        cw, ch = cropped.size
+        target_dim = max(cw, ch)
+        square_crop = Image.new("RGB", (target_dim, target_dim), (24, 34, 30))
+        offset_x = (target_dim - cw) // 2
+        offset_y = (target_dim - ch) // 2
+        square_crop.paste(cropped, (offset_x, offset_y))
+
+        # Resize to sharp 400x400
+        square_crop = square_crop.resize((400, 400), Image.Resampling.LANCZOS)
+
+        # Draw a stylish subtle emerald border & badge
+        draw = ImageDraw.Draw(square_crop)
+        for b_w in range(3):
+            draw.rectangle([b_w, b_w, 399 - b_w, 399 - b_w], outline=(16, 185, 129))
+
+        # Badge "ZOOM TAMU"
+        badge_w, badge_h = 92, 22
+        draw.rectangle([8, 8, 8 + badge_w, 8 + badge_h], fill=(16, 185, 129))
+        try:
+            draw.text((14, 12), "ZOOM TAMU", fill=(255, 255, 255))
+        except Exception:
+            pass
+
+        output_buf = io.BytesIO()
+        square_crop.save(output_buf, format="JPEG", quality=92)
+        output_buf.seek(0)
+        return StreamingResponse(output_buf, media_type="image/jpeg")
+
+    except Exception as e:
+        logger.error(f"Error generating face crop for photo {photo_id}: {e}")
         return FileResponse(p_row["file_path"], media_type="image/jpeg")
 
 

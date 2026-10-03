@@ -513,20 +513,52 @@
 
   </main>
 
-  <!-- Photo Lightbox Modal for Inspection -->
+  <!-- Photo Lightbox Modal for Inspection & Interactive Face Zoom -->
   <div id="lightbox-modal" class="fixed inset-0 z-50 bg-slate-900/90 hidden items-center justify-center p-4">
     <div class="relative max-w-4xl w-full bg-slate-950 rounded-xl overflow-hidden shadow-2xl border border-slate-800">
-      <div class="p-3 bg-slate-900 border-b border-slate-800 flex justify-between items-center text-white">
-        <span class="text-xs font-medium font-mono" id="modal-filename">photo.jpg</span>
+      
+      <!-- Top header with View Mode Toggles -->
+      <div class="p-3 bg-slate-900 border-b border-slate-800 flex flex-wrap justify-between items-center text-white gap-2">
+        <div class="flex items-center space-x-2">
+          <span class="text-xs font-semibold font-mono" id="modal-filename">photo.jpg</span>
+        </div>
+
+        <!-- Toggle View Mode: Foto Lengkap vs Zoom Wajah Tamu -->
+        <div class="flex items-center space-x-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          <button 
+            type="button" 
+            id="btn-lightbox-full" 
+            onclick="switchLightboxMode('full')" 
+            class="px-3 py-1 bg-lodge-600 text-white rounded text-xs font-semibold shadow flex items-center space-x-1 transition"
+          >
+            <span>🖼️ Foto Wahana</span>
+          </button>
+          <button 
+            type="button" 
+            id="btn-lightbox-crop" 
+            onclick="switchLightboxMode('crop')" 
+            class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1 transition"
+          >
+            <span>🔍 Zoom Wajah Tamu</span>
+          </button>
+        </div>
+
         <button onclick="closeLightbox()" class="text-slate-400 hover:text-white text-lg font-bold px-2 py-1">&times;</button>
       </div>
-      <div class="p-2 flex items-center justify-center bg-black min-h-[300px]">
-        <img id="modal-image" src="" alt="Enlarged photo preview" class="max-h-[75vh] w-auto object-contain rounded" />
+
+      <!-- Preview Image Canvas -->
+      <div class="p-2 flex items-center justify-center bg-black min-h-[320px] max-h-[75vh] overflow-hidden">
+        <img id="modal-image" src="" alt="Enlarged photo preview" class="max-h-[72vh] w-auto object-contain rounded transition duration-200" />
       </div>
+
+      <!-- Bottom footer with info and actions -->
       <div class="p-3 bg-slate-900 text-xs text-slate-300 flex justify-between items-center">
         <span id="modal-info">Akurasi Kemiripan: 85%</span>
-        <a id="modal-download-link" href="#" target="_blank" class="text-lodge-300 hover:text-white underline">Buka Resolusi Asli</a>
+        <div class="flex items-center space-x-3">
+          <a id="modal-download-link" href="#" target="_blank" class="text-lodge-300 hover:text-white underline">Buka Resolusi Asli</a>
+        </div>
       </div>
+
     </div>
   </div>
 
@@ -1145,24 +1177,57 @@
           card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow transition flex flex-col group";
 
           card.innerHTML = `
-            <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%')">
+            <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer group/img" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}')">
               <img src="${item.preview_url}" alt="${item.file_name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              
+              <!-- Match score badge -->
               <div class="absolute top-2 right-2 bg-emerald-600 text-white font-bold text-xs px-2.5 py-0.5 rounded shadow flex items-center space-x-1">
                 <span>✓ ${matchPercent}% Cocok</span>
               </div>
+
+              <!-- Zoom Face Mini-Avatar Inset (Auto-Crop Close-Up) -->
+              ${item.crop_url ? `
+                <div 
+                  class="absolute top-2 left-2 flex items-center space-x-1.5 bg-slate-900/90 hover:bg-black backdrop-blur-xs p-1 rounded-lg border border-emerald-500/60 shadow-lg cursor-pointer transition hover:scale-105"
+                  onclick="event.stopPropagation(); openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}')"
+                  title="Klik untuk melihat Zoom Close-up wajah tamu dari dekat"
+                >
+                  <img src="${item.crop_url}" alt="Zoom Tamu" class="w-9 h-9 rounded object-cover border border-emerald-400" />
+                  <div class="pr-1.5 hidden sm:block">
+                    <span class="block text-[9px] font-bold text-emerald-300 uppercase leading-tight">Zoom Wajah</span>
+                    <span class="block text-[8px] text-slate-300">Close-Up</span>
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Filename badge -->
               <div class="absolute bottom-2 left-2 bg-slate-950/80 text-white text-[11px] px-2 py-0.5 rounded font-mono truncate max-w-[85%]">
                 ${item.file_name}
               </div>
             </div>
+
             <div class="p-3 flex justify-between items-center text-xs bg-slate-50 border-t border-slate-100 gap-1.5">
-              <span class="text-slate-600 font-medium truncate max-w-[48%]" title="${item.num_faces > 1 ? item.num_faces + ' orang (Kotak Hijau = Tamu)' : '1 orang'}">
+              <span class="text-slate-600 font-medium truncate max-w-[42%]" title="${item.num_faces > 1 ? item.num_faces + ' orang (Kotak Hijau = Tamu)' : '1 orang'}">
                 ${item.num_faces > 1 ? `👥 ${item.num_faces} orang` : '👤 1 orang'}
               </span>
               <div class="flex items-center space-x-1.5 shrink-0">
+                ${item.crop_url ? `
+                  <button 
+                    type="button" 
+                    onclick="openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}')"
+                    class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
+                    title="Zoom close-up wajah tamu yang terdeteksi"
+                  >
+                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                    <span>Zoom</span>
+                  </button>
+                ` : ''}
                 <button 
                   type="button" 
                   onclick="openPhotoInExplorer('${item.file_name}', '${item.samba_file_path || ''}')"
-                  class="px-2.5 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
+                  class="px-2 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
                   title="Buka file foto ini di File Explorer"
                 >
                   <svg class="w-3.5 h-3.5 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1172,7 +1237,7 @@
                 </button>
                 <button 
                   type="button" 
-                  onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%')"
+                  onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}')"
                   class="px-2 py-1 text-lodge-600 hover:text-lodge-800 font-semibold text-[11px] hover:underline"
                 >
                   Perbesar
@@ -1293,14 +1358,69 @@
       }, 5000);
     }
 
-    function openLightbox(imgUrl, filename, matchInfo) {
-      document.getElementById('modal-image').src = imgUrl;
-      document.getElementById('modal-filename').textContent = filename;
-      document.getElementById('modal-info').textContent = `Match Confidence: ${matchInfo}`;
-      document.getElementById('modal-download-link').href = imgUrl;
+    let currentLightboxFullUrl = '';
+    let currentLightboxCropUrl = '';
+    let currentLightboxFilename = '';
+    let currentLightboxMatchInfo = '';
+    let isLightboxInCropMode = false;
+
+    function openLightbox(imgUrl, filename, matchInfo, startWithCrop = false, alternateUrl = '') {
+      currentLightboxFilename = filename;
+      currentLightboxMatchInfo = matchInfo;
+      
+      if (startWithCrop) {
+        currentLightboxCropUrl = imgUrl;
+        currentLightboxFullUrl = alternateUrl || imgUrl;
+        isLightboxInCropMode = true;
+      } else {
+        currentLightboxFullUrl = imgUrl;
+        currentLightboxCropUrl = alternateUrl || '';
+        isLightboxInCropMode = false;
+      }
+
+      updateLightboxView();
+
       const modal = document.getElementById('lightbox-modal');
       modal.classList.remove('hidden');
       modal.classList.add('flex');
+    }
+
+    function switchLightboxMode(mode) {
+      isLightboxInCropMode = (mode === 'crop');
+      updateLightboxView();
+    }
+
+    function updateLightboxView() {
+      const activeUrl = (isLightboxInCropMode && currentLightboxCropUrl) ? currentLightboxCropUrl : currentLightboxFullUrl;
+      const img = document.getElementById('modal-image');
+      if (img) img.src = activeUrl;
+      
+      const filenameElem = document.getElementById('modal-filename');
+      if (filenameElem) {
+        filenameElem.textContent = currentLightboxFilename + (isLightboxInCropMode ? ' [ZOOM WAJAH TAMU]' : ' [FOTO WAHANA]');
+      }
+
+      const infoElem = document.getElementById('modal-info');
+      if (infoElem) {
+        infoElem.textContent = `Akurasi Kemiripan: ${currentLightboxMatchInfo}`;
+      }
+
+      const dlElem = document.getElementById('modal-download-link');
+      if (dlElem) dlElem.href = activeUrl;
+
+      // Update toggle buttons styling
+      const btnFull = document.getElementById('btn-lightbox-full');
+      const btnCrop = document.getElementById('btn-lightbox-crop');
+      if (btnFull && btnCrop) {
+        if (isLightboxInCropMode) {
+          btnCrop.className = "px-3 py-1 bg-emerald-600 text-white rounded text-xs font-semibold shadow flex items-center space-x-1 transition";
+          btnFull.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1 transition";
+        } else {
+          btnFull.className = "px-3 py-1 bg-lodge-600 text-white rounded text-xs font-semibold shadow flex items-center space-x-1 transition";
+          btnCrop.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1 transition";
+        }
+        btnCrop.style.display = currentLightboxCropUrl ? 'inline-flex' : 'none';
+      }
     }
 
     function closeLightbox() {

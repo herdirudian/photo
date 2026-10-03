@@ -3,11 +3,13 @@ database.py - SQLite persistence and FAISS vector similarity search for face ret
 """
 
 import os
+import io
 import sqlite3
 import threading
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
+from PIL import Image, ImageOps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -35,9 +37,125 @@ class FaceEngine:
         self.model = model  # "hog" (fast CPU) or "cnn" (GPU)
         self.dimension = 128  # standard face_recognition dlib ResNet-34 vector size
 
+    @staticmethod
+    def _compute_iou(boxA: Tuple[int, int, int, int], boxB: Tuple[int, int, int, int]) -> float:
+        """Compute Intersection-over-Union (IoU) between two bounding boxes (top, right, bottom, left)."""
+        topA, rightA, bottomA, leftA = boxA
+        topB, rightB, bottomB, leftB = boxB
+
+        inter_top = max(topA, topB)
+        inter_left = max(leftA, leftB)
+        inter_bottom = min(bottomA, bottomB)
+        inter_right = min(rightA, rightB)
+
+        if inter_bottom <= inter_top or inter_right <= inter_left:
+            return 0.0
+
+        inter_area = (inter_bottom - inter_top) * (inter_right - inter_left)
+        areaA = max(0, bottomA - topA) * max(0, rightA - leftA)
+        areaB = max(0, bottomB - topB) * max(0, rightB - leftB)
+        union_area = areaA + areaB - inter_area
+        return inter_area / union_area if union_area > 0 else 0.0
+
+    def _nms_boxes(self, boxes: List[Tuple[int, int, int, int]], iou_thresh: float = 0.35) -> List[Tuple[int, int, int, int]]:
+        """Non-Maximum Suppression (NMS) to eliminate duplicate overlapping bounding boxes."""
+        if not boxes:
+            return []
+
+        # Sort by area descending so larger/more confident boxes take priority
+        sorted_boxes = sorted(boxes, key=lambda b: (b[2] - b[0]) * (b[1] - b[3]), reverse=True)
+        selected = []
+
+        for b in sorted_boxes:
+            overlap = False
+            for s in selected:
+                if self._compute_iou(b, s) > iou_thresh:
+                    overlap = True
+                    break
+            if not overlap:
+                selected.append(b)
+
+        return selected
+
+    def detect_multiscale_locations(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """
+        Sophisticated Multi-Scale & Tiled Pyramid Face Detection.
+        Accurately captures distant background people and crowd faces in theme park photos.
+        """
+        h, w = image.shape[:2]
+        all_locations: List[Tuple[int, int, int, int]] = []
+
+        # 1. Global Pass
+        # If image is very large, downscale slightly for fast global scan, then map back
+        if max(h, w) > 2400:
+            scale = 2000.0 / max(h, w)
+            new_w, new_h = int(w * scale), int(h * scale)
+            pil_img = Image.fromarray(image)
+            small_img = np.array(pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR))
+            global_locs = face_recognition.face_locations(small_img, number_of_times_to_upsample=1, model=self.model)
+            for top, right, bottom, left in global_locs:
+                all_locations.append((
+                    int(round(top / scale)),
+                    int(round(right / scale)),
+                    int(round(bottom / scale)),
+                    int(round(left / scale))
+                ))
+        else:
+            global_locs = face_recognition.face_locations(image, number_of_times_to_upsample=1, model=self.model)
+            all_locations.extend(global_locs)
+
+        # 2. Tiled Inspection (Zoom into quadrants & center for small/distant faces)
+        # If image is high-resolution (DSLR/ride camera), background faces are small
+        if max(h, w) >= 1200:
+            tiles = [
+                # Top-Left
+                (0, 0, int(h * 0.58), int(w * 0.58)),
+                # Top-Right
+                (0, int(w * 0.42), int(h * 0.58), w),
+                # Bottom-Left
+                (int(h * 0.42), 0, h, int(w * 0.58)),
+                # Bottom-Right
+                (int(h * 0.42), int(w * 0.42), h, w),
+                # Center (Ride seats / Focus area)
+                (int(h * 0.22), int(w * 0.22), int(h * 0.78), int(w * 0.78))
+            ]
+
+            for y1, x1, y2, x2 in tiles:
+                tile = image[y1:y2, x1:x2]
+                tile_h, tile_w = tile.shape[:2]
+                if tile_h >= 200 and tile_w >= 200:
+                    tile_locs = face_recognition.face_locations(tile, number_of_times_to_upsample=1, model=self.model)
+                    for top, right, bottom, left in tile_locs:
+                        all_locations.append((
+                            y1 + top,
+                            x1 + right,
+                            y1 + bottom,
+                            x1 + left
+                        ))
+
+        # Filter out tiny noise artifacts (< 24px)
+        filtered = [
+            loc for loc in all_locations
+            if (loc[1] - loc[3]) >= 24 and (loc[2] - loc[0]) >= 24
+        ]
+
+        if not filtered:
+            # Fallback retry with upsample=2 if still no faces found and image size is reasonable
+            if max(h, w) <= 2200:
+                try:
+                    fallback_locs = face_recognition.face_locations(image, number_of_times_to_upsample=2, model=self.model)
+                    filtered = list(fallback_locs)
+                except Exception:
+                    pass
+
+        # 3. Deduplicate via Non-Maximum Suppression
+        final_boxes = self._nms_boxes(filtered, iou_thresh=0.35)
+        return final_boxes
+
     def extract_faces_from_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
-        Extract bounding boxes and 128-d facial embeddings from an image file on disk.
+        Extract bounding boxes and 128-d facial embeddings from an image file on disk
+        using intelligent multi-scale tiled detection for distant & crowd faces.
         Returns list of {'bbox': (top, right, bottom, left), 'encoding': np.ndarray}
         """
         if not FACE_REC_AVAILABLE:
@@ -52,31 +170,11 @@ class FaceEngine:
             logger.error(f"Failed to read image file {file_path}: {e}")
             return []
 
-        # Find all face locations (top, right, bottom, left)
-        locations = face_recognition.face_locations(image, number_of_times_to_upsample=1, model=self.model)
-        # If no faces found, retry with upsample=2 for small/distant faces in crowds (if image size is reasonable)
-        if not locations:
-            h, w = image.shape[:2]
-            if max(h, w) <= 2500:
-                try:
-                    locations = face_recognition.face_locations(image, number_of_times_to_upsample=2, model=self.model)
-                except Exception:
-                    pass
-
-        if not locations:
-            return []
-
-        # Filter out tiny blurry false detections (< 30px) that cause random false matches
-        filtered_locations = []
-        for loc in locations:
-            top, right, bottom, left = loc
-            face_w = right - left
-            face_h = bottom - top
-            if face_w >= 28 and face_h >= 28:
-                filtered_locations.append(loc)
+        # Find all face locations (including distant/crowded people) via multi-scale scan
+        filtered_locations = self.detect_multiscale_locations(image)
 
         if not filtered_locations:
-            filtered_locations = locations
+            return []
 
         # Compute 128-d encodings using the high-accuracy 68-landmark model
         encodings = face_recognition.face_encodings(image, known_face_locations=filtered_locations, num_jitters=1, model="large")
@@ -98,18 +196,21 @@ class FaceEngine:
         return results
 
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
-        """Extract face locations and encodings from in-memory bytes with jittering for high query accuracy."""
+        """Extract face locations and encodings from in-memory bytes with autocontrast and jittering for high query accuracy."""
         if not FACE_REC_AVAILABLE:
             raise RuntimeError("face_recognition is not available in current environment")
-
-        import io
-        from PIL import Image
 
         image_obj = Image.open(io.BytesIO(image_bytes))
         # Ensure RGB format
         if image_obj.mode != "RGB":
             image_obj = image_obj.convert("RGB")
-        image_np = np.array(image_obj)
+        
+        # Auto-contrast enhancement to normalize indoor/outdoor shadows
+        try:
+            enhanced_obj = ImageOps.autocontrast(image_obj, cutoff=1)
+            image_np = np.array(enhanced_obj)
+        except Exception:
+            image_np = np.array(image_obj)
 
         locations = face_recognition.face_locations(image_np, number_of_times_to_upsample=1, model=self.model)
         if not locations:
@@ -437,6 +538,7 @@ class DatabaseManager:
                         "num_faces": r["num_faces"],
                         "max_score": round(score, 4),
                         "best_vector_id": vid,
+                        "best_bbox": [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]],
                         "matched_faces": [face_info]
                     }
                 else:
@@ -444,6 +546,7 @@ class DatabaseManager:
                     if score > results_by_photo[photo_id]["max_score"]:
                         results_by_photo[photo_id]["max_score"] = round(score, 4)
                         results_by_photo[photo_id]["best_vector_id"] = vid
+                        results_by_photo[photo_id]["best_bbox"] = [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]]
 
             # Sort results descending by highest similarity score
             sorted_results = sorted(
