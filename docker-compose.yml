@@ -20,6 +20,7 @@ services:
       - ./database.py:/app/database.py
       - ./indexer.py:/app/indexer.py
       - ./templates:/app/templates
+      - ./img:/app/img
     environment:
       - RAW_DIR=/app/data/raw
       - RESULTS_DIR=/app/data/results

@@ -10,6 +10,7 @@ import uuid
 import json
 import zipfile
 import shutil
+import base64
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
@@ -67,10 +68,49 @@ app = FastAPI(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+IMG_DIR = os.path.join(BASE_DIR, "img")
+
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(IMG_DIR, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+if os.path.exists(IMG_DIR):
+    app.mount("/img", StaticFiles(directory=IMG_DIR), name="img")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+
+def get_logo_file_path() -> Optional[str]:
+    candidates = [
+        os.path.join(IMG_DIR, "logotlm.png"),
+        os.path.join(BASE_DIR, "img", "logotlm.png"),
+        "/app/img/logotlm.png",
+        "img/logotlm.png",
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def get_logo_base64() -> str:
+    path = get_logo_file_path()
+    if path:
+        try:
+            with open(path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except Exception as e:
+            logger.warning(f"Failed to read logo for base64: {e}")
+    return ""
+
+
+@app.get("/logo.png")
+async def serve_logo():
+    """Serve The Lodge Maribaya official logo."""
+    path = get_logo_file_path()
+    if path:
+        return FileResponse(path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Logo not found")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -82,7 +122,8 @@ async def serve_dashboard(request: Request):
         "default_threshold": DEFAULT_THRESHOLD,
         "samba_prefix": SAMBA_PREFIX,
         "raw_dir": RAW_DIR,
-        "results_dir": RESULTS_DIR
+        "results_dir": RESULTS_DIR,
+        "logo_base64": get_logo_base64()
     }
     try:
         return templates.TemplateResponse(
