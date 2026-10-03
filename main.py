@@ -100,6 +100,7 @@ def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.1
     return rf"\\{clean_p}"
 
 
+
 def get_logo_file_path() -> Optional[str]:
     candidates = [
         os.path.join(IMG_DIR, "logotlm.png"),
@@ -326,6 +327,11 @@ async def search_guest_photos(
     host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
     samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
 
+    for item in matched_photos:
+        item["samba_file_path"] = format_samba_unc(
+            SAMBA_PREFIX, f"{customer_folder_name}\\{item['file_name']}", fallback_host=host
+        )
+
     return {
         "success": True,
         "customer_id": customer_folder_name,
@@ -440,56 +446,36 @@ async def download_results_zip(customer_id: str):
     )
 
 
-@app.get("/api/results/{customer_id}/open-folder")
-async def open_customer_folder(customer_id: str, request: Request):
+@app.get("/api/setup-explorer-protocol")
+async def download_explorer_protocol_reg():
     """
-    Generate and serve a Windows Internet Shortcut (.url) that opens the customer results folder
-    directly in Windows File Explorer when clicked.
+    Serve a Windows Registry script (.reg) that registers the custom protocol 'lodge:'.
+    When installed (by double-clicking once on the client PC without admin rights),
+    clicking 'Buka Folder di File Explorer' in Chrome/Edge will directly launch Windows File Explorer
+    to the customer's UNC network folder.
     """
-    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
-    unc_path = format_samba_unc(SAMBA_PREFIX, customer_id, fallback_host=host)
-    file_uri = "file:" + unc_path.replace("\\", "/")
-
-    content = (
-        "[InternetShortcut]\r\n"
-        f"URL={file_uri}\r\n"
-        "IconIndex=0\r\n"
-        "IconFile=explorer.exe\r\n"
+    reg_path = os.path.join(STATIC_DIR, "Aktifkan_Buka_File_Explorer.reg")
+    if os.path.exists(reg_path):
+        return FileResponse(
+            reg_path,
+            media_type="application/octet-stream",
+            filename="Aktifkan_Buka_File_Explorer.reg"
+        )
+    reg_content = (
+        "Windows Registry Editor Version 5.00\r\n\r\n"
+        "[HKEY_CURRENT_USER\\Software\\Classes\\lodge]\r\n"
+        '@="URL:The Lodge Photo Protocol"\r\n'
+        '"URL Protocol"=""\r\n\r\n'
+        "[HKEY_CURRENT_USER\\Software\\Classes\\lodge\\shell]\r\n\r\n"
+        "[HKEY_CURRENT_USER\\Software\\Classes\\lodge\\shell\\open]\r\n\r\n"
+        "[HKEY_CURRENT_USER\\Software\\Classes\\lodge\\shell\\open\\command]\r\n"
+        '@="powershell.exe -WindowStyle Hidden -NoProfile -Command \\"$u = [System.Uri]::UnescapeDataString(\'%1\') -replace \'^lodge:/?/?\',\'\' -replace \'/\',\'\\\\\\\\\'; & explorer.exe (\'\\\\\\\\\' + $u.TrimStart(\'\\\\\\\\\'))\\""\r\n'
     )
-
-    filename = f"Buka_Folder_{customer_id}.url"
     return StreamingResponse(
-        io.BytesIO(content.encode("utf-8")),
-        media_type="application/x-mswinurl",
+        io.BytesIO(reg_content.encode("utf-8")),
+        media_type="application/octet-stream",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        }
-    )
-
-
-@app.get("/api/results/{customer_id}/open-file/{file_name}")
-async def open_customer_file(customer_id: str, file_name: str, request: Request):
-    """
-    Generate and serve a Windows Internet Shortcut (.url) that opens the specific matched photo
-    directly in Windows File Explorer or Photo Viewer.
-    """
-    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
-    unc_path = format_samba_unc(SAMBA_PREFIX, f"{customer_id}/{file_name}", fallback_host=host)
-    file_uri = "file:" + unc_path.replace("\\", "/")
-
-    content = (
-        "[InternetShortcut]\r\n"
-        f"URL={file_uri}\r\n"
-        "IconIndex=0\r\n"
-        "IconFile=explorer.exe\r\n"
-    )
-
-    filename = f"Buka_Foto_{file_name}.url"
-    return StreamingResponse(
-        io.BytesIO(content.encode("utf-8")),
-        media_type="application/x-mswinurl",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
+            "Content-Disposition": 'attachment; filename="Aktifkan_Buka_File_Explorer.reg"'
         }
     )
 

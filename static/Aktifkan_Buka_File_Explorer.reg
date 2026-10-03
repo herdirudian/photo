@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\lodge]
+@="URL:The Lodge Photo Explorer Protocol"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\lodge\shell]
+
+[HKEY_CURRENT_USER\Software\Classes\lodge\shell\open]
+
+[HKEY_CURRENT_USER\Software\Classes\lodge\shell\open\command]
+@="powershell.exe -WindowStyle Hidden -NoProfile -Command \"$u = [System.Uri]::UnescapeDataString('%1') -replace '^lodge:/?/?','' -replace '/','\\\\'; & explorer.exe ('\\\\' + $u.TrimStart('\\'))\""

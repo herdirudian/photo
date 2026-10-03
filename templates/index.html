@@ -423,67 +423,76 @@
               </div>
             </div>
 
-            <!-- Samba Network Path with 1-Click Copy -->
-            <div class="space-y-1.5">
-              <label class="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                Folder Samba Windows (Salin Jalur)
-              </label>
-              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-800 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
-                  \\samba-server\park-photos\results\Customer_XXXX
-                </div>
+            <!-- Samba Network Path with 1-Click Copy and Open in Explorer -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
+                  <svg class="w-4 h-4 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  <span>Lokasi Folder Foto Windows (Samba / Jaringan)</span>
+                </label>
                 <button 
                   type="button" 
-                  onclick="openFolderInExplorer()" 
-                  id="btn-open-explorer"
-                  class="px-4 py-2.5 bg-lodge-600 hover:bg-lodge-700 active:bg-lodge-800 text-white font-bold text-xs rounded-lg transition focus-ring shrink-0 flex items-center justify-center space-x-1.5 shadow-sm"
-                  title="Buka langsung folder hasil foto tamu ini di Windows File Explorer"
+                  onclick="openExplorerGuideModal()" 
+                  class="text-[11px] text-lodge-600 hover:text-lodge-800 font-semibold hover:underline flex items-center space-x-1"
                 >
-                  <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>Buka di File Explorer</span>
-                </button>
-                <button 
-                  type="button" 
-                  onclick="copySambaPath()" 
-                  id="btn-copy-samba"
-                  class="px-3.5 py-2.5 bg-lodge-800 hover:bg-lodge-900 active:bg-black text-white font-medium text-xs rounded-lg transition focus-ring shrink-0 flex items-center justify-center space-x-1.5"
-                  title="Salin jalur network path ke clipboard"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                  </svg>
-                  <span id="copy-btn-text">Salin Path</span>
+                  <span>Panduan Buka Cepat / Setup 1-Klik</span>
                 </button>
               </div>
-              <p class="text-[11px] text-slate-500">
-                💡 Klik <strong>"Buka di File Explorer"</strong> untuk langsung membuka folder foto tamu, atau klik <strong>"Salin Path"</strong> lalu tekan <code class="px-1 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-[10px]">Win + R</code> & paste.
-              </p>
-            </div>
 
-            <!-- Download ZIP & Open Folder Option -->
-            <div class="pt-2 flex flex-wrap justify-end gap-2">
-              <button 
-                type="button"
-                onclick="openFolderInExplorer()" 
-                class="inline-flex items-center space-x-2 px-3 py-2 bg-lodge-800 hover:bg-lodge-900 text-white rounded-lg text-xs font-semibold transition focus-ring shadow-sm"
-              >
-                <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-                </svg>
-                <span>Buka Folder File Explorer</span>
-              </button>
-              <a 
-                id="btn-download-zip" 
-                href="#" 
-                class="inline-flex items-center space-x-2 px-3 py-2 bg-lodge-600 hover:bg-lodge-700 text-white rounded-lg text-xs font-semibold transition focus-ring shadow-sm"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                <span>Unduh Semua Foto (ZIP)</span>
-              </a>
+              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-800 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
+                  \\192.168.100.90\park-photos\results\Customer_XXXX
+                </div>
+
+                <div class="flex items-center space-x-2 shrink-0">
+                  <button 
+                    type="button" 
+                    onclick="openFolderInExplorer()" 
+                    id="btn-open-explorer"
+                    class="flex-1 sm:flex-none px-4 py-2.5 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold text-xs rounded-lg transition focus-ring shadow-sm flex items-center justify-center space-x-1.5"
+                    title="Buka folder foto customer langsung di Windows File Explorer"
+                  >
+                    <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Buka di File Explorer</span>
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onclick="copySambaPath()" 
+                    id="btn-copy-samba"
+                    class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg transition border border-slate-300 focus-ring flex items-center justify-center space-x-1"
+                    title="Salin jalur folder ke Clipboard"
+                  >
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    <span id="copy-btn-text">Salin Path</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-500 gap-1 pt-1">
+                <p>
+                  ⚡ Tips: Tekan <strong>Win + R</strong> lalu <strong>Ctrl + V</strong> dan <strong>Enter</strong> untuk langsung membuka folder di Windows.
+                </p>
+                <a 
+                  id="btn-download-zip" 
+                  href="#" 
+                  class="inline-flex items-center space-x-1.5 text-lodge-700 hover:text-lodge-900 font-semibold hover:underline"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Atau Unduh Semua Foto (ZIP)</span>
+                </a>
+              </div>
             </div>
 
           </div>
@@ -614,6 +623,113 @@
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
         <button type="button" onclick="closeCameraGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition">
           Saya Mengerti / Tutup
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal Panduan Buka File Explorer & Setup 1-Klik -->
+  <div id="modal-explorer-guide" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="relative max-w-xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-150">
+      
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-lodge-900 via-lodge-800 to-lodge-700 p-5 text-white flex justify-between items-start">
+        <div class="space-y-1">
+          <div class="inline-flex items-center space-x-1.5 bg-white/10 px-2.5 py-0.5 rounded text-[11px] font-semibold text-emerald-200">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <span>Windows File Explorer</span>
+          </div>
+          <h3 class="text-base font-bold">Akses Folder Foto Tamu di Windows</h3>
+        </div>
+        <button onclick="closeExplorerGuideModal()" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+      </div>
+
+      <!-- Body -->
+      <div class="p-6 space-y-4 text-xs text-slate-700 leading-relaxed max-h-[75vh] overflow-y-auto">
+        
+        <!-- Clipboard Status Banner -->
+        <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl flex items-start space-x-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">✓</div>
+          <div class="flex-1 space-y-1.5">
+            <p class="font-bold text-emerald-950 text-xs">Jalur Folder Otomatis Tersalin ke Clipboard!</p>
+            <div class="flex items-center space-x-2">
+              <input 
+                type="text" 
+                id="modal-guide-path" 
+                readonly 
+                class="flex-1 bg-white border border-emerald-300 font-mono text-[11px] text-slate-800 px-2.5 py-1.5 rounded select-all"
+                value="\\192.168.100.90\park-photos\results\Customer_XXXX"
+              />
+              <button 
+                type="button" 
+                onclick="copyTextFromElement('modal-guide-path', this)" 
+                class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded text-xs transition shrink-0"
+              >
+                Salin Ulang
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cara 1: Shortcut Cepat (1 Detik, Tanpa Install Apapun) -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
+          <div class="flex items-center space-x-2">
+            <span class="px-2 py-0.5 bg-lodge-100 text-lodge-800 font-bold rounded text-[11px] border border-lodge-200">CARA CEPAT (1 DETIK)</span>
+            <span class="font-bold text-slate-800 text-xs">Buka Langsung dengan Keyboard Windows</span>
+          </div>
+          <p class="text-slate-600 text-[11px]">Karena jalur folder sudah tersalin di clipboard komputer Anda, cukup tekan 3 tombol ini:</p>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-center font-mono">
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
+              <div class="text-[10px] text-slate-400 uppercase font-sans font-bold">Langkah 1</div>
+              <div class="font-bold text-slate-800 text-sm mt-0.5">⊞ Win + R</div>
+              <div class="text-[10px] text-slate-500 font-sans mt-0.5">Buka kotak dialog Run</div>
+            </div>
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
+              <div class="text-[10px] text-slate-400 uppercase font-sans font-bold">Langkah 2</div>
+              <div class="font-bold text-slate-800 text-sm mt-0.5">Ctrl + V</div>
+              <div class="text-[10px] text-slate-500 font-sans mt-0.5">Paste jalur folder</div>
+            </div>
+            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
+              <div class="text-[10px] text-slate-400 uppercase font-sans font-bold">Langkah 3</div>
+              <div class="font-bold text-slate-800 text-sm mt-0.5">Enter ↵</div>
+              <div class="text-[10px] text-slate-500 font-sans mt-0.5">Folder langsung terbuka!</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cara 2: Aktifkan 1-Klik Otomatis (Opsional) -->
+        <div class="bg-lodge-50/60 border border-lodge-200 rounded-xl p-4 space-y-2.5">
+          <div class="flex items-center space-x-2">
+            <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[11px] border border-emerald-200">OPSI 1-KLIK OTOMATIS</span>
+            <span class="font-bold text-slate-800 text-xs">Aktifkan Buka Langsung Tanpa Tombol Run</span>
+          </div>
+          <p class="text-slate-600 text-[11px]">
+            Ingin agar tombol <strong>"Buka di File Explorer"</strong> langsung membuka folder secara otomatis dalam 1 klik? Pasang konfigurasi registri aman berikut sekali saja pada PC operator:
+          </p>
+          <div class="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <a 
+              href="/api/setup-explorer-protocol" 
+              class="inline-flex items-center justify-center space-x-2 px-4 py-2 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-lg text-xs transition shadow-sm"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Unduh Aktifkan_Buka_File_Explorer.reg</span>
+            </a>
+            <span class="text-[10px] text-slate-500 italic">Double-click file yang diunduh lalu pilih Yes. (Tidak perlu izin Administrator)</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="closeExplorerGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition">
+          Tutup
         </button>
       </div>
 
@@ -999,26 +1115,16 @@
       }
     }
 
-    function sanitizeSambaUNC(path) {
-      if (!path) return '';
-      let clean = path.replace(/\//g, '\\').trim();
-      clean = clean.replace(/^\\+/, '');
-      clean = clean.replace(/\\+/g, '\\');
-      return '\\\\' + clean;
-    }
-
     function renderResults(data) {
       currentCustomerId = data.customer_id;
       document.getElementById('res-customer-id').textContent = data.customer_id;
       document.getElementById('res-match-count').textContent = `${data.match_count} foto cocok ditemukan`;
       document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
-      
-      let rawPath = data.samba_path || '';
-      const host = window.location.hostname || '192.168.100.90';
-      if (!rawPath || rawPath.startsWith('/mnt') || rawPath.includes('samba-server')) {
-        rawPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
+      let sambaPath = data.samba_path || '';
+      if (!sambaPath.startsWith('\\\\')) {
+        const host = window.location.hostname || '192.168.100.90';
+        sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
       }
-      const sambaPath = sanitizeSambaUNC(rawPath);
       document.getElementById('res-samba-path').textContent = sambaPath;
       document.getElementById('btn-download-zip').href = `/api/results/${data.customer_id}/download-zip`;
 
@@ -1048,16 +1154,16 @@
                 ${item.file_name}
               </div>
             </div>
-            <div class="p-3 flex justify-between items-center text-xs bg-slate-50 border-t border-slate-100 gap-1">
-              <span class="text-slate-600 font-medium truncate max-w-[45%]" title="${item.num_faces > 1 ? item.num_faces + ' orang' : '1 orang'}">
-                ${item.num_faces > 1 ? `👥 ${item.num_faces} orang (Kotak Hijau = Tamu)` : '👤 1 orang'}
+            <div class="p-3 flex justify-between items-center text-xs bg-slate-50 border-t border-slate-100 gap-1.5">
+              <span class="text-slate-600 font-medium truncate max-w-[48%]" title="${item.num_faces > 1 ? item.num_faces + ' orang (Kotak Hijau = Tamu)' : '1 orang'}">
+                ${item.num_faces > 1 ? `👥 ${item.num_faces} orang` : '👤 1 orang'}
               </span>
               <div class="flex items-center space-x-1.5 shrink-0">
                 <button 
                   type="button" 
-                  onclick="openPhotoFile('${item.file_name}')"
-                  class="px-2 py-1 bg-white hover:bg-lodge-50 text-lodge-700 hover:text-lodge-800 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
-                  title="Buka file foto ini langsung di File Explorer"
+                  onclick="openPhotoInExplorer('${item.file_name}', '${item.samba_file_path || ''}')"
+                  class="px-2.5 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
+                  title="Buka file foto ini di File Explorer"
                 >
                   <svg class="w-3.5 h-3.5 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
@@ -1081,58 +1187,84 @@
       showState('results');
     }
 
-    function openFolderInExplorer() {
-      let sambaPath = document.getElementById('res-samba-path').textContent.trim();
-      sambaPath = sanitizeSambaUNC(sambaPath);
-      const customerId = currentCustomerId || 'Customer_Folder';
+    function openExplorerGuideModal() {
+      const sambaPath = document.getElementById('res-samba-path').textContent.trim();
+      const modalInput = document.getElementById('modal-guide-path');
+      if (modalInput) modalInput.value = sambaPath;
+      const modal = document.getElementById('modal-explorer-guide');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
 
-      // 1. Salin path ke clipboard secara otomatis
+    function closeExplorerGuideModal() {
+      const modal = document.getElementById('modal-explorer-guide');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function triggerProtocolOpen(targetPath) {
+      if (!targetPath) return;
+      try {
+        const protocolUrl = 'lodge:' + encodeURI(targetPath);
+        const link = document.createElement('a');
+        link.href = protocolUrl;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (e) {
+        console.warn("Protocol launch error:", e);
+      }
+    }
+
+    function openFolderInExplorer() {
+      const sambaPath = document.getElementById('res-samba-path').textContent.trim();
+      
+      // 1. Salin otomatis ke clipboard komputer
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(sambaPath).catch(err => console.warn(err));
       }
 
-      // 2. Format file URI untuk shortcut Windows Explorer (.url)
-      const cleanPath = sambaPath.replace(/^\\+/, '').replace(/\\+/g, '/');
-      const fileUri = 'file://' + cleanPath;
-      const shortcutContent = `[InternetShortcut]\r\nURL=${fileUri}\r\nIconIndex=0\r\nIconFile=explorer.exe\r\n`;
+      // 2. Picu protokol lodge: jika sudah diaktifkan di PC operator
+      triggerProtocolOpen(sambaPath);
 
-      const blob = new Blob([shortcutContent], { type: 'application/x-mswinurl' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Buka_Folder_${customerId}.url`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-
-      // 3. Tampilkan toast konfirmasi ramah
-      showExplorerToast(`Membuka folder ${customerId} di File Explorer... Path juga otomatis tersalin ke Clipboard.`);
+      // 3. Tampilkan modal panduan dengan shortcut Win + R & installer 1-klik
+      openExplorerGuideModal();
     }
 
-    function openPhotoFile(fileName) {
-      let sambaPath = document.getElementById('res-samba-path').textContent.trim();
-      sambaPath = sanitizeSambaUNC(sambaPath);
-      const filePath = sambaPath + '\\' + fileName;
-      const customerId = currentCustomerId || 'Customer_Folder';
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(filePath).catch(err => console.warn(err));
+    function openPhotoInExplorer(fileName, sambaFilePath) {
+      let targetPath = sambaFilePath;
+      if (!targetPath) {
+        const folderPath = document.getElementById('res-samba-path').textContent.trim();
+        targetPath = folderPath + '\\' + fileName;
       }
 
-      const cleanPath = filePath.replace(/^\\+/, '').replace(/\\+/g, '/');
-      const fileUri = 'file://' + cleanPath;
-      const shortcutContent = `[InternetShortcut]\r\nURL=${fileUri}\r\nIconIndex=0\r\nIconFile=explorer.exe\r\n`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(targetPath).catch(err => console.warn(err));
+      }
 
-      const blob = new Blob([shortcutContent], { type: 'application/x-mswinurl' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Buka_Foto_${fileName}.url`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+      triggerProtocolOpen(targetPath);
+      showExplorerToast(`Jalur file ${fileName} disalin ke Clipboard! Tekan Win+R lalu Enter, atau langsung terbuka jika 1-klik aktif.`);
+    }
 
-      showExplorerToast(`Membuka file ${fileName} di File Explorer... Path file juga tersalin ke Clipboard.`);
+    function copySambaPath() {
+      const pathText = document.getElementById('res-samba-path').textContent.trim();
+      navigator.clipboard.writeText(pathText).then(() => {
+        const btnText = document.getElementById('copy-btn-text');
+        if (btnText) {
+          btnText.textContent = "Tersalin!";
+          setTimeout(() => {
+            btnText.textContent = "Salin Path";
+          }, 2000);
+        }
+        showExplorerToast("Jalur folder berhasil disalin ke Clipboard!");
+      }).catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
     }
 
     function showExplorerToast(message) {
@@ -1140,7 +1272,7 @@
       if (!toast) {
         toast = document.createElement('div');
         toast.id = 'explorer-toast';
-        toast.className = 'fixed bottom-5 right-5 z-50 bg-lodge-900 text-white border border-lodge-700 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-xs transition duration-300 max-w-md';
+        toast.className = 'fixed bottom-5 right-5 z-50 bg-lodge-900 text-white border border-lodge-700 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-xs transition duration-300 max-w-md animate-in fade-in slide-in-from-bottom-2';
         document.body.appendChild(toast);
       }
       toast.innerHTML = `
@@ -1151,7 +1283,7 @@
         </div>
         <div class="flex-1">
           <p class="font-bold text-white">${message}</p>
-          <p class="text-lodge-200 text-[11px] mt-0.5">Tips: Klik file shortcut yang terunduh, atau tekan Win+R dan paste untuk membuka langsung.</p>
+          <p class="text-lodge-200 text-[11px] mt-0.5">Tips: Tekan tombol Win + R lalu Enter di keyboard untuk membuka seketika.</p>
         </div>
       `;
       toast.classList.remove('hidden');
@@ -1159,21 +1291,6 @@
       window._toastTimer = setTimeout(() => {
         toast.classList.add('hidden');
       }, 5000);
-    }
-
-    function copySambaPath() {
-      let pathText = document.getElementById('res-samba-path').textContent.trim();
-      pathText = sanitizeSambaUNC(pathText);
-      navigator.clipboard.writeText(pathText).then(() => {
-        const btnText = document.getElementById('copy-btn-text');
-        btnText.textContent = "Tersalin!";
-        showExplorerToast("Path folder Samba berhasil disalin ke clipboard!");
-        setTimeout(() => {
-          btnText.textContent = "Salin Path";
-        }, 2000);
-      }).catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
     }
 
     function openLightbox(imgUrl, filename, matchInfo) {
@@ -1192,9 +1309,13 @@
       modal.classList.remove('flex');
     }
 
-    // Close modal on Escape key
+    // Close modals on Escape key
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'Escape') {
+        closeLightbox();
+        closeCameraGuideModal();
+        closeExplorerGuideModal();
+      }
     });
 
     async function triggerReindex() {
