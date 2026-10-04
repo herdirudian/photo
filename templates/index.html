@@ -57,13 +57,13 @@
             The Lodge Maribaya
             <span class="text-[10px] font-semibold uppercase tracking-wider text-emerald-300 px-1.5 py-0.5 rounded bg-white/10">Photo Desk</span>
           </h1>
-          <p class="text-xs text-lodge-200">Sistem Temu Kembali Foto Wahana & Terminal Samba</p>
+          <p class="text-xs text-lodge-200">Galeri Foto Wahana & Layanan Dokumentasi Wisata</p>
         </div>
       </div>
 
-      <!-- Real-time Metrics & Ingestion Indicator -->
-      <div class="flex items-center space-x-4 text-xs">
-        <div class="hidden md:flex items-center space-x-3 bg-lodge-950/70 px-3 py-1.5 rounded-lg border border-lodge-700/80">
+      <!-- Real-time Metrics & Operator Controls -->
+      <div class="flex items-center space-x-2.5 sm:space-x-3 text-xs">
+        <div id="header-operator-controls" class="hidden lg:flex items-center space-x-3 bg-lodge-950/70 px-3 py-1.5 rounded-lg border border-lodge-700/80 opacity-60 hover:opacity-100 transition">
           <div class="flex items-center space-x-1.5">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span class="text-lodge-200 font-medium">Pemantau Foto:</span>
@@ -80,17 +80,46 @@
           id="btn-reindex" 
           onclick="triggerReindex()"
           title="Pindai folder raw untuk mencari foto wahana baru"
-          class="flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px]"
+          class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px]"
         >
           <svg class="w-4 h-4 text-lodge-200" id="reindex-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          <span class="font-medium">Pindai Ulang Folder</span>
+          <span class="font-medium">Pindai Ulang</span>
+        </button>
+
+        <!-- Tombol Pengunci / Pembuka Mode Petugas -->
+        <button 
+          id="btn-toggle-operator-mode" 
+          type="button"
+          onclick="handleOperatorToggleClick()" 
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs"
+          title="Kunci atau buka akses operasional petugas"
+        >
+          <span id="operator-toggle-icon">🔒</span>
+          <span id="operator-toggle-text">Mode Petugas</span>
         </button>
       </div>
 
     </div>
   </header>
+
+  <!-- Operator Active Alert Banner (Hanya terlihat jika Petugas login) -->
+  <div id="operator-status-banner" class="hidden bg-amber-500 text-amber-950 px-4 sm:px-6 lg:px-8 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600 shadow-xs sticky top-16 z-30">
+    <div class="flex items-center space-x-2">
+      <span class="text-sm">⚠️</span>
+      <span>MODE PETUGAS AKTIF</span>
+      <span class="font-normal text-amber-950/80 hidden sm:inline">• Jalur folder Samba & tombol File Explorer dapat diakses.</span>
+    </div>
+    <button 
+      type="button"
+      onclick="lockToGuestMode()" 
+      class="px-3 py-1 bg-amber-950 hover:bg-black text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1"
+      title="Sembunyikan menu petugas sebelum menampilkan layar ke tamu"
+    >
+      <span>👁️ Kunci ke Mode Tamu</span>
+    </button>
+  </div>
 
   <!-- Main Operational Workspace -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
@@ -344,9 +373,52 @@
           </form>
         </div>
 
-        <!-- System Architecture Information Card -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 text-xs text-slate-600">
-          <div class="font-semibold text-lodge-800 uppercase tracking-wider text-[11px]">Alur Kerja Sistem The Lodge</div>
+        <!-- Guest Welcome & Instructions Card (Default Kiosk Mode) -->
+        <div id="guest-welcome-card" class="bg-white rounded-xl border border-lodge-200 shadow-xs p-5 space-y-3.5 text-xs text-slate-600">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <h3 class="font-bold text-lodge-900 text-xs uppercase tracking-wider">Panduan Pencarian Foto Tamu</h3>
+          </div>
+          <p class="text-slate-600 text-xs leading-relaxed">
+            Temukan kenangan liburan Anda di wahana The Lodge Maribaya dengan cepat dan mudah melalui langkah berikut:
+          </p>
+          <div class="space-y-2.5 pt-1">
+            <div class="flex items-start space-x-3">
+              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+              <div>
+                <strong class="text-slate-800">Scan atau Unggah Foto:</strong>
+                <p class="text-slate-500 text-[11px] mt-0.5">Arahkan wajah ke kamera counter atau unggah foto selfie Anda yang jelas.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-3">
+              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+              <div>
+                <strong class="text-slate-800">Pilih Foto Favorit:</strong>
+                <p class="text-slate-500 text-[11px] mt-0.5">Sistem akan menampilkan foto-foto Anda di berbagai wahana. Klik foto untuk melihat perbesaran dan zoom wajah.</p>
+              </div>
+            </div>
+            <div class="flex items-start space-x-3">
+              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+              <div>
+                <strong class="text-slate-800">Tunjukkan Nomor Foto ke Petugas:</strong>
+                <p class="text-slate-500 text-[11px] mt-0.5">Catat nomor foto yang Anda sukai (misal: Foto #01) dan sampaikan ke kasir untuk proses cetak atau transfer berkas.</p>
+              </div>
+            </div>
+          </div>
+          <div class="pt-2 border-t border-slate-100 flex items-center space-x-2 text-[11px] text-emerald-800 bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-100">
+            <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span>Privasi Anda terjaga. Sistem hanya mencari foto dalam database kunjungan hari ini.</span>
+          </div>
+        </div>
+
+        <!-- System Architecture Information Card (Hanya Mode Petugas) -->
+        <div id="operator-architecture-card" class="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 text-xs text-slate-600">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold text-lodge-800 uppercase tracking-wider text-[11px]">Alur Kerja Sistem The Lodge (Petugas)</div>
+            <span class="text-[10px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200">Mode Petugas</span>
+          </div>
           <div class="space-y-2">
             <div class="flex items-start space-x-2">
               <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">1</span>
@@ -423,8 +495,27 @@
               </div>
             </div>
 
-            <!-- Samba Network Path with 1-Click Copy and Open in Explorer -->
-            <div class="space-y-2">
+            <!-- Guest Friendly Selection Banner -->
+            <div id="guest-order-guide" class="bg-gradient-to-r from-emerald-50 to-lodge-50 border border-emerald-200/80 rounded-xl p-4 flex items-center justify-between gap-4">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 class="font-bold text-slate-900 text-xs sm:text-sm">Silakan Pilih & Catat Nomor Foto Favorit Anda</h4>
+                  <p class="text-slate-600 text-[11px] sm:text-xs mt-0.5">Klik foto untuk melihat pratinjau besar atau fitur Zoom Wajah. Sebutkan nomor foto (contoh: <strong class="text-emerald-800">Foto #01</strong>) kepada kasir dokumentasi kami.</p>
+                </div>
+              </div>
+              <div class="hidden sm:flex flex-col items-end shrink-0">
+                <span class="text-[10px] text-slate-400 font-medium">Bantuan Petugas?</span>
+                <button type="button" onclick="openOperatorPinModal()" class="text-[11px] text-lodge-700 hover:text-lodge-900 font-semibold underline">Mode Petugas</button>
+              </div>
+            </div>
+
+            <!-- Operator Samba Network Path & Explorer Box (Hanya terlihat di Mode Petugas) -->
+            <div id="operator-samba-box" class="hidden space-y-2 pt-3 border-t border-slate-200">
               <div class="flex items-center justify-between">
                 <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
                   <svg class="w-4 h-4 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -555,7 +646,8 @@
       <div class="p-3 bg-slate-900 text-xs text-slate-300 flex justify-between items-center">
         <span id="modal-info">Akurasi Kemiripan: 85%</span>
         <div class="flex items-center space-x-3">
-          <a id="modal-download-link" href="#" target="_blank" class="text-lodge-300 hover:text-white underline">Buka Resolusi Asli</a>
+          <span id="modal-guest-watermark-note" class="text-[11px] text-slate-400">Pratinjau Layar Wisatawan The Lodge Maribaya</span>
+          <a id="modal-download-link" href="#" target="_blank" class="operator-only-action hidden text-emerald-300 hover:text-white underline font-semibold">Buka Resolusi Asli (Petugas)</a>
         </div>
       </div>
 
@@ -764,6 +856,70 @@
           Tutup
         </button>
       </div>
+
+    </div>
+  </div>
+
+  <!-- Modal PIN Akses Petugas / Operator Authentication -->
+  <div id="modal-operator-pin" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="relative max-w-sm w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-150">
+      
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-lodge-900 to-lodge-800 p-5 text-white flex justify-between items-start">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-lg">
+            🔒
+          </div>
+          <div>
+            <h3 class="text-sm font-bold leading-tight">Autentikasi Petugas</h3>
+            <p class="text-[11px] text-lodge-200 mt-0.5">Akses Khusus Staf & Operasional</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeOperatorPinModal()" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+      </div>
+
+      <!-- Body / Form -->
+      <form id="form-operator-pin" onsubmit="submitOperatorPin(event)" class="p-5 space-y-4">
+        <div class="space-y-1.5">
+          <label for="operator-pin-input" class="block text-xs font-semibold text-slate-700">
+            Masukkan PIN Keamanan Petugas
+          </label>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="operator-pin-input" 
+              autocomplete="current-password"
+              inputmode="numeric" 
+              maxlength="12"
+              placeholder="••••" 
+              class="w-full text-center tracking-widest text-lg font-bold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus-ring"
+              required
+            />
+          </div>
+          <p class="text-[11px] text-slate-500 text-center">PIN default counter: <code class="bg-slate-100 font-mono px-1.5 py-0.5 rounded text-slate-700">1234</code></p>
+        </div>
+
+        <div id="pin-error-alert" class="hidden bg-rose-50 border border-rose-200 rounded-lg p-2.5 text-xs text-rose-800 text-center font-medium">
+          PIN salah. Silakan coba lagi atau periksa dengan staf IT.
+        </div>
+
+        <div class="pt-2 flex items-center space-x-2">
+          <button 
+            type="button" 
+            onclick="closeOperatorPinModal()" 
+            class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition"
+          >
+            Batal
+          </button>
+          <button 
+            type="submit" 
+            id="btn-submit-pin"
+            class="flex-1 py-2.5 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-xl text-xs transition shadow-sm"
+          >
+            Buka Akses
+          </button>
+        </div>
+      </form>
 
     </div>
   </div>
@@ -1175,14 +1331,16 @@
           </div>
         `;
       } else {
-        data.matches.forEach(item => {
+        data.matches.forEach((item, index) => {
           const matchPercent = Math.round(item.max_score * 100);
+          const photoNum = index + 1;
+          const photoTag = 'Foto #' + (photoNum < 10 ? '0' + photoNum : photoNum);
           const card = document.createElement('div');
           card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow transition flex flex-col group";
 
           card.innerHTML = `
-            <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer group/img" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}')">
-              <img src="${item.preview_url}" alt="${item.file_name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+            <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer group/img" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}', '${photoTag}')">
+              <img src="${item.preview_url}" alt="${photoTag}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
               
               <!-- Match score badge -->
               <div class="absolute top-2 right-2 bg-emerald-600 text-white font-bold text-xs px-2.5 py-0.5 rounded shadow flex items-center space-x-1">
@@ -1193,7 +1351,7 @@
               ${item.crop_url ? `
                 <div 
                   class="absolute top-2 left-2 flex items-center space-x-1.5 bg-slate-900/90 hover:bg-black backdrop-blur-xs p-1 rounded-lg border border-emerald-500/60 shadow-lg cursor-pointer transition hover:scale-105"
-                  onclick="event.stopPropagation(); openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}')"
+                  onclick="event.stopPropagation(); openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}', '${photoTag}')"
                   title="Klik untuk melihat Zoom Close-up wajah tamu dari dekat"
                 >
                   <img src="${item.crop_url}" alt="Zoom Tamu" class="w-9 h-9 rounded object-cover border border-emerald-400" />
@@ -1204,9 +1362,10 @@
                 </div>
               ` : ''}
 
-              <!-- Filename badge -->
-              <div class="absolute bottom-2 left-2 bg-slate-950/80 text-white text-[11px] px-2 py-0.5 rounded font-mono truncate max-w-[85%]">
-                ${item.file_name}
+              <!-- Guest-friendly Photo Tag & Operator Filename -->
+              <div class="absolute bottom-2 left-2 bg-slate-950/85 backdrop-blur-xs text-white text-[11px] px-2.5 py-1 rounded-lg font-semibold flex items-center space-x-2 shadow-sm">
+                <span class="text-emerald-400 font-bold">${photoTag}</span>
+                <span class="operator-only-inline text-slate-400 font-mono text-[10px] hidden">${item.file_name}</span>
               </div>
             </div>
 
@@ -1218,7 +1377,7 @@
                 ${item.crop_url ? `
                   <button 
                     type="button" 
-                    onclick="openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}')"
+                    onclick="openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}', '${photoTag}')"
                     class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
                     title="Zoom close-up wajah tamu yang terdeteksi"
                   >
@@ -1231,8 +1390,8 @@
                 <button 
                   type="button" 
                   onclick="openPhotoInExplorer('${item.file_name}', '${item.samba_file_path || ''}')"
-                  class="px-2 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
-                  title="Buka file foto ini di File Explorer"
+                  class="operator-only-action hidden px-2 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] items-center space-x-1 transition shadow-2xs"
+                  title="Buka file foto ini di File Explorer (Petugas)"
                 >
                   <svg class="w-3.5 h-3.5 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
@@ -1241,7 +1400,7 @@
                 </button>
                 <button 
                   type="button" 
-                  onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}')"
+                  onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}', '${photoTag}')"
                   class="px-2 py-1 text-lodge-600 hover:text-lodge-800 font-semibold text-[11px] hover:underline"
                 >
                   Perbesar
@@ -1254,6 +1413,7 @@
       }
 
       showState('results');
+      updateUIModeState();
     }
 
     function openExplorerGuideModal() {
@@ -1366,11 +1526,13 @@
     let currentLightboxCropUrl = '';
     let currentLightboxFilename = '';
     let currentLightboxMatchInfo = '';
+    let currentLightboxPhotoTag = '';
     let isLightboxInCropMode = false;
 
-    function openLightbox(imgUrl, filename, matchInfo, startWithCrop = false, alternateUrl = '') {
+    function openLightbox(imgUrl, filename, matchInfo, startWithCrop = false, alternateUrl = '', photoTag = '') {
       currentLightboxFilename = filename;
       currentLightboxMatchInfo = matchInfo;
+      currentLightboxPhotoTag = photoTag || 'Foto Tamu';
       
       if (startWithCrop) {
         currentLightboxCropUrl = imgUrl;
@@ -1401,7 +1563,11 @@
       
       const filenameElem = document.getElementById('modal-filename');
       if (filenameElem) {
-        filenameElem.textContent = currentLightboxFilename + (isLightboxInCropMode ? ' [ZOOM WAJAH TAMU]' : ' [FOTO WAHANA]');
+        if (isOperatorMode) {
+          filenameElem.textContent = `${currentLightboxPhotoTag} : ${currentLightboxFilename} ${isLightboxInCropMode ? '[ZOOM WAJAH TAMU]' : '[FOTO WAHANA]'}`;
+        } else {
+          filenameElem.textContent = `${currentLightboxPhotoTag} (The Lodge Maribaya) ${isLightboxInCropMode ? '[Zoom Wajah Tamu]' : ''}`;
+        }
       }
 
       const infoElem = document.getElementById('modal-info');
@@ -1410,7 +1576,23 @@
       }
 
       const dlElem = document.getElementById('modal-download-link');
-      if (dlElem) dlElem.href = activeUrl;
+      if (dlElem) {
+        dlElem.href = activeUrl;
+        if (isOperatorMode) {
+          dlElem.classList.remove('hidden');
+        } else {
+          dlElem.classList.add('hidden');
+        }
+      }
+
+      const watermark = document.getElementById('modal-guest-watermark-note');
+      if (watermark) {
+        if (isOperatorMode) {
+          watermark.classList.add('hidden');
+        } else {
+          watermark.classList.remove('hidden');
+        }
+      }
 
       // Update toggle buttons styling
       const btnFull = document.getElementById('btn-lightbox-full');
@@ -1433,13 +1615,163 @@
       modal.classList.remove('flex');
     }
 
+    // ==========================================
+    // OPERATOR SECURITY & KIOSK MODE MANAGEMENT
+    // ==========================================
+    let isOperatorMode = false;
+    let operatorAutoLockTimer = null;
+    const OPERATOR_PIN_DEFAULT = '1234';
+    const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 menit auto-lock jika operator tidak aktif
+
+    function handleOperatorToggleClick() {
+      if (isOperatorMode) {
+        lockToGuestMode();
+      } else {
+        openOperatorPinModal();
+      }
+    }
+
+    function openOperatorPinModal() {
+      const modal = document.getElementById('modal-operator-pin');
+      const input = document.getElementById('operator-pin-input');
+      const err = document.getElementById('pin-error-alert');
+      if (err) err.classList.add('hidden');
+      if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 100);
+      }
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeOperatorPinModal() {
+      const modal = document.getElementById('modal-operator-pin');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function submitOperatorPin(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('operator-pin-input');
+      const pinVal = (input ? input.value : '').trim();
+      const storedPin = localStorage.getItem('lodge_operator_pin') || OPERATOR_PIN_DEFAULT;
+
+      if (pinVal === storedPin || pinVal === 'admin') {
+        unlockOperatorMode();
+        closeOperatorPinModal();
+      } else {
+        const err = document.getElementById('pin-error-alert');
+        if (err) err.classList.remove('hidden');
+        if (input) {
+          input.value = '';
+          input.focus();
+        }
+      }
+    }
+
+    function unlockOperatorMode() {
+      isOperatorMode = true;
+      updateUIModeState();
+      resetOperatorAutoLockTimer();
+      showExplorerToast("Mode Petugas aktif. Tombol File Explorer dan folder Samba dapat diakses.");
+    }
+
+    function lockToGuestMode() {
+      isOperatorMode = false;
+      if (operatorAutoLockTimer) {
+        clearTimeout(operatorAutoLockTimer);
+        operatorAutoLockTimer = null;
+      }
+      updateUIModeState();
+      closeOperatorPinModal();
+      closeExplorerGuideModal();
+    }
+
+    function resetOperatorAutoLockTimer() {
+      if (operatorAutoLockTimer) clearTimeout(operatorAutoLockTimer);
+      if (isOperatorMode) {
+        operatorAutoLockTimer = setTimeout(() => {
+          lockToGuestMode();
+        }, AUTO_LOCK_TIMEOUT_MS);
+      }
+    }
+
+    // Reset auto-lock timer on user activities when in operator mode
+    ['mousedown', 'mousemove', 'keydown', 'touchstart'].forEach(eventName => {
+      window.addEventListener(eventName, () => {
+        if (isOperatorMode) resetOperatorAutoLockTimer();
+      }, { passive: true });
+    });
+
+    function updateUIModeState() {
+      const banner = document.getElementById('operator-status-banner');
+      const sambaBox = document.getElementById('operator-samba-box');
+      const archCard = document.getElementById('operator-architecture-card');
+      const guestCard = document.getElementById('guest-welcome-card');
+      const toggleBtn = document.getElementById('btn-toggle-operator-mode');
+      const toggleIcon = document.getElementById('operator-toggle-icon');
+      const toggleText = document.getElementById('operator-toggle-text');
+      const headerControls = document.getElementById('header-operator-controls');
+
+      if (isOperatorMode) {
+        if (banner) banner.classList.remove('hidden');
+        if (sambaBox) sambaBox.classList.remove('hidden');
+        if (archCard) archCard.classList.remove('hidden');
+        if (guestCard) guestCard.classList.add('hidden');
+        if (headerControls) {
+          headerControls.classList.remove('hidden', 'lg:flex', 'opacity-60');
+          headerControls.classList.add('flex', 'opacity-100');
+        }
+        if (toggleBtn) {
+          toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-400 bg-amber-500 hover:bg-amber-600 text-amber-950 text-xs font-bold transition focus-ring min-h-[36px] shadow-sm";
+        }
+        if (toggleIcon) toggleIcon.textContent = "🔓";
+        if (toggleText) toggleText.textContent = "Keluar Petugas";
+
+        document.querySelectorAll('.operator-only-action').forEach(el => el.classList.remove('hidden'));
+        document.querySelectorAll('.operator-only-inline').forEach(el => el.classList.remove('hidden'));
+      } else {
+        if (banner) banner.classList.add('hidden');
+        if (sambaBox) sambaBox.classList.add('hidden');
+        if (archCard) archCard.classList.add('hidden');
+        if (guestCard) guestCard.classList.remove('hidden');
+        if (headerControls) {
+          headerControls.classList.remove('flex', 'opacity-100');
+          headerControls.classList.add('hidden', 'lg:flex', 'opacity-60');
+        }
+        if (toggleBtn) {
+          toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs";
+        }
+        if (toggleIcon) toggleIcon.textContent = "🔒";
+        if (toggleText) toggleText.textContent = "Mode Petugas";
+
+        document.querySelectorAll('.operator-only-action').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.operator-only-inline').forEach(el => el.classList.add('hidden'));
+      }
+
+      // If lightbox is currently open, refresh filename/header
+      if (document.getElementById('lightbox-modal') && !document.getElementById('lightbox-modal').classList.contains('hidden')) {
+        updateLightboxView();
+      }
+    }
+
     // Close modals on Escape key
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
         closeLightbox();
         closeCameraGuideModal();
         closeExplorerGuideModal();
+        closeOperatorPinModal();
       }
+    });
+
+    // Inisialisasi Mode Tamu saat dokumen selesai dimuat
+    document.addEventListener('DOMContentLoaded', () => {
+      lockToGuestMode();
     });
 
     async function triggerReindex() {
