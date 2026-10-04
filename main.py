@@ -344,11 +344,22 @@ async def search_guest_photos(
     query_encoding = query_face["encoding"]
 
     # FAISS Similarity Search
-    matched_photos = db_manager.search_similar_faces(
+    raw_matches = db_manager.search_similar_faces(
         query_encoding=query_encoding,
         threshold=threshold,
         top_k=top_k
     )
+
+    # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails
+    matched_photos = []
+    for item in raw_matches:
+        p_res = db_manager.resolve_photo(item["photo_id"], RAW_DIR)
+        if not p_res:
+            logger.warning(f"Omitting stale match #{item['photo_id']} ({item.get('file_name')} not found on disk)")
+            continue
+        _, actual_path = p_res
+        item["file_path"] = actual_path
+        matched_photos.append(item)
 
     elapsed_ms = round((time.time() - start_time) * 1000, 2)
     customer_uuid = uuid.uuid4().hex[:10].upper()
@@ -456,18 +467,19 @@ async def preview_photo(
     Serve a lightweight thumbnail preview of the photo with high-visibility bounding box
     specifically on the matched customer's face, and subtle indicator on other passengers.
     """
-    with db_manager._get_connection() as conn:
-        p_row = conn.execute("SELECT file_path, file_name FROM photos WHERE id = ?", (photo_id,)).fetchone()
-        if not p_row or not os.path.exists(p_row["file_path"]):
-            raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+    photo_res = db_manager.resolve_photo(photo_id, RAW_DIR)
+    if not photo_res:
+        raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+    p_row, file_path = photo_res
 
+    with db_manager._get_connection() as conn:
         faces_rows = conn.execute(
             "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
             (photo_id,)
         ).fetchall()
 
     try:
-        img = Image.open(p_row["file_path"])
+        img = Image.open(file_path)
         if img.mode != "RGB":
             img = img.convert("RGB")
 
@@ -475,7 +487,7 @@ async def preview_photo(
         img.thumbnail((800, 800), Image.Resampling.LANCZOS)
 
         # Scale factor if image was resized
-        orig_img = Image.open(p_row["file_path"])
+        orig_img = Image.open(file_path)
         scale_x = img.width / orig_img.width
         scale_y = img.height / orig_img.height
 
@@ -519,7 +531,7 @@ async def preview_photo(
 
     except Exception as e:
         logger.error(f"Error generating preview for photo {photo_id}: {e}")
-        return FileResponse(p_row["file_path"], media_type="image/jpeg")
+        return FileResponse(file_path, media_type="image/jpeg")
 
 
 @app.get("/api/photos/{photo_id}/crop")
@@ -531,18 +543,19 @@ async def crop_matched_face(
     Serve a crisp, high-resolution zoomed close-up crop of the customer's face from the original photo.
     Enables operators and guests to instantly verify distant or crowded background faces with 100% clarity.
     """
-    with db_manager._get_connection() as conn:
-        p_row = conn.execute("SELECT file_path, file_name FROM photos WHERE id = ?", (photo_id,)).fetchone()
-        if not p_row or not os.path.exists(p_row["file_path"]):
-            raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+    photo_res = db_manager.resolve_photo(photo_id, RAW_DIR)
+    if not photo_res:
+        raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+    p_row, file_path = photo_res
 
+    with db_manager._get_connection() as conn:
         faces_rows = conn.execute(
             "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
             (photo_id,)
         ).fetchall()
 
     if not faces_rows:
-        return FileResponse(p_row["file_path"], media_type="image/jpeg")
+        return FileResponse(file_path, media_type="image/jpeg")
 
     # Find the target face
     target_face = None
@@ -555,7 +568,7 @@ async def crop_matched_face(
         target_face = faces_rows[0]
 
     try:
-        img = Image.open(p_row["file_path"])
+        img = Image.open(file_path)
         if img.mode != "RGB":
             img = img.convert("RGB")
 
@@ -611,7 +624,7 @@ async def crop_matched_face(
 
     except Exception as e:
         logger.error(f"Error generating face crop for photo {photo_id}: {e}")
-        return FileResponse(p_row["file_path"], media_type="image/jpeg")
+        return FileResponse(file_path, media_type="image/jpeg")
 
 
 @app.get("/api/results/{customer_id}/download-zip")

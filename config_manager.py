@@ -32,6 +32,15 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 }
 
 
+def _write_settings_file(settings: Dict[str, Any]):
+    """Write settings dictionary directly to JSON file."""
+    os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
+    temp_path = CONFIG_FILE_PATH + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
+    os.replace(temp_path, CONFIG_FILE_PATH)
+
+
 def load_settings() -> Dict[str, Any]:
     """Load settings from JSON file or create with defaults."""
     settings = dict(DEFAULT_SETTINGS)
@@ -43,26 +52,26 @@ def load_settings() -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error loading {CONFIG_FILE_PATH}: {e}")
     else:
-        # Create default config file
-        save_settings(settings)
+        try:
+            _write_settings_file(settings)
+        except Exception as e:
+            logger.error(f"Error saving initial {CONFIG_FILE_PATH}: {e}")
     return settings
 
 
 def save_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
-    """Atomically save settings to persistent storage."""
-    settings = load_settings()
-    settings.update(new_settings)
-    os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
-    try:
-        temp_path = CONFIG_FILE_PATH + ".tmp"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-        os.replace(temp_path, CONFIG_FILE_PATH)
-        logger.info(f"Settings successfully saved to {CONFIG_FILE_PATH}")
-    except Exception as e:
-        logger.error(f"Failed to write settings: {e}")
-        raise e
-    return settings
+    """Atomically save settings to persistent storage without recursion."""
+    current = dict(DEFAULT_SETTINGS)
+    if os.path.exists(CONFIG_FILE_PATH):
+        try:
+            with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+                current.update(json.load(f))
+        except Exception:
+            pass
+    current.update(new_settings)
+    _write_settings_file(current)
+    logger.info(f"Settings successfully saved to {CONFIG_FILE_PATH}")
+    return current
 
 
 def test_network_connection(host: str, port: int = 445, timeout: float = 3.0) -> Dict[str, Any]:

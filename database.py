@@ -299,18 +299,6 @@ class DatabaseManager:
             conn.commit()
         logger.info(f"SQLite metadata initialized at {self.db_path}")
 
-    def reset_all_data(self):
-        """Clear all records from photos, faces, and reset the FAISS index."""
-        with self.lock:
-            with self._get_connection() as conn:
-                conn.execute("DELETE FROM photos")
-                conn.commit()
-            if FAISS_AVAILABLE:
-                base_index = faiss.IndexFlatIP(self.vector_dim)
-                self.index = faiss.IndexIDMap2(base_index)
-                self._save_faiss()
-            logger.info("Database and FAISS index have been completely reset.")
-
     def _init_faiss(self):
         """Initialize FAISS vector index with ID mapping for fast inner product (cosine similarity)."""
         with self.lock:
@@ -467,6 +455,120 @@ class DatabaseManager:
 
             logger.info(f"Registered {file_name}: {len(faces)} faces indexed (photo_id: {photo_id}).")
             return photo_id
+
+    def resolve_photo(self, photo_id: int, raw_dir: str) -> Optional[Tuple[sqlite3.Row, str]]:
+        """
+        Retrieve photo database row and verified existing file path.
+        If file path on disk has changed/moved to another subfolder under raw_dir,
+        it automatically self-heals by updating the database with the new location.
+        Returns (photo_row, verified_file_path) or None if truly missing from disk.
+        """
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
+        if not row:
+            return None
+
+        current_path = row["file_path"]
+        if os.path.isfile(current_path):
+            return row, current_path
+
+        # File not at recorded path; search raw_dir tree by filename
+        filename = row["file_name"]
+        for root, _, files in os.walk(raw_dir):
+            if filename in files:
+                new_path = os.path.join(root, filename)
+                if os.path.isfile(new_path):
+                    with self.lock, self._get_connection() as conn:
+                        try:
+                            st = os.stat(new_path)
+                            conn.execute(
+                                "UPDATE photos SET file_path = ?, file_mtime = ?, file_size = ? WHERE id = ?",
+                                (new_path, st.st_mtime, st.st_size, photo_id)
+                            )
+                            conn.commit()
+                            logger.info(f"Self-healed photo #{photo_id} path: {current_path} -> {new_path}")
+                        except Exception as e:
+                            logger.error(f"Error updating photo path during resolve: {e}")
+                    return row, new_path
+
+        return None
+
+    def purge_missing_photos(self, raw_dir: str) -> Dict[str, int]:
+        """
+        Scan database for photos whose physical files are no longer on disk.
+        Attempts self-healing first if photos were moved to a subfolder.
+        If truly missing, purges the records from SQLite and FAISS vector index.
+        Returns dict with counts of purged photos, purged faces, and updated paths.
+        """
+        with self.lock:
+            with self._get_connection() as conn:
+                rows = conn.execute("SELECT id, file_path, file_name FROM photos").fetchall()
+
+            if not rows:
+                return {"purged_photos": 0, "purged_faces": 0, "updated_paths": 0}
+
+            # Pre-index existing files on disk for fast lookup: filename -> list of paths
+            disk_files_by_name: Dict[str, List[str]] = {}
+            for root, _, files in os.walk(raw_dir):
+                for f in files:
+                    disk_files_by_name.setdefault(f, []).append(os.path.join(root, f))
+
+            stale_photo_ids: List[int] = []
+            stale_vector_ids: List[int] = []
+            updated_count = 0
+
+            with self._get_connection() as conn:
+                for r in rows:
+                    p_id = r["id"]
+                    curr_path = r["file_path"]
+                    f_name = r["file_name"]
+
+                    if os.path.isfile(curr_path):
+                        continue
+
+                    # Attempt self-healing via subfolder search
+                    possible_paths = disk_files_by_name.get(f_name, [])
+                    if possible_paths:
+                        new_path = possible_paths[0]
+                        try:
+                            st = os.stat(new_path)
+                            conn.execute(
+                                "UPDATE photos SET file_path = ?, file_mtime = ?, file_size = ? WHERE id = ?",
+                                (new_path, st.st_mtime, st.st_size, p_id)
+                            )
+                            updated_count += 1
+                            logger.info(f"Self-healed relocated photo #{p_id}: {curr_path} -> {new_path}")
+                            continue
+                        except Exception:
+                            pass
+
+                    # Truly missing photo
+                    stale_photo_ids.append(p_id)
+                    v_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (p_id,)).fetchall()
+                    for v in v_rows:
+                        stale_vector_ids.append(v["vector_id"])
+
+                # Remove stale records from SQLite (cascades to faces table)
+                if stale_photo_ids:
+                    placeholders = ",".join("?" for _ in stale_photo_ids)
+                    conn.execute(f"DELETE FROM photos WHERE id IN ({placeholders})", stale_photo_ids)
+                    conn.commit()
+
+            # Remove associated vectors from FAISS index
+            if stale_vector_ids and FAISS_AVAILABLE and self.index is not None:
+                try:
+                    self.index.remove_ids(np.array(stale_vector_ids, dtype=np.int64))
+                    self._save_faiss()
+                    logger.info(f"Purged {len(stale_photo_ids)} missing photos and {len(stale_vector_ids)} vectors from FAISS.")
+                except Exception as e:
+                    logger.warning(f"Error removing IDs from FAISS ({e}). Rebuilding index from database...")
+                    self._rebuild_faiss_from_sqlite()
+
+            return {
+                "purged_photos": len(stale_photo_ids),
+                "purged_faces": len(stale_vector_ids),
+                "updated_paths": updated_count
+            }
 
     def search_similar_faces(
         self,

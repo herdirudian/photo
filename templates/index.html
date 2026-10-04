@@ -1792,10 +1792,16 @@
         const res = await fetch('/api/reindex', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-          refreshStats();
+          await refreshStats();
+          if (data.message) {
+            alert(data.message);
+          }
+        } else {
+          alert('Gagal memindai: ' + (data.detail || 'Terjadi kendala pada server.'));
         }
       } catch (e) {
         console.error("Reindex error:", e);
+        alert('Gagal memindai ulang folder foto. Pastikan server aktif.');
       } finally {
         setTimeout(() => {
           icon.classList.remove('animate-spin');
