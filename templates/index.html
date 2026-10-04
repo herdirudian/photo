@@ -228,7 +228,7 @@
                   
                   <!-- Oval Face Framing Guide -->
                   <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                    <div class="w-36 h-48 border-2 border-emerald-400 rounded-full opacity-85 shadow-[0_0_15px_rgba(52,211,153,0.3)]"></div>
+                    <div class="w-36 h-48 border-2 border-dashed border-emerald-400 rounded-full opacity-85 shadow-[0_0_15px_rgba(52,211,153,0.3)]"></div>
                     <span class="mt-2 text-[11px] text-white/95 bg-slate-900/80 px-2.5 py-0.5 rounded font-medium shadow">
                       Posisikan wajah tamu di dalam oval
                     </span>
@@ -270,7 +270,7 @@
                 ondragover="handleDragOver(event)"
                 ondragleave="handleDragLeave(event)"
                 ondrop="handleDrop(event)"
-                class="border-2 border-slate-300 hover:border-lodge-600 bg-slate-50/50 hover:bg-lodge-50/50 rounded-xl p-6 text-center cursor-pointer transition relative group shadow-2xs"
+                class="border-2 border-dashed border-slate-300 hover:border-lodge-600 bg-slate-50/50 hover:bg-lodge-50/50 rounded-xl p-6 text-center cursor-pointer transition relative group"
               >
                 <input 
                   type="file" 
@@ -1339,7 +1339,7 @@
 
           card.innerHTML = `
             <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer group/img" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}', '${photoTag}')">
-              <img src="${item.preview_url}" alt="${photoTag}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              <img src="${item.preview_url}" alt="${photoTag}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" onerror="this.onerror=null; this.closest('.group').style.display='none';" />
               
               <!-- Match score badge -->
               <div class="absolute top-2 right-2 bg-emerald-600 text-white font-bold text-xs px-2.5 py-0.5 rounded shadow flex items-center space-x-1">
@@ -1353,7 +1353,7 @@
                   onclick="event.stopPropagation(); openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}', '${photoTag}')"
                   title="Klik untuk melihat Zoom Close-up wajah tamu dari dekat"
                 >
-                  <img src="${item.crop_url}" alt="Zoom Tamu" class="w-9 h-9 rounded object-cover border border-emerald-400" />
+                  <img src="${item.crop_url}" alt="Zoom Tamu" class="w-9 h-9 rounded object-cover border border-emerald-400" onerror="this.parentElement.style.display='none';" />
                   <div class="pr-1.5 hidden sm:block">
                     <span class="block text-[9px] font-bold text-emerald-300 uppercase leading-tight">Zoom Wajah</span>
                     <span class="block text-[8px] text-slate-300">Close-Up</span>
@@ -1783,10 +1783,16 @@
         const res = await fetch('/api/reindex', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-          refreshStats();
+          await refreshStats();
+          if (data.message) {
+            alert(data.message);
+          }
+        } else {
+          alert('Gagal memindai: ' + (data.detail || 'Terjadi kendala pada server.'));
         }
       } catch (e) {
         console.error("Reindex error:", e);
+        alert('Gagal memindai ulang folder foto. Pastikan server aktif.');
       } finally {
         setTimeout(() => {
           icon.classList.remove('animate-spin');
