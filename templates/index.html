@@ -446,7 +446,7 @@
 
               <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-800 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
-                  \\192.168.100.90\park-photos\results\Customer_XXXX
+                  \\192.168.100.95\park-photos\results\Customer_XXXX
                 </div>
 
                 <div class="flex items-center space-x-2 shrink-0">
@@ -626,7 +626,7 @@
                   type="text" 
                   readonly 
                   id="server-url-input" 
-                  value="http://192.168.100.90:8000" 
+                  value="http://192.168.100.95:8000" 
                   class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-[11px] font-mono select-all font-bold text-lodge-800"
                 />
                 <button 
@@ -693,7 +693,7 @@
                 id="modal-guide-path" 
                 readonly 
                 class="flex-1 bg-white border border-emerald-300 font-mono text-[11px] text-slate-800 px-2.5 py-1.5 rounded select-all"
-                value="\\192.168.100.90\park-photos\results\Customer_XXXX"
+                value="\\192.168.100.95\park-photos\results\Customer_XXXX"
               />
               <button 
                 type="button" 
@@ -778,6 +778,10 @@
     let toastTimeout = null;
 
     function openCameraGuideModal() {
+      const serverInput = document.getElementById('server-url-input');
+      if (serverInput && window.location.origin && window.location.origin !== 'null') {
+        serverInput.value = window.location.origin;
+      }
       document.getElementById('modal-camera-guide').classList.remove('hidden');
       document.getElementById('modal-camera-guide').classList.add('flex');
     }
@@ -1154,7 +1158,7 @@
       document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
       let sambaPath = data.samba_path || '';
       if (!sambaPath.startsWith('\\\\')) {
-        const host = window.location.hostname || '192.168.100.90';
+        const host = window.location.hostname || '192.168.100.95';
         sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
       }
       document.getElementById('res-samba-path').textContent = sambaPath;

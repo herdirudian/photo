@@ -80,13 +80,13 @@ if os.path.exists(IMG_DIR):
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.168.100.90") -> str:
+def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.168.100.95") -> str:
     """
-    Produce a strictly valid Windows UNC network path (e.g. \\192.168.100.90\park-photos\results\Customer_XXXX).
+    Produce a strictly valid Windows UNC network path (e.g. \\192.168.100.95\park-photos\results\Customer_XXXX).
     Guarantees exactly two leading backslashes and single backslashes in between.
     """
     import re
-    if not prefix or prefix.startswith("/mnt") or "samba-server" in prefix:
+    if not prefix or prefix.startswith("/mnt") or "samba-server" in prefix or "192.168.100.90" in prefix:
         prefix = rf"\\{fallback_host}\park-photos\results"
 
     clean_p = re.sub(r"^[\\/]+", "", prefix.strip())
@@ -326,7 +326,7 @@ async def search_guest_photos(
         json.dump(summary_data, f, indent=2)
 
     # Format Samba path dynamically using the accessed server IP / hostname
-    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
+    host = request.headers.get("host", "").split(":")[0] or "192.168.100.95"
     samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
 
     for item in matched_photos:
