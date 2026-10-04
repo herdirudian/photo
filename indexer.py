@@ -132,136 +132,60 @@ class RawPhotoEventHandler(FileSystemEventHandler):
 
 
 class PhotoIndexer:
-    """
-    Manages directory scanning, Watchdog observer lifecycle, and periodic polling.
-    Periodic polling is essential for CIFS/Samba/NFS network mounts where Linux kernel inotify
-    events are not triggered by remote file additions or deletions.
-    """
+    """Manages directory scanning and Watchdog observer lifecycle."""
 
-    def __init__(self, raw_dir: str, db_manager: DatabaseManager, face_engine: FaceEngine, polling_interval: float = 15.0):
+    def __init__(self, raw_dir: str, db_manager: DatabaseManager, face_engine: FaceEngine):
         self.raw_dir = raw_dir
         self.db_manager = db_manager
         self.face_engine = face_engine
-        self.polling_interval = polling_interval
         self.observer: Optional[Observer] = None
-        self._polling_thread: Optional[threading.Thread] = None
         self._running = False
-        self._scan_lock = threading.Lock()
         os.makedirs(self.raw_dir, exist_ok=True)
 
-    def scan_existing_files(self) -> dict:
-        """
-        Scan the raw directory recursively:
-        1. Purge missing/stale photos from SQLite & FAISS (with self-healing for relocated files).
-        2. Index newly discovered photos across all ride subfolders.
-        Returns a dictionary of scan metrics.
-        """
-        if not self._scan_lock.acquire(blocking=False):
-            logger.info("Scan already in progress. Skipping concurrent request.")
-            return {"status": "busy"}
+    def scan_existing_files(self):
+        """Scan the raw directory recursively to index existing or missed photos on startup."""
+        logger.info(f"Scanning directory for existing photos: {self.raw_dir}")
+        handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
+        scanned_count = 0
+        new_indexed_count = 0
 
-        try:
-            logger.info(f"Starting directory scan on: {self.raw_dir}")
+        for root, _, files in os.walk(self.raw_dir):
+            for filename in files:
+                full_path = os.path.join(root, filename)
+                if is_valid_image(full_path):
+                    scanned_count += 1
+                    try:
+                        stat = os.stat(full_path)
+                        if not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
+                            handler.process_file(full_path)
+                            new_indexed_count += 1
+                    except Exception as e:
+                        logger.error(f"Error checking {full_path}: {e}")
 
-            # Step 1: Self-heal moved photos and purge deleted/missing photos
-            purge_stats = self.db_manager.purge_missing_photos(self.raw_dir)
-            if purge_stats["purged_photos"] > 0:
-                logger.info(f"Cleaned up {purge_stats['purged_photos']} missing photos ({purge_stats['purged_faces']} face vectors).")
-            if purge_stats["updated_paths"] > 0:
-                logger.info(f"Self-healed paths for {purge_stats['updated_paths']} relocated photos.")
-
-            # Step 2: Index new or updated files
-            handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
-            scanned_count = 0
-            new_indexed_count = 0
-
-            for root, _, files in os.walk(self.raw_dir):
-                for filename in files:
-                    full_path = os.path.join(root, filename)
-                    if is_valid_image(full_path):
-                        scanned_count += 1
-                        try:
-                            stat = os.stat(full_path)
-                            if not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
-                                handler.process_file(full_path)
-                                new_indexed_count += 1
-                        except Exception as e:
-                            logger.error(f"Error checking {full_path}: {e}")
-
-            summary = {
-                "scanned": scanned_count,
-                "newly_indexed": new_indexed_count,
-                "purged_photos": purge_stats.get("purged_photos", 0),
-                "purged_faces": purge_stats.get("purged_faces", 0),
-                "updated_paths": purge_stats.get("updated_paths", 0)
-            }
-            logger.info(f"Scan complete. Scanned: {scanned_count}, Newly processed: {new_indexed_count}, Purged: {summary['purged_photos']}")
-            return summary
-
-        finally:
-            self._scan_lock.release()
-
-    def _polling_worker(self):
-        """
-        Background worker that periodically polls the network share (CIFS/Samba)
-        to detect newly added photos or cleaned up files without relying on kernel inotify.
-        """
-        logger.info(f"Network share periodic polling worker started (interval: {self.polling_interval}s).")
-        while self._running:
-            # Sleep in small steps to react quickly to shutdown
-            for _ in range(int(self.polling_interval)):
-                if not self._running:
-                    return
-                time.sleep(1)
-
-            try:
-                self.scan_existing_files()
-            except Exception as e:
-                logger.error(f"Error in background polling scanner: {e}")
+        logger.info(f"Initial scan complete. Scanned: {scanned_count}, Newly processed: {new_indexed_count}")
 
     def start(self):
-        """Start the watchdog observer and the periodic network share polling worker."""
+        """Start the background watchdog observer thread."""
         if self._running:
             return
 
-        self._running = True
-
-        # Perform initial scan synchronously to ensure clean state
         self.scan_existing_files()
 
-        # Start Watchdog observer (works on local file systems)
-        try:
-            event_handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
-            self.observer = Observer()
-            self.observer.schedule(event_handler, self.raw_dir, recursive=True)
-            self.observer.daemon = True
-            self.observer.start()
-            logger.info(f"Watchdog folder monitor active on: {self.raw_dir}")
-        except Exception as e:
-            logger.warning(f"Could not initialize inotify observer ({e}). Relying on polling worker.")
-
-        # Start background polling thread (essential for CIFS / Samba network mounts)
-        self._polling_thread = threading.Thread(target=self._polling_worker, daemon=True, name="SharePollingWorker")
-        self._polling_thread.start()
+        event_handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
+        self.observer = Observer()
+        self.observer.schedule(event_handler, self.raw_dir, recursive=True)
+        self.observer.daemon = True
+        self.observer.start()
+        self._running = True
+        logger.info(f"Watchdog folder monitor active on: {self.raw_dir}")
 
     def stop(self):
-        """Stop both the watchdog observer and polling worker."""
-        if not self._running:
-            return
-
-        self._running = False
-
-        if self.observer:
-            try:
-                self.observer.stop()
-                self.observer.join(timeout=3.0)
-            except Exception:
-                pass
-
-        if self._polling_thread and self._polling_thread.is_alive():
-            self._polling_thread.join(timeout=3.0)
-
-        logger.info("Watchdog and polling monitors stopped cleanly.")
+        """Stop the watchdog observer."""
+        if self.observer and self._running:
+            self.observer.stop()
+            self.observer.join(timeout=3.0)
+            self._running = False
+            logger.info("Watchdog folder monitor stopped.")
 
 
 if __name__ == "__main__":

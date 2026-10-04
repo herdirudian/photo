@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw
 
 from database import DatabaseManager, FaceEngine
 from indexer import PhotoIndexer
+import config_manager
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -42,9 +43,15 @@ for directory in [RAW_DIR, RESULTS_DIR, DB_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Singletons
+app_settings = config_manager.load_settings()
 db_manager = DatabaseManager(db_dir=DB_DIR)
 face_engine = FaceEngine(model=FACE_MODEL)
-indexer = PhotoIndexer(raw_dir=RAW_DIR, db_manager=db_manager, face_engine=face_engine)
+indexer = PhotoIndexer(
+    raw_dir=RAW_DIR, 
+    db_manager=db_manager, 
+    face_engine=face_engine,
+    polling_interval=float(app_settings.get("polling_interval", 15.0))
+)
 
 
 @asynccontextmanager
@@ -159,6 +166,99 @@ async def serve_dashboard(request: Request):
         )
 
 
+@app.get("/admin", response_class=HTMLResponse)
+async def serve_admin_dashboard(request: Request):
+    """Serve the Administrator Dashboard for network storage and system management."""
+    stats = db_manager.get_stats()
+    context = {
+        "request": request,
+        "stats": stats,
+        "logo_base64": get_logo_base64()
+    }
+    try:
+        return templates.TemplateResponse(
+            request=request,
+            name="admin.html",
+            context=context
+        )
+    except TypeError:
+        return templates.TemplateResponse("admin.html", context)
+
+
+# ==========================================
+# ADMIN CONFIGURATION & NETWORK STORAGE APIS
+# ==========================================
+
+@app.get("/api/admin/settings")
+async def get_admin_settings():
+    """Retrieve current system and network storage settings."""
+    cfg = config_manager.load_settings()
+    safe_cfg = dict(cfg)
+    if safe_cfg.get("smb_password"):
+        safe_cfg["smb_password"] = "••••••••"
+    return safe_cfg
+
+
+@app.post("/api/admin/settings")
+async def update_admin_settings(request: Request):
+    """Save new system and network storage configuration."""
+    data = await request.json()
+    existing = config_manager.load_settings()
+    # Preserve existing password if user didn't change masked string
+    if data.get("smb_password") in ["••••••••", "", None]:
+        data["smb_password"] = existing.get("smb_password", "")
+
+    updated = config_manager.save_settings(data)
+    if "polling_interval" in updated:
+        try:
+            indexer.polling_interval = float(updated["polling_interval"])
+        except Exception:
+            pass
+    return {"success": True, "settings": updated}
+
+
+@app.post("/api/admin/test-connection")
+async def test_admin_connection(request: Request):
+    """Test direct TCP connectivity to SMB server host on port 445."""
+    data = await request.json()
+    host = data.get("host", "").strip()
+    port = int(data.get("port", 445))
+    return config_manager.test_network_connection(host=host, port=port)
+
+
+@app.get("/api/admin/storage-status")
+async def get_storage_status():
+    """Inspect active storage folder, total photos, and detected ride subfolders."""
+    return config_manager.inspect_storage_status(RAW_DIR)
+
+
+@app.post("/api/admin/purge-stale")
+async def purge_stale_records():
+    """Manually trigger purging of photos missing from disk."""
+    return db_manager.purge_missing_photos(RAW_DIR)
+
+
+@app.post("/api/admin/reset-database")
+async def reset_database(request: Request):
+    """Reset and empty SQLite photos and FAISS vector index."""
+    data = await request.json()
+    cfg = config_manager.load_settings()
+    admin_pin = cfg.get("admin_pin", "1234")
+    if data.get("pin") != admin_pin:
+        raise HTTPException(status_code=403, detail="PIN Admin tidak valid.")
+    db_manager.reset_all_data()
+    return {"success": True, "message": "Database dan indeks FAISS berhasil direset."}
+
+
+@app.post("/api/admin/verify-pin")
+async def verify_admin_pin(request: Request):
+    """Verify administrator PIN."""
+    data = await request.json()
+    cfg = config_manager.load_settings()
+    is_valid = (data.get("pin") == cfg.get("admin_pin", "1234"))
+    return {"valid": is_valid}
+
+
 @app.get("/api/health")
 async def health_check():
     """System health check endpoint for Docker container status."""
@@ -185,18 +285,10 @@ async def get_system_stats():
 
 @app.post("/api/reindex")
 async def trigger_reindex():
-    """Trigger manual re-scan of raw photos directory and purge stale records."""
+    """Trigger manual re-scan of raw photos directory."""
     try:
-        stats = indexer.scan_existing_files()
-        return {
-            "success": True,
-            "message": (
-                f"Pemindaian selesai: {stats.get('scanned', 0)} foto dicek, "
-                f"{stats.get('newly_indexed', 0)} foto baru diindeks, "
-                f"{stats.get('purged_photos', 0)} data usang dibersihkan."
-            ),
-            "stats": stats
-        }
+        indexer.scan_existing_files()
+        return {"success": True, "message": "Raw photo scan completed successfully."}
     except Exception as e:
         logger.error(f"Error during re-index: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -214,9 +306,8 @@ async def search_guest_photos(
     1. Reads reference photo of guest.
     2. Extracts 128-d face vector.
     3. Searches FAISS for matching faces above similarity threshold.
-    4. Validates disk presence (self-healing relocated subfolders, filtering stale records).
-    5. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks / copies.
-    6. Returns matches and network folder path.
+    4. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks.
+    5. Returns matches and network folder path.
     """
     start_time = time.time()
 
@@ -253,22 +344,11 @@ async def search_guest_photos(
     query_encoding = query_face["encoding"]
 
     # FAISS Similarity Search
-    raw_matches = db_manager.search_similar_faces(
+    matched_photos = db_manager.search_similar_faces(
         query_encoding=query_encoding,
         threshold=threshold,
         top_k=top_k
     )
-
-    # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails
-    matched_photos = []
-    for item in raw_matches:
-        p_res = db_manager.resolve_photo(item["photo_id"], RAW_DIR)
-        if not p_res:
-            logger.warning(f"Omitting stale match #{item['photo_id']} ({item.get('file_name')} not found on disk)")
-            continue
-        _, actual_path = p_res
-        item["file_path"] = actual_path
-        matched_photos.append(item)
 
     elapsed_ms = round((time.time() - start_time) * 1000, 2)
     customer_uuid = uuid.uuid4().hex[:10].upper()
@@ -375,21 +455,19 @@ async def preview_photo(
     """
     Serve a lightweight thumbnail preview of the photo with high-visibility bounding box
     specifically on the matched customer's face, and subtle indicator on other passengers.
-    Self-heals if the photo was relocated into a ride subfolder.
     """
-    photo_res = db_manager.resolve_photo(photo_id, RAW_DIR)
-    if not photo_res:
-        raise HTTPException(status_code=404, detail="Photo file not found on disk.")
-    p_row, file_path = photo_res
-
     with db_manager._get_connection() as conn:
+        p_row = conn.execute("SELECT file_path, file_name FROM photos WHERE id = ?", (photo_id,)).fetchone()
+        if not p_row or not os.path.exists(p_row["file_path"]):
+            raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+
         faces_rows = conn.execute(
             "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
             (photo_id,)
         ).fetchall()
 
     try:
-        img = Image.open(file_path)
+        img = Image.open(p_row["file_path"])
         if img.mode != "RGB":
             img = img.convert("RGB")
 
@@ -397,7 +475,7 @@ async def preview_photo(
         img.thumbnail((800, 800), Image.Resampling.LANCZOS)
 
         # Scale factor if image was resized
-        orig_img = Image.open(file_path)
+        orig_img = Image.open(p_row["file_path"])
         scale_x = img.width / orig_img.width
         scale_y = img.height / orig_img.height
 
@@ -441,7 +519,7 @@ async def preview_photo(
 
     except Exception as e:
         logger.error(f"Error generating preview for photo {photo_id}: {e}")
-        return FileResponse(file_path, media_type="image/jpeg")
+        return FileResponse(p_row["file_path"], media_type="image/jpeg")
 
 
 @app.get("/api/photos/{photo_id}/crop")
@@ -452,21 +530,19 @@ async def crop_matched_face(
     """
     Serve a crisp, high-resolution zoomed close-up crop of the customer's face from the original photo.
     Enables operators and guests to instantly verify distant or crowded background faces with 100% clarity.
-    Self-heals if the photo was relocated into a ride subfolder.
     """
-    photo_res = db_manager.resolve_photo(photo_id, RAW_DIR)
-    if not photo_res:
-        raise HTTPException(status_code=404, detail="Photo file not found on disk.")
-    p_row, file_path = photo_res
-
     with db_manager._get_connection() as conn:
+        p_row = conn.execute("SELECT file_path, file_name FROM photos WHERE id = ?", (photo_id,)).fetchone()
+        if not p_row or not os.path.exists(p_row["file_path"]):
+            raise HTTPException(status_code=404, detail="Photo file not found on disk.")
+
         faces_rows = conn.execute(
             "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
             (photo_id,)
         ).fetchall()
 
     if not faces_rows:
-        return FileResponse(file_path, media_type="image/jpeg")
+        return FileResponse(p_row["file_path"], media_type="image/jpeg")
 
     # Find the target face
     target_face = None
@@ -479,7 +555,7 @@ async def crop_matched_face(
         target_face = faces_rows[0]
 
     try:
-        img = Image.open(file_path)
+        img = Image.open(p_row["file_path"])
         if img.mode != "RGB":
             img = img.convert("RGB")
 
@@ -535,7 +611,7 @@ async def crop_matched_face(
 
     except Exception as e:
         logger.error(f"Error generating face crop for photo {photo_id}: {e}")
-        return FileResponse(file_path, media_type="image/jpeg")
+        return FileResponse(p_row["file_path"], media_type="image/jpeg")
 
 
 @app.get("/api/results/{customer_id}/download-zip")

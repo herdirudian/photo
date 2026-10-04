@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-900">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Pengaturan Sumber Foto | The Lodge Maribaya</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            lodge: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+              950: '#052e16',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full flex flex-col text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-950/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        {% if logo_base64 %}
+          <img src="data:image/png;base64,{{ logo_base64 }}" alt="The Lodge Maribaya" class="h-10 w-auto object-contain brightness-110" />
+        {% else %}
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-lodge-700 flex items-center justify-center font-bold text-white shadow-lg">TL</div>
+        {% endif %}
+        <div class="border-l border-slate-700 pl-3">
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-sm tracking-wide text-white">THE LODGE MARIBAYA</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">ADMIN CONSOLE</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Pengaturan Jaringan Sumber Foto & Manajemen Sistem</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3 text-xs">
+        <a 
+          href="/" 
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition font-medium"
+        >
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span>Kembali ke Galeri Tamu</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+    
+    <!-- Status Overview Bar -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-lg">
+          📡
+        </div>
+        <div>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Koneksi Server Sumber</span>
+          <span id="stat-conn-status" class="text-sm font-bold text-emerald-400 flex items-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Memeriksa...</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-lg">
+          📁
+        </div>
+        <div>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Total Foto di Folder</span>
+          <span id="stat-disk-photos" class="text-sm font-bold text-white">- foto</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
+        <div class="w-10 h-10 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold text-lg">
+          🎡
+        </div>
+        <div>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Subfolder Wahana</span>
+          <span id="stat-subfolder-count" class="text-sm font-bold text-white">- wahana terdeteksi</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
+        <div class="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg">
+          🧠
+        </div>
+        <div>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Wajah Terindeks (AI)</span>
+          <span id="stat-indexed-faces" class="text-sm font-bold text-amber-300">- wajah</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workspace Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+      <!-- Left Column: Network Share Configuration (7 cols) -->
+      <section class="lg:col-span-7 space-y-6">
+        
+        <!-- Form Pengaturan Sumber Foto Jaringan -->
+        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
+          <div class="p-5 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <span class="text-xl">🌐</span>
+              <div>
+                <h2 class="text-base font-bold text-white">Sumber Folder Foto (Network Share / SMB)</h2>
+                <p class="text-xs text-slate-400">Atur alamat IP dan folder sharing tempat kamera wahana mengunggah foto.</p>
+              </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              CIFS / Samba 3.0
+            </span>
+          </div>
+
+          <form id="settings-form" onsubmit="handleSaveSettings(event)" class="p-6 space-y-5">
+            
+            <!-- IP Address & Port -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="sm:col-span-2 space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Alamat IP Server Foto <span class="text-emerald-400">*</span>
+                </label>
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-mono text-xs">
+                    //
+                  </span>
+                  <input 
+                    type="text" 
+                    id="smb_host" 
+                    name="smb_host" 
+                    required 
+                    placeholder="192.168.100.93"
+                    class="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  />
+                </div>
+                <span class="text-[11px] text-slate-400">Contoh: IP server sharing foto (misal: 192.168.100.93).</span>
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Port SMB
+                </label>
+                <input 
+                  type="number" 
+                  id="smb_port" 
+                  name="smb_port" 
+                  value="445" 
+                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                />
+                <span class="text-[11px] text-slate-400">Default: 445 (Samba).</span>
+              </div>
+            </div>
+
+            <!-- Share Name & Subfolder -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Nama Folder Sharing (Share Name) <span class="text-emerald-400">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="smb_share" 
+                  name="smb_share" 
+                  required 
+                  placeholder="photo"
+                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                />
+                <span class="text-[11px] text-slate-400">Nama share folder di Windows / Linux (misal: photo).</span>
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Subfolder Spesifik (Opsional)
+                </label>
+                <input 
+                  type="text" 
+                  id="smb_subfolder" 
+                  name="smb_subfolder" 
+                  placeholder="Kosongkan untuk seluruh isi share"
+                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                />
+                <span class="text-[11px] text-slate-400">Biarkan kosong jika semua subfolder wahana ada di root share.</span>
+              </div>
+            </div>
+
+            <!-- Autentikasi Pengguna -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-700/80">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Username Share (Jika Ada)
+                </label>
+                <input 
+                  type="text" 
+                  id="smb_username" 
+                  name="smb_username" 
+                  placeholder="USER_SHARE"
+                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                />
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Password Share (Jika Ada)
+                </label>
+                <input 
+                  type="password" 
+                  id="smb_password" 
+                  name="smb_password" 
+                  placeholder="••••••••"
+                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                />
+              </div>
+            </div>
+
+            <!-- Path Lokal Server -->
+            <div class="space-y-1.5 pt-2 border-t border-slate-700/80">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Lokasi Mount Target di Server (Host Path)
+              </label>
+              <input 
+                type="text" 
+                id="local_path" 
+                name="local_path" 
+                readonly
+                value="/opt/SistemPhoto/data/raw" 
+                class="w-full px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-lg text-xs font-mono text-slate-400 focus:outline-none cursor-not-allowed"
+              />
+              <span class="text-[11px] text-slate-400">Path default ini terhubung langsung ke kontainer Docker sistem foto.</span>
+            </div>
+
+            <!-- Tombol Aksi: Uji & Simpan -->
+            <div class="pt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-700">
+              <button 
+                type="button" 
+                id="btn-test-connection"
+                onclick="testConnection()"
+                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-2 border border-slate-600 shadow-sm"
+              >
+                <span id="test-spinner" class="hidden animate-spin">⏳</span>
+                <span>⚡ Uji Koneksi ke IP Ini</span>
+              </button>
+
+              <button 
+                type="submit" 
+                id="btn-save-settings"
+                class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-2 shadow-lg shadow-emerald-900/30"
+              >
+                <span>💾 Simpan & Terapkan Pengaturan</span>
+              </button>
+            </div>
+
+            <!-- Test Connection Result Banner -->
+            <div id="test-result-box" class="hidden p-3.5 rounded-xl border text-xs"></div>
+
+          </form>
+        </div>
+
+        <!-- Perintah Mount Siap-Salin (Linux Host Helper) -->
+        <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-base">📋</span>
+              <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Perintah Mount di Server Ubuntu</h3>
+            </div>
+            <button 
+              type="button"
+              onclick="copyMountCommand()"
+              class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[11px] font-semibold transition flex items-center space-x-1"
+            >
+              <span id="copy-icon">📄</span>
+              <span id="copy-text">Salin Perintah</span>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Jika server belum me-mount folder CIFS secara otomatis, Anda cukup menyalin perintah di bawah ini ke terminal server:
+          </p>
+          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 overflow-x-auto">
+            <code id="mount-command-display" class="font-mono text-xs text-emerald-400 select-all whitespace-pre">sudo mount -t cifs //192.168.100.93/photo /opt/SistemPhoto/data/raw -o username=USER_SHARE,file_mode=0777,dir_mode=0777,iocharset=utf8</code>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Column: Subfolder Inspector & System Operations (5 cols) -->
+      <section class="lg:col-span-5 space-y-6">
+        
+        <!-- Kartu Subfolder Wahana yang Terdeteksi -->
+        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
+          <div class="p-5 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+              <span class="text-xl">🎡</span>
+              <div>
+                <h3 class="text-sm font-bold text-white">Subfolder Wahana Terdeteksi</h3>
+                <p class="text-[11px] text-slate-400">Daftar wahana di dalam sharing folder aktif</p>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onclick="refreshStorageInspection()" 
+              class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-semibold transition"
+              title="Perbarui daftar folder"
+            >
+              🔄 Segarkan
+            </button>
+          </div>
+
+          <div class="p-5 space-y-3">
+            <div id="subfolder-list" class="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+              <div class="text-center py-6 text-slate-500 text-xs">Memuat subfolder wahana...</div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-400">
+              <span>Total Foto Terdeteksi:</span>
+              <span id="subfolder-total-photos" class="font-bold text-white">0 foto</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kartu Pengaturan AI & Sistem -->
+        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl p-5 space-y-4">
+          <div class="flex items-center space-x-2.5 border-b border-slate-700 pb-3">
+            <span class="text-xl">⚙️</span>
+            <div>
+              <h3 class="text-sm font-bold text-white">Pengaturan Pemindaian & Keamanan</h3>
+              <p class="text-[11px] text-slate-400">Konfigurasi interval pemantauan & PIN</p>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Interval Pemindaian Latar Belakang (Detik)</label>
+              <select id="polling_interval" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-emerald-500">
+                <option value="10">Setiap 10 Detik (Sangat Cepat)</option>
+                <option value="15" selected>Setiap 15 Detik (Rekomendasi)</option>
+                <option value="30">Setiap 30 Detik (Standar)</option>
+                <option value="60">Setiap 60 Detik (Hemat CPU)</option>
+              </select>
+              <span class="text-[10px] text-slate-400 mt-0.5 block">Sistem otomatis mendeteksi foto baru dari server lain sesuai interval ini.</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">PIN Petugas (Kiosk)</label>
+                <input type="password" id="operator_pin" maxlength="6" value="1234" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-mono text-center tracking-widest focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-300 mb-1">PIN Admin</label>
+                <input type="password" id="admin_pin" maxlength="6" value="1234" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-mono text-center tracking-widest focus:outline-none focus:border-emerald-500" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kartu Pemeliharaan & Reset Database -->
+        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl p-5 space-y-3">
+          <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+            <span>🛠️</span>
+            <span>Aksi Pemeliharaan Sistem</span>
+          </h3>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <button 
+              type="button" 
+              onclick="triggerFullReindex()"
+              class="px-3 py-2 bg-lodge-800 hover:bg-lodge-700 text-white rounded-lg text-xs font-semibold transition border border-lodge-600 flex items-center justify-center space-x-1.5"
+            >
+              <span>🔄</span>
+              <span>Pindai Ulang Sekarang</span>
+            </button>
+
+            <button 
+              type="button" 
+              onclick="triggerPurgeStale()"
+              class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-semibold transition border border-slate-600 flex items-center justify-center space-x-1.5"
+            >
+              <span>🧹</span>
+              <span>Bersihkan Data Usang</span>
+            </button>
+          </div>
+
+          <div class="pt-3 border-t border-slate-700/80">
+            <button 
+              type="button" 
+              onclick="confirmResetDatabase()"
+              class="w-full px-3 py-2 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/60 rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1.5"
+            >
+              <span>⚠️</span>
+              <span>Reset & Kosongkan Indeks Wajah</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- PIN Modal for Admin Authentication if needed -->
+  <div id="admin-pin-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
+      <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-2xl flex items-center justify-center mx-auto">
+        🔒
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-white">Autentikasi Akses Admin</h3>
+        <p class="text-xs text-slate-400 mt-1">Masukkan PIN Admin untuk mengelola pengaturan sistem.</p>
+      </div>
+      <div>
+        <input 
+          type="password" 
+          id="input-admin-modal-pin" 
+          maxlength="6" 
+          placeholder="••••"
+          class="w-36 mx-auto px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-center font-mono text-xl text-white tracking-widest focus:outline-none focus:border-emerald-500"
+          onkeydown="if(event.key==='Enter') verifyAdminPinModal()"
+        />
+        <p id="pin-modal-error" class="hidden text-xs text-red-400 mt-2 font-medium">PIN yang Anda masukkan salah.</p>
+      </div>
+      <div class="flex items-center space-x-2 pt-2">
+        <a href="/" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition">
+          Batal
+        </a>
+        <button type="button" onclick="verifyAdminPinModal()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
+          Buka Kunci
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Application Logic -->
+  <script>
+    let currentSettings = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check session or load settings
+      loadInitialData();
+    });
+
+    async function loadInitialData() {
+      await fetchSettings();
+      await refreshStorageInspection();
+      await fetchSystemStats();
+      // Auto test connection on initial load
+      testConnection(false);
+    }
+
+    async function fetchSettings() {
+      try {
+        const res = await fetch('/api/admin/settings');
+        if (res.ok) {
+          const data = await res.json();
+          currentSettings = data;
+          document.getElementById('smb_host').value = data.smb_host || '192.168.100.93';
+          document.getElementById('smb_share').value = data.smb_share || 'photo';
+          document.getElementById('smb_subfolder').value = data.smb_subfolder || '';
+          document.getElementById('smb_username').value = data.smb_username || '';
+          document.getElementById('polling_interval').value = data.polling_interval || '15';
+          document.getElementById('operator_pin').value = data.operator_pin || '1234';
+          document.getElementById('admin_pin').value = data.admin_pin || '1234';
+          updateMountCommandDisplay();
+        }
+      } catch (e) {
+        console.error("Failed to load settings:", e);
+      }
+    }
+
+    function updateMountCommandDisplay() {
+      const host = document.getElementById('smb_host').value || '192.168.100.93';
+      const share = document.getElementById('smb_share').value || 'photo';
+      const sub = document.getElementById('smb_subfolder').value || '';
+      const user = document.getElementById('smb_username').value || 'USER_SHARE';
+      const pwd = document.getElementById('smb_password').value;
+
+      let auth = `username=${user}`;
+      if (pwd) {
+        auth += `,password=${pwd}`;
+      }
+
+      let unc = `//${host}/${share}`;
+      if (sub) {
+        unc += `/${sub}`;
+      }
+
+      const cmd = `sudo mount -t cifs ${unc} /opt/SistemPhoto/data/raw -o ${auth},file_mode=0777,dir_mode=0777,iocharset=utf8`;
+      document.getElementById('mount-command-display').textContent = cmd;
+    }
+
+    // Update command dynamically as user types
+    ['smb_host', 'smb_share', 'smb_subfolder', 'smb_username', 'smb_password'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', updateMountCommandDisplay);
+    });
+
+    async function testConnection(showToast = true) {
+      const host = document.getElementById('smb_host').value.trim();
+      const port = parseInt(document.getElementById('smb_port').value) || 445;
+      const resultBox = document.getElementById('test-result-box');
+      const spinner = document.getElementById('test-spinner');
+      const btn = document.getElementById('btn-test-connection');
+
+      if (!host) {
+        alert('Silakan isi Alamat IP server terlebih dahulu.');
+        return;
+      }
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/admin/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host, port })
+        });
+        const data = await res.json();
+
+        resultBox.classList.remove('hidden');
+        if (data.success) {
+          resultBox.className = "p-3.5 rounded-xl border text-xs bg-emerald-950/60 border-emerald-500/50 text-emerald-300";
+          resultBox.innerHTML = `
+            <div class="flex items-center space-x-2">
+              <span class="text-base">✅</span>
+              <div>
+                <strong>Koneksi Berhasil!</strong> Server <code>${data.host}:${data.port}</code> aktif (${data.latency_ms} ms).
+              </div>
+            </div>
+          `;
+          document.getElementById('stat-conn-status').innerHTML = `
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>Terhubung (${data.latency_ms} ms)</span>
+          `;
+          document.getElementById('stat-conn-status').className = "text-sm font-bold text-emerald-400 flex items-center space-x-1.5";
+        } else {
+          resultBox.className = "p-3.5 rounded-xl border text-xs bg-red-950/60 border-red-500/50 text-red-300";
+          resultBox.innerHTML = `
+            <div class="flex items-center space-x-2">
+              <span class="text-base">❌</span>
+              <div>
+                <strong>Koneksi Gagal:</strong> ${data.error || 'Server tidak merespons.'}
+              </div>
+            </div>
+          `;
+          document.getElementById('stat-conn-status').innerHTML = `
+            <span class="w-2 h-2 rounded-full bg-red-400"></span>
+            <span>Tidak Terhubung</span>
+          `;
+          document.getElementById('stat-conn-status').className = "text-sm font-bold text-red-400 flex items-center space-x-1.5";
+        }
+      } catch (e) {
+        resultBox.classList.remove('hidden');
+        resultBox.className = "p-3.5 rounded-xl border text-xs bg-red-950/60 border-red-500/50 text-red-300";
+        resultBox.textContent = "Gagal menghubungi API test connection.";
+      } finally {
+        spinner.classList.add('hidden');
+        btn.disabled = false;
+      }
+    }
+
+    async function handleSaveSettings(e) {
+      e.preventDefault();
+      const saveBtn = document.getElementById('btn-save-settings');
+      saveBtn.disabled = true;
+
+      const payload = {
+        smb_host: document.getElementById('smb_host').value.trim(),
+        smb_share: document.getElementById('smb_share').value.trim(),
+        smb_subfolder: document.getElementById('smb_subfolder').value.trim(),
+        smb_username: document.getElementById('smb_username').value.trim(),
+        smb_password: document.getElementById('smb_password').value,
+        polling_interval: parseInt(document.getElementById('polling_interval').value) || 15,
+        operator_pin: document.getElementById('operator_pin').value.trim() || '1234',
+        admin_pin: document.getElementById('admin_pin').value.trim() || '1234'
+      };
+
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('Pengaturan berhasil disimpan! Sistem pemindai akan menyinkronkan folder sesuai konfigurasi baru.');
+          await refreshStorageInspection();
+        } else {
+          alert('Gagal menyimpan pengaturan: ' + (data.error || 'Terjadi kesalahan'));
+        }
+      } catch (e) {
+        alert('Gagal menyimpan pengaturan. Periksa koneksi ke server.');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function refreshStorageInspection() {
+      const container = document.getElementById('subfolder-list');
+      try {
+        const res = await fetch('/api/admin/storage-status');
+        const data = await res.json();
+
+        document.getElementById('stat-disk-photos').textContent = `${data.total_images} foto`;
+        document.getElementById('stat-subfolder-count').textContent = `${data.subfolder_count} wahana`;
+        document.getElementById('subfolder-total-photos').textContent = `${data.total_images} foto`;
+
+        container.innerHTML = '';
+        if (data.subfolders && data.subfolders.length > 0) {
+          data.subfolders.forEach(sub => {
+            const item = document.createElement('div');
+            item.className = "flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-700/80 text-xs";
+            item.innerHTML = `
+              <div class="flex items-center space-x-2">
+                <span class="text-emerald-400">📁</span>
+                <span class="font-medium text-slate-200">${sub.name}</span>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[11px] font-bold">
+                ${sub.photo_count} foto
+              </span>
+            `;
+            container.appendChild(item);
+          });
+        } else {
+          container.innerHTML = `
+            <div class="text-center py-6 text-slate-500 text-xs">
+              ${data.readable ? 'Belum ada subfolder wahana di dalam folder sharing.' : 'Folder sharing belum terpasang atau tidak dapat dibaca.'}
+            </div>
+          `;
+        }
+      } catch (e) {
+        container.innerHTML = '<div class="text-center py-4 text-red-400 text-xs">Gagal memuat status folder.</div>';
+      }
+    }
+
+    async function fetchSystemStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        document.getElementById('stat-indexed-faces').textContent = `${data.total_faces} wajah`;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function triggerFullReindex() {
+      if (!confirm('Pindai ulang seluruh folder sekarang? Sistem akan menyisir foto baru dan membersihkan foto yang sudah dihapus.')) return;
+      try {
+        const res = await fetch('/api/reindex', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Pemindaian selesai.');
+        await refreshStorageInspection();
+        await fetchSystemStats();
+      } catch (e) {
+        alert('Gagal melakukan pemindaian ulang.');
+      }
+    }
+
+    async function triggerPurgeStale() {
+      try {
+        const res = await fetch('/api/admin/purge-stale', { method: 'POST' });
+        const data = await res.json();
+        alert(`Pembersihan selesai: ${data.purged_photos} foto usang dan ${data.purged_faces} vektor wajah dibersihkan.`);
+        await fetchSystemStats();
+      } catch (e) {
+        alert('Gagal membersihkan data usang.');
+      }
+    }
+
+    async function confirmResetDatabase() {
+      const pin = prompt('PERINGATAN: Seluruh indeks wajah akan dikosongkan!\nMasukkan PIN Admin untuk konfirmasi:');
+      if (!pin) return;
+
+      try {
+        const res = await fetch('/api/admin/reset-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('Database dan indeks wajah berhasil dikosongkan.');
+          await fetchSystemStats();
+          await refreshStorageInspection();
+        } else {
+          alert('Gagal mereset: ' + (data.error || 'PIN Salah'));
+        }
+      } catch (e) {
+        alert('Gagal mereset database.');
+      }
+    }
+
+    function copyMountCommand() {
+      const cmd = document.getElementById('mount-command-display').textContent;
+      navigator.clipboard.writeText(cmd).then(() => {
+        const icon = document.getElementById('copy-icon');
+        const text = document.getElementById('copy-text');
+        icon.textContent = "✅";
+        text.textContent = "Tersalin!";
+        setTimeout(() => {
+          icon.textContent = "📄";
+          text.textContent = "Salin Perintah";
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

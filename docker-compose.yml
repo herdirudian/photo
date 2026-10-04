@@ -19,6 +19,7 @@ services:
       - ./main.py:/app/main.py
       - ./database.py:/app/database.py
       - ./indexer.py:/app/indexer.py
+      - ./config_manager.py:/app/config_manager.py
       - ./templates:/app/templates
       - ./img:/app/img
     environment:
