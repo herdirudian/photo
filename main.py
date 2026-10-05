@@ -312,12 +312,48 @@ async def get_system_stats():
 
 @app.post("/api/reindex")
 async def trigger_reindex():
-    """Trigger manual re-scan of raw photos directory."""
+    """Trigger manual re-scan of raw photos directory and return detailed metrics."""
     try:
-        indexer.scan_existing_files()
-        return {"success": True, "message": "Raw photo scan completed successfully."}
+        summary = indexer.scan_existing_files()
+        if summary.get("status") == "busy":
+            return {
+                "success": False,
+                "busy": True,
+                "message": "Pemindaian sedang berlangsung di latar belakang. Mohon tunggu beberapa detik lagi."
+            }
+
+        stats = db_manager.get_stats()
+        scanned = summary.get("scanned", 0)
+        newly_indexed = summary.get("newly_indexed", 0)
+        subfolders_count = summary.get("subfolders_count", 0)
+        total_photos = stats.get("total_photos", 0)
+        total_faces = stats.get("total_faces", 0)
+
+        if scanned == 0:
+            msg = (
+                f"Hasil Pemindaian: 0 berkas foto ditemukan di dalam '{RAW_DIR}'.\n\n"
+                "Kemungkinan penyebab:\n"
+                "1. Berkas foto diletakkan di luar folder /opt/SistemPhoto/data/raw pada server host.\n"
+                "2. Jika menggunakan Samba share, periksa apakah berkas berada di subfolder lain (misal: /opt/SistemPhoto/data/raw/raw/).\n"
+                "3. Jalankan 'ls -la /opt/SistemPhoto/data/raw' di terminal Ubuntu untuk memastikan file terlihat oleh Docker."
+            )
+        else:
+            msg = (
+                f"Pemindaian Berhasil Selesai!\n"
+                f"• Berkas foto di disk: {scanned} foto ({subfolders_count} subfolder wahana)\n"
+                f"• Foto baru yang diproses: {newly_indexed} foto\n"
+                f"• Total foto di database: {total_photos} foto\n"
+                f"• Total wajah terindeks: {total_faces} wajah"
+            )
+
+        return {
+            "success": True,
+            "message": msg,
+            "summary": summary,
+            "stats": stats
+        }
     except Exception as e:
-        logger.error(f"Error during re-index: {e}")
+        logger.error(f"Error during re-index: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

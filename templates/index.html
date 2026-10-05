@@ -568,6 +568,33 @@
       <!-- Right Column: Results & Matched Photos Gallery (7 cols) -->
       <section class="lg:col-span-7 space-y-6">
 
+        <!-- Zero Photos Diagnostic Alert Banner -->
+        <div id="zero-photos-banner" class="{% if stats.total_photos > 0 %}hidden{% endif %} bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-900 flex items-start justify-between gap-3 shadow-xs">
+          <div class="flex items-start space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="text-xs space-y-1">
+              <h4 class="font-bold text-amber-950">Belum Ada Foto Terindeks di Database (0 Foto)</h4>
+              <p class="text-amber-800 leading-relaxed">
+                Jika berkas foto sudah disalin ke folder sharing <code class="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">raw</code>, klik tombol <strong>Pindai Ulang</strong> untuk memproses dan mendaftarkan wajah tamu ke sistem pencarian.
+              </p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onclick="triggerReindex()" 
+            class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shrink-0 transition flex items-center space-x-1.5 shadow-xs"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Pindai Ulang</span>
+          </button>
+        </div>
+
         <!-- Default Empty State -->
         <div id="state-empty" class="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center space-y-4">
           <div class="w-16 h-16 mx-auto bg-lodge-50 rounded-full flex items-center justify-center text-lodge-600">
@@ -2065,17 +2092,17 @@
     async function triggerReindex() {
       const btn = document.getElementById('btn-reindex');
       const icon = document.getElementById('reindex-icon');
-      btn.disabled = true;
-      icon.classList.add('animate-spin');
+      if (btn) btn.disabled = true;
+      if (icon) icon.classList.add('animate-spin');
 
       try {
         const res = await fetch('/api/reindex', { method: 'POST' });
         const data = await res.json();
-        if (data.success) {
-          await refreshStats();
-          if (data.message) {
-            alert(data.message);
-          }
+        await refreshStats();
+        if (data.message) {
+          alert(data.message);
+        } else if (data.success) {
+          alert('Pemindaian foto selesai.');
         } else {
           alert('Gagal memindai: ' + (data.detail || 'Terjadi kendala pada server.'));
         }
@@ -2084,8 +2111,8 @@
         alert('Gagal memindai ulang folder foto. Pastikan server aktif.');
       } finally {
         setTimeout(() => {
-          icon.classList.remove('animate-spin');
-          btn.disabled = false;
+          if (icon) icon.classList.remove('animate-spin');
+          if (btn) btn.disabled = false;
         }, 800);
       }
     }
@@ -2094,8 +2121,19 @@
       try {
         const res = await fetch('/api/stats');
         const data = await res.json();
-        document.getElementById('stat-photos').textContent = `${data.total_photos} photos`;
-        document.getElementById('stat-faces').textContent = data.total_faces;
+        const statPhotos = document.getElementById('stat-photos');
+        const statFaces = document.getElementById('stat-faces');
+        if (statPhotos) statPhotos.textContent = `${data.total_photos} foto`;
+        if (statFaces) statFaces.textContent = data.total_faces;
+
+        const zeroBanner = document.getElementById('zero-photos-banner');
+        if (zeroBanner) {
+          if (data.total_photos > 0) {
+            zeroBanner.classList.add('hidden');
+          } else {
+            zeroBanner.classList.remove('hidden');
+          }
+        }
       } catch (e) {
         console.error("Stats refresh error:", e);
       }
