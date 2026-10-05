@@ -74,7 +74,7 @@ def save_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
     return current
 
 
-def test_network_connection(host: str, port: int = 445, timeout: float = 3.0) -> Dict[str, Any]:
+def test_network_connection(host: str, port: int = 445, timeout: float = 4.0) -> Dict[str, Any]:
     """
     Test direct TCP connectivity to SMB server host on port 445 (or NetBIOS 139).
     Returns connection status and latency.
@@ -87,6 +87,8 @@ def test_network_connection(host: str, port: int = 445, timeout: float = 3.0) ->
 
     host = host.strip().lstrip(r"\/")
     start_time = time.time()
+
+    # Try specified port first
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -98,25 +100,18 @@ def test_network_connection(host: str, port: int = 445, timeout: float = 3.0) ->
             "host": host,
             "port": port,
             "latency_ms": latency_ms,
-            "message": f"Koneksi berhasil! Server {host}:{port} aktif dan dapat dijangkau ({latency_ms} ms)."
+            "message": f"Koneksi berhasil! Server {host} pada port {port} merespons normal ({latency_ms} ms)."
         }
-    except socket.timeout:
-        return {
-            "success": False,
-            "host": host,
-            "port": port,
-            "error": f"Waktu koneksi habis (Timeout {timeout}s). Pastikan IP {host} aktif dan terhubung ke jaringan yang sama."
-        }
-    except Exception as e:
-        # Retry with port 139 (NetBIOS) if 445 failed
+    except Exception as primary_err:
+        # Fallback test with port 139 (NetBIOS SMB) if port 445 timed out or refused
         if port == 445:
             try:
-                start_time = time.time()
+                start_time_alt = time.time()
                 sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock2.settimeout(timeout)
+                sock2.settimeout(2.5)
                 sock2.connect((host, 139))
                 sock2.close()
-                latency_ms = round((time.time() - start_time) * 1000, 2)
+                latency_ms = round((time.time() - start_time_alt) * 1000, 2)
                 return {
                     "success": True,
                     "host": host,
@@ -131,7 +126,10 @@ def test_network_connection(host: str, port: int = 445, timeout: float = 3.0) ->
             "success": False,
             "host": host,
             "port": port,
-            "error": f"Gagal terhubung ke {host}:{port} - {str(e)}"
+            "error": (
+                f"Koneksi ke {host}:{port} tidak merespons ({primary_err}). "
+                "Pastikan PC sumber menyala, satu segmen jaringan, dan 'File and Printer Sharing' diizinkan di Windows Defender Firewall."
+            )
         }
 
 

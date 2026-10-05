@@ -106,25 +106,34 @@
   <!-- Operator Active Alert Banner (Hanya terlihat jika Petugas login) -->
   <div id="operator-status-banner" class="hidden bg-amber-500 text-amber-950 px-4 sm:px-6 lg:px-8 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600 shadow-xs sticky top-16 z-30">
     <div class="flex items-center space-x-2">
-      <span class="text-sm">⚠️</span>
+      <svg class="w-4 h-4 text-amber-950 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
       <span>MODE PETUGAS AKTIF</span>
       <span class="font-normal text-amber-950/80 hidden sm:inline">• Jalur folder Samba & tombol File Explorer dapat diakses.</span>
     </div>
     <div class="flex items-center space-x-2">
       <a 
         href="/admin" 
-        class="px-3 py-1 bg-lodge-900 hover:bg-lodge-950 text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1"
+        class="px-3 py-1.5 bg-lodge-900 hover:bg-lodge-950 text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1.5 focus-ring"
         title="Buka Dashboard Admin untuk mengatur IP sharing folder & sistem"
       >
-        <span>⚙️ Pengaturan Admin</span>
+        <svg class="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span>Pengaturan Admin</span>
       </a>
       <button 
         type="button"
         onclick="lockToGuestMode()" 
-        class="px-3 py-1 bg-amber-950 hover:bg-black text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1"
+        class="px-3 py-1.5 bg-amber-950 hover:bg-black text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1.5 focus-ring"
         title="Sembunyikan menu petugas sebelum menampilkan layar ke tamu"
       >
-        <span>👁️ Kunci ke Mode Tamu</span>
+        <svg class="w-3.5 h-3.5 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+        </svg>
+        <span>Kunci ke Mode Tamu</span>
       </button>
     </div>
   </div>

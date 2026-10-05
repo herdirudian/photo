@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="id" class="h-full bg-slate-900">
+<html lang="id" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard - Pengaturan Sumber Foto | The Lodge Maribaya</title>
+  <title>Pengaturan Sumber Foto & Sistem - The Lodge Maribaya</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,143 +14,208 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
             mono: ['"JetBrains Mono"', 'monospace'],
           },
           colors: {
             lodge: {
-              50: '#f0fdf4',
-              100: '#dcfce7',
-              200: '#bbf7d0',
-              300: '#86efac',
-              400: '#4ade80',
-              500: '#22c55e',
-              600: '#16a34a',
-              700: '#15803d',
-              800: '#166534',
-              900: '#14532d',
-              950: '#052e16',
+              50: '#F4F7F5',
+              100: '#E8EFEB',
+              200: '#D2DFD8',
+              300: '#AFC5BB',
+              400: '#7E9F91',
+              500: '#5B7E70',
+              600: '#49655A', // The Lodge Maribaya Official Pine Green
+              700: '#3D554C',
+              800: '#2D3F37',
+              900: '#1E2B25',
+              950: '#141D19',
             }
           }
         }
       }
     }
   </script>
+  <style>
+    /* Custom scrollbar and subtle focus rings */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #49655A; }
+
+    .focus-ring:focus-visible {
+      outline: 2px solid #49655A;
+      outline-offset: 2px;
+    }
+  </style>
 </head>
-<body class="h-full flex flex-col text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-white">
+<body class="bg-[#F8FAF9] text-slate-800 min-h-screen flex flex-col font-sans antialiased selection:bg-lodge-600 selection:text-white">
 
   <!-- Top Navigation Bar -->
-  <header class="bg-slate-950/90 border-b border-slate-800 backdrop-blur-md sticky top-0 z-40">
+  <header class="bg-lodge-900 text-white border-b border-lodge-800 sticky top-0 z-40 shadow-xs">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        {% if logo_base64 %}
-          <img src="data:image/png;base64,{{ logo_base64 }}" alt="The Lodge Maribaya" class="h-10 w-auto object-contain brightness-110" />
-        {% else %}
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-lodge-700 flex items-center justify-center font-bold text-white shadow-lg">TL</div>
-        {% endif %}
-        <div class="border-l border-slate-700 pl-3">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center space-x-3 sm:space-x-3.5">
+        <div class="h-11 px-3 py-1.5 bg-white rounded-xl shadow-xs border border-white/20 flex items-center justify-center shrink-0">
+          {% if logo_base64 %}
+            <img src="data:image/png;base64,{{ logo_base64 }}" alt="The Lodge Maribaya" class="h-8 w-auto max-h-full object-contain" />
+          {% else %}
+            <img src="/img/logotlm.png" alt="The Lodge Maribaya" class="h-8 w-auto max-h-full object-contain" onerror="this.onerror=null; this.src='/logo.png';" />
+          {% endif %}
+        </div>
+        <div class="flex flex-col justify-center">
           <div class="flex items-center space-x-2">
-            <span class="font-bold text-sm tracking-wide text-white">THE LODGE MARIBAYA</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">ADMIN CONSOLE</span>
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
+              The Lodge Maribaya
+            </h1>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide bg-white/15 text-emerald-200 border border-white/10 uppercase">
+              Admin Console
+            </span>
           </div>
-          <p class="text-[11px] text-slate-400">Pengaturan Jaringan Sumber Foto & Manajemen Sistem</p>
+          <p class="text-xs text-emerald-200/90 font-medium leading-normal mt-0.5">
+            Pengaturan Sumber Foto Jaringan & Pemeliharaan Sistem
+          </p>
         </div>
       </div>
 
+      <!-- Action Nav -->
       <div class="flex items-center space-x-3 text-xs">
         <a 
           href="/" 
-          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition font-medium"
+          class="flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white border border-white/15 transition font-semibold focus-ring"
+          title="Kembali ke layar pencarian foto tamu"
         >
-          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span>Kembali ke Galeri Tamu</span>
+          <span class="hidden sm:inline">Kembali ke Galeri Tamu</span>
+          <span class="sm:hidden">Kembali</span>
         </a>
       </div>
+
     </div>
   </header>
 
-  <!-- Main Content Layout -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
-    
-    <!-- Status Overview Bar -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
-        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-lg">
-          📡
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+
+    <!-- Overview Metrics Cards (Clean White Surface) -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- Card 1: Status Koneksi SMB -->
+      <div class="bg-white border border-slate-200/80 rounded-2xl p-4.5 shadow-xs flex items-center space-x-3.5">
+        <div class="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-lodge-600 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+          </svg>
         </div>
-        <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Koneksi Server Sumber</span>
-          <span id="stat-conn-status" class="text-sm font-bold text-emerald-400 flex items-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <div class="min-w-0 flex-1">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            Status Server Sumber
+          </span>
+          <div id="stat-conn-status" class="text-sm font-bold text-slate-700 flex items-center space-x-1.5 mt-0.5 truncate">
+            <span class="w-2 h-2 rounded-full bg-slate-400"></span>
             <span>Memeriksa...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Total Foto Disk -->
+      <div class="bg-white border border-slate-200/80 rounded-2xl p-4.5 shadow-xs flex items-center space-x-3.5">
+        <div class="w-11 h-11 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-700 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            Total Foto di Folder
+          </span>
+          <span id="stat-disk-photos" class="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+            {{ stats.total_photos }} foto
           </span>
         </div>
       </div>
 
-      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
-        <div class="w-10 h-10 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-lg">
-          📁
+      <!-- Card 3: Subfolder Wahana -->
+      <div class="bg-white border border-slate-200/80 rounded-2xl p-4.5 shadow-xs flex items-center space-x-3.5">
+        <div class="w-11 h-11 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-700 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
         </div>
-        <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Total Foto di Folder</span>
-          <span id="stat-disk-photos" class="text-sm font-bold text-white">- foto</span>
-        </div>
-      </div>
-
-      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
-        <div class="w-10 h-10 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 font-bold text-lg">
-          🎡
-        </div>
-        <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Subfolder Wahana</span>
-          <span id="stat-subfolder-count" class="text-sm font-bold text-white">- wahana terdeteksi</span>
+        <div class="min-w-0 flex-1">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            Subfolder Wahana
+          </span>
+          <span id="stat-subfolder-count" class="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+            - wahana
+          </span>
         </div>
       </div>
 
-      <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center space-x-3.5 shadow-sm">
-        <div class="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg">
-          🧠
+      <!-- Card 4: Indeks Wajah AI -->
+      <div class="bg-white border border-slate-200/80 rounded-2xl p-4.5 shadow-xs flex items-center space-x-3.5">
+        <div class="w-11 h-11 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
         </div>
-        <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Wajah Terindeks (AI)</span>
-          <span id="stat-indexed-faces" class="text-sm font-bold text-amber-300">- wajah</span>
+        <div class="min-w-0 flex-1">
+          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            Wajah Terindeks (AI)
+          </span>
+          <span id="stat-indexed-faces" class="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+            {{ stats.total_faces }} wajah
+          </span>
         </div>
       </div>
-    </div>
+
+    </section>
 
     <!-- Main Workspace Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-      <!-- Left Column: Network Share Configuration (7 cols) -->
+      <!-- Left Column: Network Storage Configuration (7 cols) -->
       <section class="lg:col-span-7 space-y-6">
-        
-        <!-- Form Pengaturan Sumber Foto Jaringan -->
-        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
-          <div class="p-5 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+
+        <!-- Card: Form Pengaturan Sumber Foto Jaringan -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+          
+          <!-- Card Header -->
+          <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <span class="text-xl">🌐</span>
+              <div class="w-9 h-9 rounded-lg bg-lodge-50 text-lodge-600 flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+              </div>
               <div>
-                <h2 class="text-base font-bold text-white">Sumber Folder Foto (Network Share / SMB)</h2>
-                <p class="text-xs text-slate-400">Atur alamat IP dan folder sharing tempat kamera wahana mengunggah foto.</p>
+                <h2 class="text-sm font-bold text-slate-900">
+                  Sumber Folder Foto (Network Share / SMB)
+                </h2>
+                <p class="text-xs text-slate-500">
+                  Hubungkan direktori foto dari komputer fotografer atau file server lokal.
+                </p>
               </div>
             </div>
-            <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              CIFS / Samba 3.0
+            <span class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              Samba / CIFS
             </span>
           </div>
 
+          <!-- Form Content -->
           <form id="settings-form" onsubmit="handleSaveSettings(event)" class="p-6 space-y-5">
             
             <!-- IP Address & Port -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div class="sm:col-span-2 space-y-1.5">
-                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Alamat IP Server Foto <span class="text-emerald-400">*</span>
+                <label for="smb_host" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Alamat IP Server Foto <span class="text-lodge-600">*</span>
                 </label>
                 <div class="relative">
-                  <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-mono text-xs">
+                  <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-mono text-xs">
                     //
                   </span>
                   <input 
@@ -159,14 +224,16 @@
                     name="smb_host" 
                     required 
                     placeholder="192.168.100.93"
-                    class="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                    class="w-full pl-8 pr-3.5 py-2.5 bg-slate-50/60 border border-slate-300 rounded-xl text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
                   />
                 </div>
-                <span class="text-[11px] text-slate-400">Contoh: IP server sharing foto (misal: 192.168.100.93).</span>
+                <span class="text-[11px] text-slate-500">
+                  Alamat IP komputer atau server penyedia share folder foto.
+                </span>
               </div>
 
               <div class="space-y-1.5">
-                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <label for="smb_port" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Port SMB
                 </label>
                 <input 
@@ -174,17 +241,19 @@
                   id="smb_port" 
                   name="smb_port" 
                   value="445" 
-                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  class="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-300 rounded-xl text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
                 />
-                <span class="text-[11px] text-slate-400">Default: 445 (Samba).</span>
+                <span class="text-[11px] text-slate-500">
+                  Standar: 445 (atau 139).
+                </span>
               </div>
             </div>
 
             <!-- Share Name & Subfolder -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
-                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Nama Folder Sharing (Share Name) <span class="text-emerald-400">*</span>
+                <label for="smb_share" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Nama Folder Sharing (Share Name) <span class="text-lodge-600">*</span>
                 </label>
                 <input 
                   type="text" 
@@ -192,59 +261,68 @@
                   name="smb_share" 
                   required 
                   placeholder="photo"
-                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  class="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
                 />
-                <span class="text-[11px] text-slate-400">Nama share folder di Windows / Linux (misal: photo).</span>
+                <span class="text-[11px] text-slate-500">
+                  Nama share folder di Windows (contoh: photo).
+                </span>
               </div>
 
               <div class="space-y-1.5">
-                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <label for="smb_subfolder" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Subfolder Spesifik (Opsional)
                 </label>
                 <input 
                   type="text" 
                   id="smb_subfolder" 
                   name="smb_subfolder" 
-                  placeholder="Kosongkan untuk seluruh isi share"
-                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  placeholder="Kosongkan jika di root folder"
+                  class="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
                 />
-                <span class="text-[11px] text-slate-400">Biarkan kosong jika semua subfolder wahana ada di root share.</span>
+                <span class="text-[11px] text-slate-500">
+                  Biarkan kosong jika semua subfolder wahana ada di root folder share.
+                </span>
               </div>
             </div>
 
             <!-- Autentikasi Pengguna -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-700/80">
-              <div class="space-y-1.5">
-                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Username Share (Jika Ada)
-                </label>
-                <input 
-                  type="text" 
-                  id="smb_username" 
-                  name="smb_username" 
-                  placeholder="USER_SHARE"
-                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
-                />
-              </div>
+            <div class="pt-3 border-t border-slate-100">
+              <span class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">
+                Kredensial Akses Folder (Opsional)
+              </span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-1.5">
+                  <label for="smb_username" class="block text-[11px] font-medium text-slate-600">
+                    Username Share
+                  </label>
+                  <input 
+                    type="text" 
+                    id="smb_username" 
+                    name="smb_username" 
+                    placeholder="USER_SHARE"
+                    class="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
+                  />
+                </div>
 
-              <div class="space-y-1.5">
-                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Password Share (Jika Ada)
-                </label>
-                <input 
-                  type="password" 
-                  id="smb_password" 
-                  name="smb_password" 
-                  placeholder="••••••••"
-                  class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
-                />
+                <div class="space-y-1.5">
+                  <label for="smb_password" class="block text-[11px] font-medium text-slate-600">
+                    Password Share
+                  </label>
+                  <input 
+                    type="password" 
+                    id="smb_password" 
+                    name="smb_password" 
+                    placeholder="••••••••"
+                    class="w-full px-3.5 py-2.5 bg-slate-50/60 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
+                  />
+                </div>
               </div>
             </div>
 
-            <!-- Path Lokal Server -->
-            <div class="space-y-1.5 pt-2 border-t border-slate-700/80">
-              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Lokasi Mount Target di Server (Host Path)
+            <!-- Path Target Lokal di Server -->
+            <div class="space-y-1.5 pt-3 border-t border-slate-100">
+              <label for="local_path" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Lokasi Mount Target di Server Host
               </label>
               <input 
                 type="text" 
@@ -252,168 +330,240 @@
                 name="local_path" 
                 readonly
                 value="/opt/SistemPhoto/data/raw" 
-                class="w-full px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-lg text-xs font-mono text-slate-400 focus:outline-none cursor-not-allowed"
+                class="w-full px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono text-slate-600 select-all cursor-not-allowed"
               />
-              <span class="text-[11px] text-slate-400">Path default ini terhubung langsung ke kontainer Docker sistem foto.</span>
+              <span class="text-[11px] text-slate-500">
+                Direktori lokal ini dipetakan langsung ke kontainer Docker sistem foto.
+              </span>
             </div>
 
             <!-- Tombol Aksi: Uji & Simpan -->
-            <div class="pt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-700">
+            <div class="pt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
               <button 
                 type="button" 
                 id="btn-test-connection"
                 onclick="testConnection()"
-                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-2 border border-slate-600 shadow-sm"
+                class="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center space-x-2 border border-slate-300 shadow-2xs focus-ring"
               >
-                <span id="test-spinner" class="hidden animate-spin">⏳</span>
-                <span>⚡ Uji Koneksi ke IP Ini</span>
+                <svg id="test-icon" class="w-4 h-4 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <svg id="test-spinner" class="hidden w-4 h-4 text-lodge-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="test-btn-text">Uji Koneksi Server</span>
               </button>
 
               <button 
                 type="submit" 
                 id="btn-save-settings"
-                class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-2 shadow-lg shadow-emerald-900/30"
+                class="px-5 py-2.5 bg-lodge-600 hover:bg-lodge-700 text-white rounded-xl text-xs font-semibold transition flex items-center space-x-2 shadow-xs focus-ring"
               >
-                <span>💾 Simpan & Terapkan Pengaturan</span>
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Simpan Pengaturan</span>
               </button>
             </div>
 
             <!-- Test Connection Result Banner -->
-            <div id="test-result-box" class="hidden p-3.5 rounded-xl border text-xs"></div>
+            <div id="test-result-box" class="hidden rounded-xl p-4 text-xs"></div>
 
           </form>
         </div>
 
         <!-- Perintah Mount Siap-Salin (Linux Host Helper) -->
-        <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-5 space-y-3">
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-3.5 shadow-xs">
           <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <span class="text-base">📋</span>
-              <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Perintah Mount di Server Ubuntu</h3>
+            <div class="flex items-center space-x-2.5">
+              <div class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Perintah Mount di Server Ubuntu
+              </h3>
             </div>
+            
             <button 
-              type="button"
+              type="button" 
               onclick="copyMountCommand()"
-              class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[11px] font-semibold transition flex items-center space-x-1"
+              class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition border border-slate-200 flex items-center space-x-1.5 focus-ring"
             >
-              <span id="copy-icon">📄</span>
+              <svg id="copy-icon" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
               <span id="copy-text">Salin Perintah</span>
             </button>
           </div>
-          <p class="text-[11px] text-slate-400">
-            Jika server belum me-mount folder CIFS secara otomatis, Anda cukup menyalin perintah di bawah ini ke terminal server:
+
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Jika server belum memasang folder sharing secara otomatis, salin dan jalankan perintah terminal di bawah ini pada server host:
           </p>
-          <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 overflow-x-auto">
-            <code id="mount-command-display" class="font-mono text-xs text-emerald-400 select-all whitespace-pre">sudo mount -t cifs //192.168.100.93/photo /opt/SistemPhoto/data/raw -o username=USER_SHARE,file_mode=0777,dir_mode=0777,iocharset=utf8</code>
+
+          <div class="bg-slate-900 rounded-xl p-3.5 border border-slate-800 overflow-x-auto">
+            <code id="mount-command-display" class="font-mono text-xs text-emerald-400 select-all whitespace-pre block">sudo mount -t cifs //192.168.100.93/photo /opt/SistemPhoto/data/raw -o username=USER_SHARE,file_mode=0777,dir_mode=0777,iocharset=utf8</code>
           </div>
         </div>
 
       </section>
 
-      <!-- Right Column: Subfolder Inspector & System Operations (5 cols) -->
+      <!-- Right Column: Subfolder Inspector & Maintenance (5 cols) -->
       <section class="lg:col-span-5 space-y-6">
-        
-        <!-- Kartu Subfolder Wahana yang Terdeteksi -->
-        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
-          <div class="p-5 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+
+        <!-- Kartu Subfolder Wahana Terdeteksi -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div class="flex items-center space-x-2.5">
-              <span class="text-xl">🎡</span>
+              <div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </div>
               <div>
-                <h3 class="text-sm font-bold text-white">Subfolder Wahana Terdeteksi</h3>
-                <p class="text-[11px] text-slate-400">Daftar wahana di dalam sharing folder aktif</p>
+                <h3 class="text-sm font-bold text-slate-900">Subfolder Wahana</h3>
+                <p class="text-[11px] text-slate-500">Koleksi foto per wahana yang terdeteksi</p>
               </div>
             </div>
+
             <button 
               type="button" 
               onclick="refreshStorageInspection()" 
-              class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-semibold transition"
-              title="Perbarui daftar folder"
+              class="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition border border-slate-200 flex items-center space-x-1.5 focus-ring"
+              title="Perbarui status folder"
             >
-              🔄 Segarkan
+              <svg id="refresh-icon" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Segarkan</span>
             </button>
           </div>
 
           <div class="p-5 space-y-3">
-            <div id="subfolder-list" class="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-              <div class="text-center py-6 text-slate-500 text-xs">Memuat subfolder wahana...</div>
+            <div id="subfolder-list" class="space-y-2 max-h-[290px] overflow-y-auto pr-1">
+              <div class="text-center py-8 text-slate-400 text-xs">
+                Memuat daftar subfolder...
+              </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-400">
-              <span>Total Foto Terdeteksi:</span>
-              <span id="subfolder-total-photos" class="font-bold text-white">0 foto</span>
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+              <span class="font-medium">Total Foto Terdeteksi:</span>
+              <span id="subfolder-total-photos" class="font-bold text-slate-900">0 foto</span>
             </div>
           </div>
         </div>
 
-        <!-- Kartu Pengaturan AI & Sistem -->
-        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl p-5 space-y-4">
-          <div class="flex items-center space-x-2.5 border-b border-slate-700 pb-3">
-            <span class="text-xl">⚙️</span>
+        <!-- Kartu Pengaturan Pemindaian & Akses Keamanan -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 space-y-4">
+          <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
+            <div class="w-8 h-8 rounded-lg bg-lodge-50 text-lodge-600 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </div>
             <div>
-              <h3 class="text-sm font-bold text-white">Pengaturan Pemindaian & Keamanan</h3>
-              <p class="text-[11px] text-slate-400">Konfigurasi interval pemantauan & PIN</p>
+              <h3 class="text-sm font-bold text-slate-900">Pemindaian & Keamanan</h3>
+              <p class="text-[11px] text-slate-500">Interval pemantauan foto & PIN akses</p>
             </div>
           </div>
 
-          <div class="space-y-3 text-xs">
+          <div class="space-y-3.5 text-xs">
             <div>
-              <label class="block font-semibold text-slate-300 mb-1">Interval Pemindaian Latar Belakang (Detik)</label>
-              <select id="polling_interval" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-emerald-500">
+              <label for="polling_interval" class="block font-semibold text-slate-700 mb-1">
+                Interval Pemindaian Latar Belakang
+              </label>
+              <select 
+                id="polling_interval" 
+                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+              >
                 <option value="10">Setiap 10 Detik (Sangat Cepat)</option>
                 <option value="15" selected>Setiap 15 Detik (Rekomendasi)</option>
                 <option value="30">Setiap 30 Detik (Standar)</option>
-                <option value="60">Setiap 60 Detik (Hemat CPU)</option>
+                <option value="60">Setiap 60 Detik (Hemat Sumber Daya)</option>
               </select>
-              <span class="text-[10px] text-slate-400 mt-0.5 block">Sistem otomatis mendeteksi foto baru dari server lain sesuai interval ini.</span>
+              <span class="text-[11px] text-slate-500 mt-1 block">
+                Sistem memeriksa foto baru yang diunggah kamera secara berkala.
+              </span>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 pt-2">
+            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
               <div>
-                <label class="block font-semibold text-slate-300 mb-1">PIN Petugas (Kiosk)</label>
-                <input type="password" id="operator_pin" maxlength="6" value="1234" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-mono text-center tracking-widest focus:outline-none focus:border-emerald-500" />
+                <label for="operator_pin" class="block font-semibold text-slate-700 mb-1">
+                  PIN Petugas (Kiosk)
+                </label>
+                <input 
+                  type="password" 
+                  id="operator_pin" 
+                  maxlength="6" 
+                  value="1234" 
+                  class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-mono text-center tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition" 
+                />
               </div>
               <div>
-                <label class="block font-semibold text-slate-300 mb-1">PIN Admin</label>
-                <input type="password" id="admin_pin" maxlength="6" value="1234" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs font-mono text-center tracking-widest focus:outline-none focus:border-emerald-500" />
+                <label for="admin_pin" class="block font-semibold text-slate-700 mb-1">
+                  PIN Administrator
+                </label>
+                <input 
+                  type="password" 
+                  id="admin_pin" 
+                  maxlength="6" 
+                  value="1234" 
+                  class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-mono text-center tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition" 
+                />
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Kartu Pemeliharaan & Reset Database -->
-        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl shadow-xl p-5 space-y-3">
-          <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
-            <span>🛠️</span>
-            <span>Aksi Pemeliharaan Sistem</span>
-          </h3>
+        <!-- Kartu Pemeliharaan Sistem -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 space-y-3.5">
+          <div class="flex items-center space-x-2">
+            <div class="w-6 h-6 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Aksi Pemeliharaan Sistem
+            </h3>
+          </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <button 
               type="button" 
               onclick="triggerFullReindex()"
-              class="px-3 py-2 bg-lodge-800 hover:bg-lodge-700 text-white rounded-lg text-xs font-semibold transition border border-lodge-600 flex items-center justify-center space-x-1.5"
+              class="px-3 py-2 bg-lodge-50 hover:bg-lodge-100 text-lodge-800 rounded-xl text-xs font-semibold transition border border-lodge-200 flex items-center justify-center space-x-1.5 focus-ring"
             >
-              <span>🔄</span>
+              <svg class="w-3.5 h-3.5 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
               <span>Pindai Ulang Sekarang</span>
             </button>
 
             <button 
               type="button" 
               onclick="triggerPurgeStale()"
-              class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-semibold transition border border-slate-600 flex items-center justify-center space-x-1.5"
+              class="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition border border-slate-200 flex items-center justify-center space-x-1.5 focus-ring"
             >
-              <span>🧹</span>
+              <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
               <span>Bersihkan Data Usang</span>
             </button>
           </div>
 
-          <div class="pt-3 border-t border-slate-700/80">
+          <div class="pt-2 border-t border-slate-100">
             <button 
               type="button" 
               onclick="confirmResetDatabase()"
-              class="w-full px-3 py-2 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/60 rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1.5"
+              class="w-full px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition flex items-center justify-center space-x-1.5 focus-ring"
             >
-              <span>⚠️</span>
+              <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
               <span>Reset & Kosongkan Indeks Wajah</span>
             </button>
           </div>
@@ -426,14 +576,16 @@
   </main>
 
   <!-- PIN Modal for Admin Authentication if needed -->
-  <div id="admin-pin-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
-      <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-2xl flex items-center justify-center mx-auto">
-        🔒
+  <div id="admin-pin-modal" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl">
+      <div class="w-12 h-12 rounded-2xl bg-lodge-50 border border-lodge-100 text-lodge-700 flex items-center justify-center mx-auto">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
       </div>
       <div>
-        <h3 class="text-base font-bold text-white">Autentikasi Akses Admin</h3>
-        <p class="text-xs text-slate-400 mt-1">Masukkan PIN Admin untuk mengelola pengaturan sistem.</p>
+        <h3 class="text-base font-bold text-slate-900">Autentikasi Akses Admin</h3>
+        <p class="text-xs text-slate-500 mt-1">Masukkan PIN Admin untuk mengelola pengaturan sistem.</p>
       </div>
       <div>
         <input 
@@ -441,16 +593,16 @@
           id="input-admin-modal-pin" 
           maxlength="6" 
           placeholder="••••"
-          class="w-36 mx-auto px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-center font-mono text-xl text-white tracking-widest focus:outline-none focus:border-emerald-500"
+          class="w-36 mx-auto px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-center font-mono text-xl text-slate-900 tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition"
           onkeydown="if(event.key==='Enter') verifyAdminPinModal()"
         />
-        <p id="pin-modal-error" class="hidden text-xs text-red-400 mt-2 font-medium">PIN yang Anda masukkan salah.</p>
+        <p id="pin-modal-error" class="hidden text-xs text-rose-600 mt-2 font-medium">PIN yang Anda masukkan salah.</p>
       </div>
       <div class="flex items-center space-x-2 pt-2">
-        <a href="/" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition">
+        <a href="/" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition">
           Batal
         </a>
-        <button type="button" onclick="verifyAdminPinModal()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
+        <button type="button" onclick="verifyAdminPinModal()" class="flex-1 py-2.5 bg-lodge-600 hover:bg-lodge-700 text-white rounded-xl text-xs font-semibold transition shadow-xs">
           Buka Kunci
         </button>
       </div>
@@ -462,7 +614,6 @@
     let currentSettings = {};
 
     document.addEventListener('DOMContentLoaded', () => {
-      // Check session or load settings
       loadInitialData();
     });
 
@@ -481,6 +632,7 @@
           const data = await res.json();
           currentSettings = data;
           document.getElementById('smb_host').value = data.smb_host || '192.168.100.93';
+          document.getElementById('smb_port').value = data.smb_port || 445;
           document.getElementById('smb_share').value = data.smb_share || 'photo';
           document.getElementById('smb_subfolder').value = data.smb_subfolder || '';
           document.getElementById('smb_username').value = data.smb_username || '';
@@ -526,6 +678,8 @@
       const port = parseInt(document.getElementById('smb_port').value) || 445;
       const resultBox = document.getElementById('test-result-box');
       const spinner = document.getElementById('test-spinner');
+      const testIcon = document.getElementById('test-icon');
+      const testBtnText = document.getElementById('test-btn-text');
       const btn = document.getElementById('btn-test-connection');
 
       if (!host) {
@@ -534,7 +688,9 @@
       }
 
       btn.disabled = true;
-      spinner.classList.remove('hidden');
+      if (spinner) spinner.classList.remove('hidden');
+      if (testIcon) testIcon.classList.add('hidden');
+      if (testBtnText) testBtnText.textContent = "Menguji...";
 
       try {
         const res = await fetch('/api/admin/test-connection', {
@@ -546,42 +702,55 @@
 
         resultBox.classList.remove('hidden');
         if (data.success) {
-          resultBox.className = "p-3.5 rounded-xl border text-xs bg-emerald-950/60 border-emerald-500/50 text-emerald-300";
+          resultBox.className = "rounded-xl p-4 text-xs bg-emerald-50 border border-emerald-200 text-emerald-900";
           resultBox.innerHTML = `
-            <div class="flex items-center space-x-2">
-              <span class="text-base">✅</span>
+            <div class="flex items-start space-x-2.5">
+              <svg class="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               <div>
-                <strong>Koneksi Berhasil!</strong> Server <code>${data.host}:${data.port}</code> aktif (${data.latency_ms} ms).
+                <p class="font-bold text-emerald-950">Koneksi Berhasil!</p>
+                <p class="mt-0.5 text-emerald-800">Server <code>${data.host}:${data.port}</code> aktif dan merespons normal (latensi: ${data.latency_ms} ms).</p>
               </div>
             </div>
           `;
           document.getElementById('stat-conn-status').innerHTML = `
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>Terhubung (${data.latency_ms} ms)</span>
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span class="text-emerald-700">Terhubung (${data.latency_ms} ms)</span>
           `;
-          document.getElementById('stat-conn-status').className = "text-sm font-bold text-emerald-400 flex items-center space-x-1.5";
         } else {
-          resultBox.className = "p-3.5 rounded-xl border text-xs bg-red-950/60 border-red-500/50 text-red-300";
+          resultBox.className = "rounded-xl p-4 text-xs bg-rose-50 border border-rose-200 text-rose-900";
           resultBox.innerHTML = `
-            <div class="flex items-center space-x-2">
-              <span class="text-base">❌</span>
+            <div class="flex items-start space-x-2.5">
+              <svg class="w-4 h-4 text-rose-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               <div>
-                <strong>Koneksi Gagal:</strong> ${data.error || 'Server tidak merespons.'}
+                <p class="font-bold text-rose-950">Koneksi Gagal</p>
+                <p class="mt-0.5 text-rose-800">${data.error || 'Server tidak merespons.'}</p>
+                <div class="mt-2 text-[11px] text-rose-700 bg-rose-100/60 p-2 rounded-lg">
+                  <strong>Saran Perbaikan:</strong>
+                  <ul class="list-disc list-inside mt-0.5 space-y-0.5">
+                    <li>Pastikan komputer dengan IP <code>${host}</code> menyala dan berada dalam 1 jaringan Wi-Fi / LAN yang sama.</li>
+                    <li>Di Windows komputer sumber, buka <em>Windows Defender Firewall</em> dan pastikan fitur <strong>File and Printer Sharing</strong> diizinkan (Allow).</li>
+                  </ul>
+                </div>
               </div>
             </div>
           `;
           document.getElementById('stat-conn-status').innerHTML = `
-            <span class="w-2 h-2 rounded-full bg-red-400"></span>
-            <span>Tidak Terhubung</span>
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span class="text-rose-700">Tidak Terhubung</span>
           `;
-          document.getElementById('stat-conn-status').className = "text-sm font-bold text-red-400 flex items-center space-x-1.5";
         }
       } catch (e) {
         resultBox.classList.remove('hidden');
-        resultBox.className = "p-3.5 rounded-xl border text-xs bg-red-950/60 border-red-500/50 text-red-300";
+        resultBox.className = "rounded-xl p-4 text-xs bg-rose-50 border border-rose-200 text-rose-900";
         resultBox.textContent = "Gagal menghubungi API test connection.";
       } finally {
-        spinner.classList.add('hidden');
+        if (spinner) spinner.classList.add('hidden');
+        if (testIcon) testIcon.classList.remove('hidden');
+        if (testBtnText) testBtnText.textContent = "Uji Koneksi Server";
         btn.disabled = false;
       }
     }
@@ -593,6 +762,7 @@
 
       const payload = {
         smb_host: document.getElementById('smb_host').value.trim(),
+        smb_port: parseInt(document.getElementById('smb_port').value) || 445,
         smb_share: document.getElementById('smb_share').value.trim(),
         smb_subfolder: document.getElementById('smb_subfolder').value.trim(),
         smb_username: document.getElementById('smb_username').value.trim(),
@@ -624,6 +794,9 @@
 
     async function refreshStorageInspection() {
       const container = document.getElementById('subfolder-list');
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
       try {
         const res = await fetch('/api/admin/storage-status');
         const data = await res.json();
@@ -636,13 +809,15 @@
         if (data.subfolders && data.subfolders.length > 0) {
           data.subfolders.forEach(sub => {
             const item = document.createElement('div');
-            item.className = "flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-700/80 text-xs";
+            item.className = "flex items-center justify-between p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 border border-slate-200/70 text-xs transition";
             item.innerHTML = `
-              <div class="flex items-center space-x-2">
-                <span class="text-emerald-400">📁</span>
-                <span class="font-medium text-slate-200">${sub.name}</span>
+              <div class="flex items-center space-x-2.5 min-w-0">
+                <svg class="w-4 h-4 text-lodge-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <span class="font-semibold text-slate-800 truncate">${sub.name}</span>
               </div>
-              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[11px] font-bold">
+              <span class="px-2.5 py-0.5 rounded-full bg-lodge-100 text-lodge-800 font-semibold text-[11px] shrink-0">
                 ${sub.photo_count} foto
               </span>
             `;
@@ -650,13 +825,18 @@
           });
         } else {
           container.innerHTML = `
-            <div class="text-center py-6 text-slate-500 text-xs">
-              ${data.readable ? 'Belum ada subfolder wahana di dalam folder sharing.' : 'Folder sharing belum terpasang atau tidak dapat dibaca.'}
+            <div class="text-center py-8 text-slate-400 text-xs">
+              <svg class="w-8 h-8 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+              </svg>
+              ${data.readable ? 'Belum ada subfolder wahana di dalam folder sharing.' : 'Folder sharing belum terpasang atau belum dapat dibaca.'}
             </div>
           `;
         }
       } catch (e) {
-        container.innerHTML = '<div class="text-center py-4 text-red-400 text-xs">Gagal memuat status folder.</div>';
+        container.innerHTML = '<div class="text-center py-6 text-rose-600 text-xs">Gagal memuat status folder.</div>';
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
       }
     }
 
@@ -722,11 +902,20 @@
       navigator.clipboard.writeText(cmd).then(() => {
         const icon = document.getElementById('copy-icon');
         const text = document.getElementById('copy-text');
-        icon.textContent = "✅";
+        
+        // Show success state
         text.textContent = "Tersalin!";
+        if (icon) {
+          icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />`;
+          icon.classList.add('text-emerald-600');
+        }
+
         setTimeout(() => {
-          icon.textContent = "📄";
           text.textContent = "Salin Perintah";
+          if (icon) {
+            icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />`;
+            icon.classList.remove('text-emerald-600');
+          }
         }, 2000);
       });
     }
