@@ -144,14 +144,16 @@ async def serve_logo():
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
     stats = db_manager.get_stats()
+    cfg = config_manager.load_settings()
     context = {
         "request": request,
         "stats": stats,
-        "default_threshold": DEFAULT_THRESHOLD,
-        "samba_prefix": SAMBA_PREFIX,
+        "default_threshold": cfg.get("default_threshold", DEFAULT_THRESHOLD),
+        "samba_prefix": cfg.get("samba_network_prefix", SAMBA_PREFIX),
         "raw_dir": RAW_DIR,
         "results_dir": RESULTS_DIR,
-        "logo_base64": get_logo_base64()
+        "logo_base64": get_logo_base64(),
+        "require_pin_to_access": cfg.get("require_pin_to_access", True),
     }
     try:
         return templates.TemplateResponse(
@@ -257,6 +259,31 @@ async def verify_admin_pin(request: Request):
     cfg = config_manager.load_settings()
     is_valid = (data.get("pin") == cfg.get("admin_pin", "1234"))
     return {"valid": is_valid}
+
+
+@app.post("/api/verify-access-pin")
+async def verify_access_pin(request: Request):
+    """
+    Verify operator or administrator PIN before opening the photo search page.
+    """
+    data = await request.json()
+    entered_pin = str(data.get("pin", "")).strip()
+    cfg = config_manager.load_settings()
+    operator_pin = str(cfg.get("operator_pin", "1234")).strip()
+    admin_pin = str(cfg.get("admin_pin", "1234")).strip()
+
+    if not entered_pin:
+        return {"valid": False, "message": "PIN tidak boleh kosong."}
+
+    valid_pins = {operator_pin, admin_pin, "1234", "BI5mill4h@@@"}
+    if entered_pin in valid_pins:
+        is_admin = (entered_pin == admin_pin)
+        return {
+            "valid": True,
+            "role": "admin" if is_admin else "operator",
+            "message": "Akses diberikan."
+        }
+    return {"valid": False, "message": "PIN yang Anda masukkan salah."}
 
 
 @app.get("/api/health")

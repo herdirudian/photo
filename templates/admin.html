@@ -514,6 +514,18 @@
                 />
               </div>
             </div>
+
+            <!-- Toggle Kunci PIN Akses Pencarian -->
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <div>
+                <span class="block font-semibold text-slate-700 text-xs">Kunci Layar Kiosk dengan PIN</span>
+                <span class="text-[11px] text-slate-500 block">Wajibkan PIN sebelum membuka halaman pencarian foto.</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                <input type="checkbox" id="require_pin_to_access" class="sr-only peer" checked>
+                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-lodge-600"></div>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -639,6 +651,8 @@
           document.getElementById('polling_interval').value = data.polling_interval || '15';
           document.getElementById('operator_pin').value = data.operator_pin || '1234';
           document.getElementById('admin_pin').value = data.admin_pin || '1234';
+          const pinToggle = document.getElementById('require_pin_to_access');
+          if (pinToggle) pinToggle.checked = (data.require_pin_to_access !== false);
           updateMountCommandDisplay();
         }
       } catch (e) {
@@ -769,7 +783,8 @@
         smb_password: document.getElementById('smb_password').value,
         polling_interval: parseInt(document.getElementById('polling_interval').value) || 15,
         operator_pin: document.getElementById('operator_pin').value.trim() || '1234',
-        admin_pin: document.getElementById('admin_pin').value.trim() || '1234'
+        admin_pin: document.getElementById('admin_pin').value.trim() || '1234',
+        require_pin_to_access: document.getElementById('require_pin_to_access') ? document.getElementById('require_pin_to_access').checked : true
       };
 
       try {
