@@ -145,6 +145,8 @@ async def serve_logo():
 async def serve_dashboard(request: Request):
     stats = db_manager.get_stats()
     cfg = config_manager.load_settings()
+    storage_info = config_manager.inspect_storage_status(RAW_DIR)
+    subfolders = [s["name"] for s in storage_info.get("subfolders", [])]
     context = {
         "request": request,
         "stats": stats,
@@ -154,6 +156,7 @@ async def serve_dashboard(request: Request):
         "results_dir": RESULTS_DIR,
         "logo_base64": get_logo_base64(),
         "require_pin_to_access": cfg.get("require_pin_to_access", True),
+        "subfolders": subfolders,
     }
     try:
         return templates.TemplateResponse(
@@ -326,13 +329,14 @@ async def search_guest_photos(
     request: Request,
     file: UploadFile = File(...),
     threshold: float = Form(DEFAULT_THRESHOLD),
-    top_k: int = Form(50)
+    top_k: int = Form(50),
+    ride_filter: Optional[str] = Form(None)
 ):
     """
     Search endpoint:
     1. Reads reference photo of guest.
     2. Extracts 128-d face vector.
-    3. Searches FAISS for matching faces above similarity threshold.
+    3. Searches FAISS for matching faces above similarity threshold (with optional ride subfolder filter).
     4. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks.
     5. Returns matches and network folder path.
     """
@@ -370,11 +374,12 @@ async def search_guest_photos(
     query_face = extracted_faces[0]
     query_encoding = query_face["encoding"]
 
-    # FAISS Similarity Search
+    # FAISS Similarity Search with optional ride filter
     raw_matches = db_manager.search_similar_faces(
         query_encoding=query_encoding,
         threshold=threshold,
-        top_k=top_k
+        top_k=top_k,
+        ride_filter=ride_filter
     )
 
     # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails

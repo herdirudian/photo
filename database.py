@@ -80,15 +80,15 @@ class FaceEngine:
     def detect_multiscale_locations(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
         High-Performance Face Detection optimized for theme park DSLR / camera photos.
-        Processes in ~0.5s - 1.2s per photo on CPU instead of 30s.
+        Accurately captures both close-up and distant faces (such as Hot Air Balloon & ride baskets).
         """
         h, w = image.shape[:2]
         all_locations: List[Tuple[int, int, int, int]] = []
         max_dim = max(h, w)
 
-        # 1. Main Global Pass with optimal resolution (max 1600px)
-        if max_dim > 1600:
-            scale = 1600.0 / max_dim
+        # 1. Main Global Pass with optimal resolution (max 2000px)
+        if max_dim > 2000:
+            scale = 2000.0 / max_dim
             new_w, new_h = int(w * scale), int(h * scale)
             pil_img = Image.fromarray(image)
             small_img = np.array(pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR))
@@ -104,11 +104,12 @@ class FaceEngine:
             global_locs = face_recognition.face_locations(image, number_of_times_to_upsample=1, model=self.model)
             all_locations.extend(global_locs)
 
-        # 2. Focused Center Pass: Only if no faces were found globally, check ride center area
-        if not all_locations and max_dim >= 1400:
+        # 2. Focused Center Pass: Inspect central ride zone where guests/baskets are located
+        if max_dim >= 1800:
             cy1, cx1, cy2, cx2 = int(h * 0.15), int(w * 0.15), int(h * 0.85), int(w * 0.85)
             center_crop = image[cy1:cy2, cx1:cx2]
-            scale_c = 1400.0 / max(center_crop.shape[:2]) if max(center_crop.shape[:2]) > 1400 else 1.0
+            c_dim = max(center_crop.shape[:2])
+            scale_c = 1500.0 / c_dim if c_dim > 1500 else 1.0
             if scale_c < 1.0:
                 cw_s, ch_s = int(center_crop.shape[1] * scale_c), int(center_crop.shape[0] * scale_c)
                 pil_c = Image.fromarray(center_crop).resize((cw_s, ch_s), Image.Resampling.BILINEAR)
@@ -551,11 +552,13 @@ class DatabaseManager:
         self,
         query_encoding: np.ndarray,
         threshold: float = 0.75,
-        top_k: int = 50
+        top_k: int = 50,
+        ride_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Query FAISS for matching faces above the similarity threshold and fetch photo details from SQLite.
         Inner product on unit-normalized vectors directly yields cosine similarity (0.0 to 1.0).
+        Supports optional filtering by ride subfolder (e.g. 'BL' for Hot Air Balloon).
         """
         with self.lock:
             if not FAISS_AVAILABLE or self.index is None or self.index.ntotal == 0:
@@ -602,9 +605,16 @@ class DatabaseManager:
                 JOIN photos p ON f.photo_id = p.id
                 WHERE f.vector_id IN ({placeholders})
             """
+            params = list(matched_vector_ids)
+
+            # Apply ride subfolder filter if specified (e.g. 'BL' for Hot Air Balloon)
+            if ride_filter and ride_filter.strip() and ride_filter.lower() not in ["all", "semua"]:
+                clean_rf = ride_filter.strip()
+                query_sql += " AND (p.file_path LIKE ? OR p.file_path LIKE ?)"
+                params.extend([f"%/{clean_rf}/%", f"%\\{clean_rf}\\%"])
 
             with self._get_connection() as conn:
-                cursor = conn.execute(query_sql, matched_vector_ids)
+                cursor = conn.execute(query_sql, params)
                 rows = cursor.fetchall()
 
             # Group results by photo so that multiple face matches on the same photo retain the highest similarity
