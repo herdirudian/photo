@@ -87,13 +87,13 @@ if os.path.exists(IMG_DIR):
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.168.100.95") -> str:
+def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.168.100.90") -> str:
     """
-    Produce a strictly valid Windows UNC network path (e.g. \\192.168.100.95\park-photos\results\Customer_XXXX).
+    Produce a strictly valid Windows UNC network path (e.g. \\192.168.100.90\park-photos\results\Customer_XXXX).
     Guarantees exactly two leading backslashes and single backslashes in between.
     """
     import re
-    if not prefix or prefix.startswith("/mnt") or "samba-server" in prefix or "192.168.100.90" in prefix:
+    if not prefix or prefix.startswith("/mnt") or "samba-server" in prefix or "192.168.100.95" in prefix:
         prefix = rf"\\{fallback_host}\park-photos\results"
 
     clean_p = re.sub(r"^[\\/]+", "", prefix.strip())
@@ -312,48 +312,12 @@ async def get_system_stats():
 
 @app.post("/api/reindex")
 async def trigger_reindex():
-    """Trigger manual re-scan of raw photos directory and return detailed metrics."""
+    """Trigger manual re-scan of raw photos directory."""
     try:
-        summary = indexer.scan_existing_files()
-        if summary.get("status") == "busy":
-            return {
-                "success": False,
-                "busy": True,
-                "message": "Pemindaian sedang berlangsung di latar belakang. Mohon tunggu beberapa detik lagi."
-            }
-
-        stats = db_manager.get_stats()
-        scanned = summary.get("scanned", 0)
-        newly_indexed = summary.get("newly_indexed", 0)
-        subfolders_count = summary.get("subfolders_count", 0)
-        total_photos = stats.get("total_photos", 0)
-        total_faces = stats.get("total_faces", 0)
-
-        if scanned == 0:
-            msg = (
-                f"Hasil Pemindaian: 0 berkas foto ditemukan di dalam '{RAW_DIR}'.\n\n"
-                "Kemungkinan penyebab:\n"
-                "1. Berkas foto diletakkan di luar folder /opt/SistemPhoto/data/raw pada server host.\n"
-                "2. Jika menggunakan Samba share, periksa apakah berkas berada di subfolder lain (misal: /opt/SistemPhoto/data/raw/raw/).\n"
-                "3. Jalankan 'ls -la /opt/SistemPhoto/data/raw' di terminal Ubuntu untuk memastikan file terlihat oleh Docker."
-            )
-        else:
-            msg = (
-                f"Pemindaian Berhasil Selesai!\n"
-                f"• Berkas foto di disk: {scanned} foto ({subfolders_count} subfolder wahana)\n"
-                f"• Foto baru yang diproses: {newly_indexed} foto\n"
-                f"• Total foto di database: {total_photos} foto\n"
-                f"• Total wajah terindeks: {total_faces} wajah"
-            )
-
-        return {
-            "success": True,
-            "message": msg,
-            "summary": summary,
-            "stats": stats
-        }
+        indexer.scan_existing_files()
+        return {"success": True, "message": "Raw photo scan completed successfully."}
     except Exception as e:
-        logger.error(f"Error during re-index: {e}", exc_info=True)
+        logger.error(f"Error during re-index: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -500,7 +464,7 @@ async def search_guest_photos(
         json.dump(summary_data, f, indent=2)
 
     # Format Samba path dynamically using the accessed server IP / hostname
-    host = request.headers.get("host", "").split(":")[0] or "192.168.100.95"
+    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
     samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
 
     for item in matched_photos:
