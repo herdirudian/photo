@@ -30,23 +30,6 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
     Ensure the file is completely written to disk before attempting computer vision extraction.
     Crucial for theme park network shares (Samba) or camera offloads where files arrive in chunks.
     """
-    if not os.path.exists(file_path):
-        return False
-
-    # Fast path for existing stable files (copied more than 2 seconds ago)
-    try:
-        stat = os.stat(file_path)
-        if stat.st_size > 0 and (time.time() - stat.st_mtime) > 2.0:
-            with open(file_path, "rb") as f:
-                f.seek(0)
-                head = f.read(10)
-                f.seek(max(0, stat.st_size - 10))
-                tail = f.read(10)
-                if head and tail:
-                    return True
-    except OSError:
-        pass
-
     start_time = time.time()
     last_size = -1
 
@@ -191,12 +174,8 @@ class PhotoIndexer:
             handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
             scanned_count = 0
             new_indexed_count = 0
-            subfolders_detected = set()
 
-            for root, dirs, files in os.walk(self.raw_dir):
-                for d in dirs:
-                    rel_d = os.path.relpath(os.path.join(root, d), self.raw_dir)
-                    subfolders_detected.add(rel_d)
+            for root, _, files in os.walk(self.raw_dir):
                 for filename in files:
                     full_path = os.path.join(root, filename)
                     if is_valid_image(full_path):
@@ -212,13 +191,11 @@ class PhotoIndexer:
             summary = {
                 "scanned": scanned_count,
                 "newly_indexed": new_indexed_count,
-                "subfolders_count": len(subfolders_detected),
-                "subfolders": sorted(list(subfolders_detected)),
                 "purged_photos": purge_stats.get("purged_photos", 0),
                 "purged_faces": purge_stats.get("purged_faces", 0),
                 "updated_paths": purge_stats.get("updated_paths", 0)
             }
-            logger.info(f"Scan complete on {self.raw_dir}. Scanned: {scanned_count} files ({len(subfolders_detected)} subfolders), Newly processed: {new_indexed_count}, Purged: {summary['purged_photos']}")
+            logger.info(f"Scan complete. Scanned: {scanned_count}, Newly processed: {new_indexed_count}, Purged: {summary['purged_photos']}")
             return summary
 
         finally:
@@ -230,6 +207,13 @@ class PhotoIndexer:
         to detect newly added photos or cleaned up files without relying on kernel inotify.
         """
         logger.info(f"Network share periodic polling worker started (interval: {self.polling_interval}s).")
+        
+        # Initial scan runs in this background thread so Uvicorn web server starts immediately!
+        try:
+            self.scan_existing_files()
+        except Exception as e:
+            logger.error(f"Error in initial background directory scan: {e}")
+
         while self._running:
             # Sleep in small steps to react quickly to shutdown
             for _ in range(max(1, int(self.polling_interval))):
@@ -248,9 +232,6 @@ class PhotoIndexer:
             return
 
         self._running = True
-
-        # Perform initial scan synchronously to ensure clean state
-        self.scan_existing_files()
 
         # Start Watchdog observer (works on local file systems)
         try:
