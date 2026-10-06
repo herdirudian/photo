@@ -40,10 +40,33 @@ else
     echo -e "\n${GREEN}[2/5] Docker sudah terpasang.${NC}"
 fi
 
-# 3. Prepare data directories
-echo -e "\n${YELLOW}[3/5] Menyiapkan struktur folder data & permission...${NC}"
+# 3. Prepare data directories & Samba share
+echo -e "\n${YELLOW}[3/5] Menyiapkan struktur folder data & Windows File Share (Samba)...${NC}"
 mkdir -p data/raw data/results data/db img static templates
 sudo chmod -R 777 data
+
+# Install & configure Samba automatically so operators can open \\IP\park-photos\raw
+sudo apt-get install -y samba
+DATA_DIR="$(pwd)/data"
+if ! grep -q "\[park-photos\]" /etc/samba/smb.conf 2>/dev/null; then
+    echo -e "${YELLOW}Mengonfigurasi share folder [park-photos] di Samba...${NC}"
+    sudo bash -c "cat >> /etc/samba/smb.conf" << EOL
+
+[park-photos]
+   comment = The Lodge Maribaya Photos & Results
+   path = $DATA_DIR
+   browseable = yes
+   read only = no
+   guest ok = yes
+   create mask = 0777
+   directory mask = 0777
+   follow symlinks = yes
+   wide links = yes
+   unix extensions = no
+EOL
+    sudo systemctl restart smbd || true
+    sudo systemctl enable smbd || true
+fi
 
 # 4. Build and start container
 echo -e "\n${YELLOW}[4/5] Membangun image Docker & mengunduh model AI...${NC}"
@@ -63,3 +86,4 @@ echo -e "\nSistem Photo siap digunakan:"
 echo -e "  🌐 Layar Tamu / Kiosk : ${GREEN}http://${IP_ADDR}:8000/${NC}"
 echo -e "  ⚙️  Dashboard Admin    : ${GREEN}http://${IP_ADDR}:8000/admin${NC}"
 echo -e "  🔑 PIN Keamanan Default : ${YELLOW}BI5mill4h@@@${NC} atau ${YELLOW}1234${NC}\n"
+

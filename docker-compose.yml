@@ -10,7 +10,7 @@ services:
       - "8000:8000"
     volumes:
       # Raw park ride photos dropped here by staff or automated cameras
-      - ./data/raw:/app/data/raw
+      - ./data/raw:/app/data/raw:rslave
       # Virtual result folders with customer symlinks generated here
       - ./data/results:/app/data/results
       # SQLite database and FAISS binary index cache
