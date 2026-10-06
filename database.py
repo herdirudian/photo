@@ -187,12 +187,7 @@ class FaceEngine:
         if image_obj.mode != "RGB":
             image_obj = image_obj.convert("RGB")
         
-        # Auto-contrast enhancement to normalize indoor/outdoor shadows
-        try:
-            enhanced_obj = ImageOps.autocontrast(image_obj, cutoff=1)
-            image_np = np.array(enhanced_obj)
-        except Exception:
-            image_np = np.array(image_obj)
+        image_np = np.array(image_obj)
 
         locations = face_recognition.face_locations(image_np, number_of_times_to_upsample=1, model=self.model)
         if not locations:
