@@ -71,6 +71,13 @@ server {
     # Kapasitas upload maksimal foto DSLR resolusi tinggi (hingga 50MB)
     client_max_body_size 50M;
 
+    # Endpoint download sertifikat SSL untuk Windows Trusted Root Store
+    location = /sistemphoto-ssl.crt {
+        alias $SSL_DIR/server.crt;
+        default_type application/x-x509-ca-cert;
+        add_header Content-Disposition 'attachment; filename="sistemphoto-ssl.crt"';
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host \$host;
@@ -113,3 +120,4 @@ echo -e "\nKeuntungan HTTPS aktif:"
 echo -e "  1. Akses Webcam di Chrome/Edge langsung aktif TANPA flags browser!"
 echo -e "  2. Semua port 80 (HTTP) otomatis dialihkan ke HTTPS."
 echo -e "  3. Sertifikat tersimpan di: /opt/SistemPhoto/sistemphoto-ssl.crt\n"
+
