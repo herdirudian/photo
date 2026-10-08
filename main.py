@@ -35,7 +35,7 @@ RAW_DIR = os.getenv("RAW_DIR", os.path.abspath("./data/raw"))
 RESULTS_DIR = os.getenv("RESULTS_DIR", os.path.abspath("./data/results"))
 DB_DIR = os.getenv("DB_DIR", os.path.abspath("./data/db"))
 SAMBA_PREFIX = os.getenv("SAMBA_NETWORK_PREFIX", r"\\samba-server\park-photos\results")
-DEFAULT_THRESHOLD = float(os.getenv("DEFAULT_SIMILARITY_THRESHOLD", "0.86"))
+DEFAULT_THRESHOLD = float(os.getenv("DEFAULT_SIMILARITY_THRESHOLD", "0.82"))
 FACE_MODEL = os.getenv("FACE_DETECTION_MODEL", "hog")
 
 # Ensure required directories exist

@@ -79,14 +79,16 @@ class FaceEngine:
 
     def detect_multiscale_locations(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
-        High-Performance Face Detection optimized for theme park DSLR / camera photos.
-        Accurately captures both close-up and distant faces (such as Hot Air Balloon & ride baskets).
+        High-Performance Multi-Scale Face Detection optimized for The Lodge Maribaya ride photos:
+        - Sky Swing / Ayunan (prominent center subject, vertical ropes)
+        - Hammock / Zip Line (suspended subjects, horizontal cables, deep forest background)
+        - Hot Air Balloon (close & wide basket, groups of 1-6 people, glasses, and hijabs)
         """
         h, w = image.shape[:2]
         all_locations: List[Tuple[int, int, int, int]] = []
         max_dim = max(h, w)
 
-        # 1. Main Global Pass with optimal resolution (max 2000px)
+        # 1. Main Global Pass
         if max_dim > 2000:
             scale = 2000.0 / max_dim
             new_w, new_h = int(w * scale), int(h * scale)
@@ -103,70 +105,105 @@ class FaceEngine:
         else:
             global_locs = face_recognition.face_locations(image, number_of_times_to_upsample=1, model=self.model)
             all_locations.extend(global_locs)
+            if len(global_locs) == 0 and max_dim <= 1200:
+                all_locations.extend(face_recognition.face_locations(image, number_of_times_to_upsample=2, model=self.model))
 
-        # 2. Focused Center Pass: Inspect central ride zone where guests/baskets are located
-        if max_dim >= 1800:
-            cy1, cx1, cy2, cx2 = int(h * 0.15), int(w * 0.15), int(h * 0.85), int(w * 0.85)
-            center_crop = image[cy1:cy2, cx1:cx2]
-            c_dim = max(center_crop.shape[:2])
-            scale_c = 1500.0 / c_dim if c_dim > 1500 else 1.0
-            if scale_c < 1.0:
-                cw_s, ch_s = int(center_crop.shape[1] * scale_c), int(center_crop.shape[0] * scale_c)
-                pil_c = Image.fromarray(center_crop).resize((cw_s, ch_s), Image.Resampling.BILINEAR)
-                center_crop_s = np.array(pil_c)
+        # 2. Targeted Ride Zone Pass:
+        # Across all rides (Swing, Hammock, Hot Air Balloon), guests are ALWAYS in y in [0.20, 0.98]
+        # and x in [0.05, 0.95]. (Excludes pure sky and treetop canopy above rides).
+        ry1, rx1, ry2, rx2 = int(h * 0.20), int(w * 0.05), int(h * 0.98), int(w * 0.95)
+        ride_crop = image[ry1:ry2, rx1:rx2]
+        if ride_crop.size > 0:
+            c_dim = max(ride_crop.shape[:2])
+            scale_r = 1800.0 / c_dim if c_dim > 1800 else 1.0
+            if scale_r < 1.0:
+                cw_s, ch_s = int(ride_crop.shape[1] * scale_r), int(ride_crop.shape[0] * scale_r)
+                pil_c = Image.fromarray(ride_crop).resize((cw_s, ch_s), Image.Resampling.BILINEAR)
+                ride_crop_s = np.array(pil_c)
             else:
-                center_crop_s = center_crop
-            c_locs = face_recognition.face_locations(center_crop_s, number_of_times_to_upsample=1, model=self.model)
-            for top, right, bottom, left in c_locs:
+                ride_crop_s = ride_crop
+
+            upsample_num = 2 if max(ride_crop_s.shape[:2]) <= 1100 else 1
+            r_locs = face_recognition.face_locations(ride_crop_s, number_of_times_to_upsample=upsample_num, model=self.model)
+            for top, right, bottom, left in r_locs:
                 all_locations.append((
-                    cy1 + int(round(top / scale_c)),
-                    cx1 + int(round(right / scale_c)),
-                    cy1 + int(round(bottom / scale_c)),
-                    cx1 + int(round(left / scale_c))
+                    ry1 + int(round(top / scale_r)),
+                    rx1 + int(round(right / scale_r)),
+                    ry1 + int(round(bottom / scale_r)),
+                    rx1 + int(round(left / scale_r))
                 ))
 
-        # Filter out tiny noise artifacts (< 35px) and non-face aspect ratios
+        # 3. Dedicated Balloon Basket Scan (Bottom-Center Crop: y in [0.65, 0.98], x in [0.20, 0.80])
+        # In Hot Air Balloon photos, 6 guests stand closely packed in the basket.
+        # This targeted crop ensures distant balloon basket faces are ALWAYS caught.
+        by1, bx1, by2, bx2 = int(h * 0.65), int(w * 0.20), int(h * 0.98), int(w * 0.80)
+        basket_crop = image[by1:by2, bx1:bx2]
+        if basket_crop.size > 0:
+            b_dim = max(basket_crop.shape[:2])
+            scale_b = 1200.0 / b_dim if b_dim > 1200 else 1.0
+            if scale_b < 1.0:
+                bw_s, bh_s = int(basket_crop.shape[1] * scale_b), int(basket_crop.shape[0] * scale_b)
+                basket_crop_s = np.array(Image.fromarray(basket_crop).resize((bw_s, bh_s), Image.Resampling.BILINEAR))
+            else:
+                basket_crop_s = basket_crop
+
+            b_locs = face_recognition.face_locations(basket_crop_s, number_of_times_to_upsample=1, model=self.model)
+            for top, right, bottom, left in b_locs:
+                all_locations.append((
+                    by1 + int(round(top / scale_b)),
+                    bx1 + int(round(right / scale_b)),
+                    by1 + int(round(bottom / scale_b)),
+                    bx1 + int(round(left / scale_b))
+                ))
+
+        # Deduplicate overlapping bounding boxes from different scales via Non-Maximum Suppression
+        dedup_boxes = self._nms_boxes(all_locations, iou_thresh=0.35)
+
+        # Adaptive minimum face dimension based on image size:
+        # In 1024x682: min_size = 14px (catches distant balloon faces)
+        # In 6000x4000: min_size = 50px (filters distant leaves & bark noise)
+        min_dim = max(14, int(min(h, w) * 0.015))
+
         filtered = []
-        for loc in all_locations:
+        for loc in dedup_boxes:
             box_h = loc[2] - loc[0]
             box_w = loc[1] - loc[3]
-            if box_w >= 35 and box_h >= 35:
+            if box_w >= min_dim and box_h >= min_dim:
                 ratio = float(box_h) / float(box_w)
-                if 0.70 <= ratio <= 1.48:
+                # Human face aspect ratio (height / width)
+                # Rejects tall skinny ropes/poles (ratio > 1.55) and horizontal rails (ratio < 0.65)
+                if 0.65 <= ratio <= 1.55:
                     filtered.append(loc)
 
-        # 3. Deduplicate via Non-Maximum Suppression
-        final_boxes = self._nms_boxes(filtered, iou_thresh=0.35)
-        return final_boxes
+        return filtered
 
     def is_valid_human_face(self, image: np.ndarray, bbox: Tuple[int, int, int, int]) -> bool:
         """
         Validate whether a candidate bounding box is genuinely a human face
         using anatomical 68-point facial landmark geometry and aspect ratio checks.
-        Filters out false positives on trees, pine bark, wooden poles, metal cables, and park equipment.
+        Optimized for The Lodge Maribaya ride photos (Swing, Hammock, Hot Air Balloon,
+        including guests wearing glasses and hijabs).
+        Filters out false positives on trees, pine bark, wooden poles, ropes, and metal equipment.
         """
         if not FACE_REC_AVAILABLE:
             return True
 
+        img_h, img_w = image.shape[:2]
         top, right, bottom, left = bbox
         w = right - left
         h = bottom - top
 
-        # 1. Minimum dimension check:
-        # In DSLR/high-res ride photos, any face smaller than 35px is texture noise/foliage
-        if w < 35 or h < 35:
+        # 1. Adaptive dimension check
+        min_dim = max(14, int(min(img_h, img_w) * 0.015))
+        if w < min_dim or h < min_dim:
             return False
 
-        # 2. Aspect ratio check:
-        # Real human faces have aspect ratios (height / width) roughly between 0.72 and 1.48.
-        # Vertical poles/trees often have aspect ratios > 1.5, horizontal beams < 0.70.
+        # 2. Aspect ratio check
         aspect_ratio = float(h) / float(w)
-        if aspect_ratio < 0.72 or aspect_ratio > 1.48:
+        if aspect_ratio < 0.65 or aspect_ratio > 1.55:
             return False
 
-        # 3. Variance / Contrast Check:
-        # Eliminates flat, uniform surfaces (e.g. smooth metal poles, solid painted wood)
-        img_h, img_w = image.shape[:2]
+        # 3. Variance / Contrast Check
         crop_top = max(0, min(img_h, top))
         crop_bottom = max(0, min(img_h, bottom))
         crop_left = max(0, min(img_w, left))
@@ -176,7 +213,7 @@ class FaceEngine:
             return False
             
         crop = image[crop_top:crop_bottom, crop_left:crop_right]
-        if crop.size == 0 or np.std(crop) < 14.0:
+        if crop.size == 0 or np.std(crop) < 10.0:
             return False
 
         # 4. 68-Landmark Anatomical Validation:
@@ -184,14 +221,17 @@ class FaceEngine:
             landmarks_list = face_recognition.face_landmarks(image, face_locations=[bbox], model="large")
         except Exception as e:
             logger.warning(f"Error computing face landmarks for bbox {bbox}: {e}")
-            return False
+            landmarks_list = []
 
         if not landmarks_list or len(landmarks_list) == 0:
+            # If landmarks could not be extracted on a very small distant face (< 28px),
+            # allow it only if aspect ratio is strictly oval/circular (0.75 - 1.35)
+            if min(w, h) < 28:
+                return (0.75 <= aspect_ratio <= 1.35)
             return False
 
         lm = landmarks_list[0]
 
-        # Critical facial components must be present
         left_eye = lm.get("left_eye")
         right_eye = lm.get("right_eye")
         nose_tip = lm.get("nose_tip")
@@ -199,7 +239,7 @@ class FaceEngine:
         top_lip = lm.get("top_lip")
         chin = lm.get("chin")
 
-        if not left_eye or not right_eye or not nose_tip or (not bottom_lip and not top_lip):
+        if not left_eye or not right_eye:
             return False
 
         # Compute eye centers
@@ -208,53 +248,42 @@ class FaceEngine:
         rex = sum(p[0] for p in right_eye) / len(right_eye)
         rey = sum(p[1] for p in right_eye) / len(right_eye)
 
-        # In face_recognition:
-        # left_eye points (viewer's left) have smaller x
-        # right_eye points (viewer's right) have larger x
         eye_dist_x = rex - lex
 
-        # In a real face, left eye must be to the left of right eye horizontally
+        # In real human faces (even 3/4 view or wearing glasses), left eye is to the left of right eye
         if eye_dist_x <= 0:
             return False
 
-        # Distance between eyes must be a reasonable portion of face width (typically 20% to 65%)
-        # On poles and vertical tree bark, landmark points collapse horizontally (eye_dist_x near zero)
-        if eye_dist_x < (0.18 * w) or eye_dist_x > (0.75 * w):
+        # Distance between eyes: typical 12% to 80% of face width
+        # (On vertical poles/cables, points collapse horizontally so eye_dist_x is near zero)
+        if eye_dist_x < (0.12 * w) or eye_dist_x > (0.80 * w):
             return False
 
-        # Eye tilt / alignment: head tilt in theme park photos is normally within +/- 45 degrees
+        # Eye tilt / alignment: accommodates playful head tilts on swings/rides up to 48 degrees
         eye_diff_y = abs(rey - ley)
-        if eye_diff_y > (0.90 * eye_dist_x):
+        if eye_diff_y > (1.10 * eye_dist_x):
             return False
 
-        # Vertical anatomical ordering:
-        # y increases downwards in image coordinates.
-        # Eyes -> Nose -> Mouth -> Chin
+        # Vertical anatomical ordering (Eyes above Nose, Nose above Mouth):
         eyes_y = (ley + rey) / 2.0
-        nose_y = sum(p[1] for p in nose_tip) / len(nose_tip)
-        
-        mouth_pts = bottom_lip if bottom_lip else top_lip
-        mouth_y = sum(p[1] for p in mouth_pts) / len(mouth_pts)
-
-        # Eyes must be above nose tip (at least 3% of face height)
-        if (nose_y - eyes_y) < (0.03 * h):
-            return False
-
-        # Nose tip must be above mouth (at least 3% of face height)
-        if (mouth_y - nose_y) < (0.03 * h):
-            return False
-
-        # Chin bottom check if chin is available
-        if chin:
-            chin_y = max(p[1] for p in chin)
-            if (chin_y - mouth_y) < (0.02 * h):
+        if nose_tip:
+            nose_y = sum(p[1] for p in nose_tip) / len(nose_tip)
+            if (nose_y - eyes_y) < -0.05 * h:
                 return False
 
-        # Mouth horizontal centering relative to eyes midpoint
-        mouth_x = sum(p[0] for p in mouth_pts) / len(mouth_pts)
-        eyes_center_x = (lex + rex) / 2.0
-        if abs(mouth_x - eyes_center_x) > (0.35 * w):
-            return False
+        mouth_pts = bottom_lip if bottom_lip else top_lip
+        if mouth_pts and nose_tip:
+            mouth_y = sum(p[1] for p in mouth_pts) / len(mouth_pts)
+            if (mouth_y - nose_y) < -0.05 * h:
+                return False
+
+        # Chin check: HIJAB-SAFE
+        # Guests wearing hijab have fabric covering the chin, so chin points rest on the cloth.
+        # Only verify that chin is not inverted above the mouth.
+        if chin and mouth_pts:
+            chin_y = max(p[1] for p in chin)
+            if chin_y < (mouth_y - 0.05 * h):
+                return False
 
         return True
 

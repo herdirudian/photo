@@ -25,7 +25,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "smb_domain": "",
     "local_path": "/app/data/raw",
     "polling_interval": 15,
-    "default_threshold": 0.86,
+    "default_threshold": 0.82,
     "admin_pin": "BI5mill4h@@@",
     "operator_pin": "BI5mill4h@@@",
     "require_pin_to_access": True,

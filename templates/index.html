@@ -472,7 +472,7 @@
                   <span class="text-[11px] text-slate-500">Mencegah muka orang lain ikut muncul</span>
                 </div>
                 <span id="threshold-val" class="text-sm font-bold text-lodge-800 bg-lodge-100 border border-lodge-200 px-2.5 py-0.5 rounded">
-                  {{ (default_threshold * 100)|int if default_threshold else 86 }}%
+                  {{ (default_threshold * 100)|int if default_threshold else 82 }}%
                 </span>
               </div>
 
@@ -482,14 +482,14 @@
                 min="0.70" 
                 max="0.95" 
                 step="0.01" 
-                value="{{ default_threshold if default_threshold else 0.86 }}" 
+                value="{{ default_threshold if default_threshold else 0.82 }}" 
                 oninput="updateThresholdDisplay(this.value)"
                 class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-lodge-600"
               />
 
               <div class="flex justify-between text-[11px] text-slate-500">
                 <span>70% (Lebih Longgar)</span>
-                <span class="font-bold text-lodge-800">86% - 88% (Presisi & Akurat)</span>
+                <span class="font-bold text-lodge-800">82% - 85% (Rekomendasi Wahana)</span>
                 <span>95% (Sangat Ketat)</span>
               </div>
               <p class="text-[11px] text-slate-500 bg-white p-2 rounded border border-slate-200/80">
