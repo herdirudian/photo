@@ -314,11 +314,15 @@ async def get_system_stats():
 
 
 @app.post("/api/reindex")
-async def trigger_reindex():
-    """Trigger manual re-scan of raw photos directory."""
+async def trigger_reindex(force: bool = Query(True)):
+    """Trigger manual re-scan of raw photos directory with full face re-validation."""
     try:
-        indexer.scan_existing_files()
-        return {"success": True, "message": "Raw photo scan completed successfully."}
+        summary = indexer.scan_existing_files(force=force)
+        return {
+            "success": True,
+            "message": "Raw photo scan completed successfully.",
+            "summary": summary
+        }
     except Exception as e:
         logger.error(f"Error during re-index: {e}")
         raise HTTPException(status_code=500, detail=str(e))

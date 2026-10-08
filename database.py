@@ -125,20 +125,144 @@ class FaceEngine:
                     cx1 + int(round(left / scale_c))
                 ))
 
-        # Filter out tiny noise artifacts (< 20px)
-        filtered = [
-            loc for loc in all_locations
-            if (loc[1] - loc[3]) >= 20 and (loc[2] - loc[0]) >= 20
-        ]
+        # Filter out tiny noise artifacts (< 35px) and non-face aspect ratios
+        filtered = []
+        for loc in all_locations:
+            box_h = loc[2] - loc[0]
+            box_w = loc[1] - loc[3]
+            if box_w >= 35 and box_h >= 35:
+                ratio = float(box_h) / float(box_w)
+                if 0.70 <= ratio <= 1.48:
+                    filtered.append(loc)
 
         # 3. Deduplicate via Non-Maximum Suppression
         final_boxes = self._nms_boxes(filtered, iou_thresh=0.35)
         return final_boxes
 
+    def is_valid_human_face(self, image: np.ndarray, bbox: Tuple[int, int, int, int]) -> bool:
+        """
+        Validate whether a candidate bounding box is genuinely a human face
+        using anatomical 68-point facial landmark geometry and aspect ratio checks.
+        Filters out false positives on trees, pine bark, wooden poles, metal cables, and park equipment.
+        """
+        if not FACE_REC_AVAILABLE:
+            return True
+
+        top, right, bottom, left = bbox
+        w = right - left
+        h = bottom - top
+
+        # 1. Minimum dimension check:
+        # In DSLR/high-res ride photos, any face smaller than 35px is texture noise/foliage
+        if w < 35 or h < 35:
+            return False
+
+        # 2. Aspect ratio check:
+        # Real human faces have aspect ratios (height / width) roughly between 0.72 and 1.48.
+        # Vertical poles/trees often have aspect ratios > 1.5, horizontal beams < 0.70.
+        aspect_ratio = float(h) / float(w)
+        if aspect_ratio < 0.72 or aspect_ratio > 1.48:
+            return False
+
+        # 3. Variance / Contrast Check:
+        # Eliminates flat, uniform surfaces (e.g. smooth metal poles, solid painted wood)
+        img_h, img_w = image.shape[:2]
+        crop_top = max(0, min(img_h, top))
+        crop_bottom = max(0, min(img_h, bottom))
+        crop_left = max(0, min(img_w, left))
+        crop_right = max(0, min(img_w, right))
+        
+        if crop_bottom <= crop_top or crop_right <= crop_left:
+            return False
+            
+        crop = image[crop_top:crop_bottom, crop_left:crop_right]
+        if crop.size == 0 or np.std(crop) < 14.0:
+            return False
+
+        # 4. 68-Landmark Anatomical Validation:
+        try:
+            landmarks_list = face_recognition.face_landmarks(image, face_locations=[bbox], model="large")
+        except Exception as e:
+            logger.warning(f"Error computing face landmarks for bbox {bbox}: {e}")
+            return False
+
+        if not landmarks_list or len(landmarks_list) == 0:
+            return False
+
+        lm = landmarks_list[0]
+
+        # Critical facial components must be present
+        left_eye = lm.get("left_eye")
+        right_eye = lm.get("right_eye")
+        nose_tip = lm.get("nose_tip")
+        bottom_lip = lm.get("bottom_lip")
+        top_lip = lm.get("top_lip")
+        chin = lm.get("chin")
+
+        if not left_eye or not right_eye or not nose_tip or (not bottom_lip and not top_lip):
+            return False
+
+        # Compute eye centers
+        lex = sum(p[0] for p in left_eye) / len(left_eye)
+        ley = sum(p[1] for p in left_eye) / len(left_eye)
+        rex = sum(p[0] for p in right_eye) / len(right_eye)
+        rey = sum(p[1] for p in right_eye) / len(right_eye)
+
+        # In face_recognition:
+        # left_eye points (viewer's left) have smaller x
+        # right_eye points (viewer's right) have larger x
+        eye_dist_x = rex - lex
+
+        # In a real face, left eye must be to the left of right eye horizontally
+        if eye_dist_x <= 0:
+            return False
+
+        # Distance between eyes must be a reasonable portion of face width (typically 20% to 65%)
+        # On poles and vertical tree bark, landmark points collapse horizontally (eye_dist_x near zero)
+        if eye_dist_x < (0.18 * w) or eye_dist_x > (0.75 * w):
+            return False
+
+        # Eye tilt / alignment: head tilt in theme park photos is normally within +/- 45 degrees
+        eye_diff_y = abs(rey - ley)
+        if eye_diff_y > (0.90 * eye_dist_x):
+            return False
+
+        # Vertical anatomical ordering:
+        # y increases downwards in image coordinates.
+        # Eyes -> Nose -> Mouth -> Chin
+        eyes_y = (ley + rey) / 2.0
+        nose_y = sum(p[1] for p in nose_tip) / len(nose_tip)
+        
+        mouth_pts = bottom_lip if bottom_lip else top_lip
+        mouth_y = sum(p[1] for p in mouth_pts) / len(mouth_pts)
+
+        # Eyes must be above nose tip (at least 3% of face height)
+        if (nose_y - eyes_y) < (0.03 * h):
+            return False
+
+        # Nose tip must be above mouth (at least 3% of face height)
+        if (mouth_y - nose_y) < (0.03 * h):
+            return False
+
+        # Chin bottom check if chin is available
+        if chin:
+            chin_y = max(p[1] for p in chin)
+            if (chin_y - mouth_y) < (0.02 * h):
+                return False
+
+        # Mouth horizontal centering relative to eyes midpoint
+        mouth_x = sum(p[0] for p in mouth_pts) / len(mouth_pts)
+        eyes_center_x = (lex + rex) / 2.0
+        if abs(mouth_x - eyes_center_x) > (0.35 * w):
+            return False
+
+        return True
+
     def extract_faces_from_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
         Extract bounding boxes and 128-d facial embeddings from an image file on disk
-        using intelligent multi-scale tiled detection for distant & crowd faces.
+        using intelligent multi-scale tiled detection with anatomical landmark validation.
+        Eliminates poles, trees, pine bark, and park equipment from face index.
         Returns list of {'bbox': (top, right, bottom, left), 'encoding': np.ndarray}
         """
         if not FACE_REC_AVAILABLE:
@@ -153,17 +277,28 @@ class FaceEngine:
             logger.error(f"Failed to read image file {file_path}: {e}")
             return []
 
-        # Find all face locations (including distant/crowded people) via multi-scale scan
-        filtered_locations = self.detect_multiscale_locations(image)
+        # Find all face candidate locations via multi-scale scan
+        candidate_locations = self.detect_multiscale_locations(image)
 
-        if not filtered_locations:
+        if not candidate_locations:
             return []
 
-        # Compute 128-d encodings using the high-accuracy 68-landmark model
-        encodings = face_recognition.face_encodings(image, known_face_locations=filtered_locations, num_jitters=1, model="large")
+        # Validate each face candidate through strict anatomical landmark checks
+        valid_locations = []
+        for loc in candidate_locations:
+            if self.is_valid_human_face(image, loc):
+                valid_locations.append(loc)
+            else:
+                logger.info(f"Filtered out non-human false detection at {loc} in {os.path.basename(file_path)} (pole/tree/equipment)")
+
+        if not valid_locations:
+            return []
+
+        # Compute 128-d encodings using the high-accuracy 68-landmark model ONLY for verified human faces
+        encodings = face_recognition.face_encodings(image, known_face_locations=valid_locations, num_jitters=1, model="large")
 
         results = []
-        for loc, enc in zip(filtered_locations, encodings):
+        for loc, enc in zip(valid_locations, encodings):
             # Normalize vector to unit length for cosine similarity via inner product
             norm = np.linalg.norm(enc)
             if norm > 0:
@@ -179,7 +314,7 @@ class FaceEngine:
         return results
 
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
-        """Extract face locations and encodings from in-memory bytes with autocontrast and jittering for high query accuracy."""
+        """Extract face locations and encodings from in-memory bytes with autocontrast and landmark validation."""
         if not FACE_REC_AVAILABLE:
             raise RuntimeError("face_recognition is not available in current environment")
 
@@ -197,10 +332,26 @@ class FaceEngine:
         if not locations:
             return []
 
+        # Validate human face geometry for webcam/uploaded photo
+        valid_locations = [
+            loc for loc in locations
+            if self.is_valid_human_face(image_np, loc)
+        ]
+
+        # Sane aspect ratio fallback for webcam closeups if extreme lighting
+        if not valid_locations:
+            valid_locations = [
+                loc for loc in locations
+                if 0.65 <= ((loc[2] - loc[0]) / max(1, loc[1] - loc[3])) <= 1.55
+            ]
+
+        if not valid_locations:
+            return []
+
         # For the query guest photo, use num_jitters=2 and model="large" to produce an ultra-stable embedding
-        encodings = face_recognition.face_encodings(image_np, known_face_locations=locations, num_jitters=2, model="large")
+        encodings = face_recognition.face_encodings(image_np, known_face_locations=valid_locations, num_jitters=2, model="large")
         results = []
-        for loc, enc in zip(locations, encodings):
+        for loc, enc in zip(valid_locations, encodings):
             norm = np.linalg.norm(enc)
             if norm > 0:
                 normalized_enc = (enc / norm).astype(np.float32)
@@ -542,10 +693,76 @@ class DatabaseManager:
                     logger.warning(f"Error removing IDs from FAISS ({e}). Rebuilding index from database...")
                     self._rebuild_faiss_from_sqlite()
 
+            # Also purge any invalid face bounding boxes (poles, trees)
+            invalid_face_stats = self.purge_invalid_face_boxes()
+
             return {
                 "purged_photos": len(stale_photo_ids),
-                "purged_faces": len(stale_vector_ids),
-                "updated_paths": updated_count
+                "purged_faces": len(stale_vector_ids) + invalid_face_stats.get("purged_faces", 0),
+                "updated_paths": updated_count,
+                "purged_invalid_faces": invalid_face_stats.get("purged_faces", 0)
+            }
+
+    def purge_invalid_face_boxes(self) -> Dict[str, int]:
+        """
+        Scan existing face records in SQLite and purge false positives
+        (e.g., vertical poles, tree bark, ropes, mechanical equipment)
+        based on bounding box dimensions and aspect ratios.
+        Removes invalid vector IDs from FAISS and updates photo counts.
+        """
+        with self.lock:
+            stale_face_ids: List[int] = []
+            stale_vector_ids: List[int] = []
+            affected_photo_ids = set()
+
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT id, photo_id, vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces"
+                ).fetchall()
+
+                for r in rows:
+                    w = r["bbox_right"] - r["bbox_left"]
+                    h = r["bbox_bottom"] - r["bbox_top"]
+
+                    is_invalid = False
+                    if w < 32 or h < 32:
+                        is_invalid = True
+                    else:
+                        ratio = float(h) / float(w)
+                        if ratio < 0.70 or ratio > 1.48:
+                            is_invalid = True
+
+                    if is_invalid:
+                        stale_face_ids.append(r["id"])
+                        stale_vector_ids.append(r["vector_id"])
+                        affected_photo_ids.add(r["photo_id"])
+
+                if stale_face_ids:
+                    placeholders = ",".join("?" for _ in stale_face_ids)
+                    conn.execute(f"DELETE FROM faces WHERE id IN ({placeholders})", stale_face_ids)
+
+                    # Update num_faces and status on affected photos
+                    for p_id in affected_photo_ids:
+                        cnt = conn.execute("SELECT COUNT(*) FROM faces WHERE photo_id = ?", (p_id,)).fetchone()[0]
+                        status = "indexed" if cnt > 0 else "no_faces"
+                        conn.execute("UPDATE photos SET num_faces = ?, status = ? WHERE id = ?", (cnt, status, p_id))
+
+                    conn.commit()
+                    logger.info(f"Purged {len(stale_face_ids)} invalid pole/tree face records from database.")
+
+            # Remove invalid vectors from FAISS index
+            if stale_vector_ids and FAISS_AVAILABLE and self.index is not None:
+                try:
+                    self.index.remove_ids(np.array(stale_vector_ids, dtype=np.int64))
+                    self._save_faiss()
+                    logger.info(f"Removed {len(stale_vector_ids)} invalid vectors from FAISS index.")
+                except Exception as e:
+                    logger.warning(f"Error removing IDs from FAISS ({e}). Rebuilding index from database...")
+                    self._rebuild_faiss_from_sqlite()
+
+            return {
+                "purged_faces": len(stale_face_ids),
+                "affected_photos": len(affected_photo_ids)
             }
 
     def search_similar_faces(

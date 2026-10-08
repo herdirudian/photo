@@ -74,7 +74,7 @@ class RawPhotoEventHandler(FileSystemEventHandler):
         self.face_engine = face_engine
         self._processing_lock = threading.Lock()
 
-    def process_file(self, file_path: str):
+    def process_file(self, file_path: str, force: bool = False):
         """Process a single image file for face detection and indexing."""
         if not is_valid_image(file_path):
             return
@@ -90,12 +90,12 @@ class RawPhotoEventHandler(FileSystemEventHandler):
             file_mtime = stat.st_mtime
             file_size = stat.st_size
 
-            # Check if file has already been indexed
-            if self.db_manager.is_photo_indexed(file_path, file_mtime, file_size):
+            # Check if file has already been indexed (unless forced)
+            if not force and self.db_manager.is_photo_indexed(file_path, file_mtime, file_size):
                 logger.debug(f"Skipping already indexed file: {file_path}")
                 return
 
-            logger.info(f"Extracting faces from new photo: {os.path.basename(file_path)}")
+            logger.info(f"Extracting faces from photo: {os.path.basename(file_path)}")
             faces = self.face_engine.extract_faces_from_file(file_path)
 
             status = "indexed" if len(faces) > 0 else "no_faces"
@@ -149,11 +149,11 @@ class PhotoIndexer:
         self._scan_lock = threading.Lock()
         os.makedirs(self.raw_dir, exist_ok=True)
 
-    def scan_existing_files(self) -> dict:
+    def scan_existing_files(self, force: bool = False) -> dict:
         """
         Scan the raw directory recursively:
-        1. Purge missing/stale photos from SQLite & FAISS (with self-healing for relocated files).
-        2. Index newly discovered photos across all ride subfolders.
+        1. Purge missing/stale photos and invalid pole/tree face records from SQLite & FAISS.
+        2. Index newly discovered photos across all ride subfolders (or re-process all if force=True).
         Returns a dictionary of scan metrics.
         """
         if not self._scan_lock.acquire(blocking=False):
@@ -161,12 +161,14 @@ class PhotoIndexer:
             return {"status": "busy"}
 
         try:
-            logger.info(f"Starting directory scan on: {self.raw_dir}")
+            logger.info(f"Starting directory scan on: {self.raw_dir} (force={force})")
 
-            # Step 1: Self-heal moved photos and purge deleted/missing photos
+            # Step 1: Self-heal moved photos, purge deleted photos, and clean invalid face detections
             purge_stats = self.db_manager.purge_missing_photos(self.raw_dir)
             if purge_stats["purged_photos"] > 0:
-                logger.info(f"Cleaned up {purge_stats['purged_photos']} missing photos ({purge_stats['purged_faces']} face vectors).")
+                logger.info(f"Cleaned up {purge_stats['purged_photos']} missing photos.")
+            if purge_stats.get("purged_invalid_faces", 0) > 0:
+                logger.info(f"Purged {purge_stats['purged_invalid_faces']} invalid face boxes (poles/trees).")
             if purge_stats["updated_paths"] > 0:
                 logger.info(f"Self-healed paths for {purge_stats['updated_paths']} relocated photos.")
 
@@ -182,8 +184,8 @@ class PhotoIndexer:
                         scanned_count += 1
                         try:
                             stat = os.stat(full_path)
-                            if not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
-                                handler.process_file(full_path)
+                            if force or not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
+                                handler.process_file(full_path, force=force)
                                 new_indexed_count += 1
                         except Exception as e:
                             logger.error(f"Error checking {full_path}: {e}")
@@ -193,9 +195,10 @@ class PhotoIndexer:
                 "newly_indexed": new_indexed_count,
                 "purged_photos": purge_stats.get("purged_photos", 0),
                 "purged_faces": purge_stats.get("purged_faces", 0),
+                "purged_invalid_faces": purge_stats.get("purged_invalid_faces", 0),
                 "updated_paths": purge_stats.get("updated_paths", 0)
             }
-            logger.info(f"Scan complete. Scanned: {scanned_count}, Newly processed: {new_indexed_count}, Purged: {summary['purged_photos']}")
+            logger.info(f"Scan complete. Scanned: {scanned_count}, Processed: {new_indexed_count}, Purged faces: {summary['purged_faces']}")
             return summary
 
         finally:

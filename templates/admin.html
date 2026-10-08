@@ -866,11 +866,16 @@
     }
 
     async function triggerFullReindex() {
-      if (!confirm('Pindai ulang seluruh folder sekarang? Sistem akan menyisir foto baru dan membersihkan foto yang sudah dihapus.')) return;
+      if (!confirm('Pindai ulang seluruh folder sekarang? Sistem akan memvalidasi ulang geometri wajah untuk mengeliminasi deteksi tiang/pohon dan menyelaraskan indeks.')) return;
       try {
         const res = await fetch('/api/reindex', { method: 'POST' });
         const data = await res.json();
-        alert(data.message || 'Pemindaian selesai.');
+        if (data.summary) {
+          const s = data.summary;
+          alert(`Pemindaian selesai!\n• Total Foto Dipindai: ${s.scanned}\n• Foto Baru/Diperbarui: ${s.newly_indexed}\n• Deteksi Tiang/Pohon Dieliminasi: ${s.purged_invalid_faces || 0}`);
+        } else {
+          alert(data.message || 'Pemindaian selesai.');
+        }
         await refreshStorageInspection();
         await fetchSystemStats();
       } catch (e) {
@@ -882,7 +887,12 @@
       try {
         const res = await fetch('/api/admin/purge-stale', { method: 'POST' });
         const data = await res.json();
-        alert(`Pembersihan selesai: ${data.purged_photos} foto usang dan ${data.purged_faces} vektor wajah dibersihkan.`);
+        let msg = `Pembersihan selesai!\n• Foto usang dihapus: ${data.purged_photos}`;
+        if (data.purged_invalid_faces) {
+          msg += `\n• Deteksi tiang/pohon dieliminasi: ${data.purged_invalid_faces}`;
+        }
+        msg += `\n• Total vektor dibersihkan: ${data.purged_faces}`;
+        alert(msg);
         await fetchSystemStats();
       } catch (e) {
         alert('Gagal membersihkan data usang.');
