@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageOps
+import cv2
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -287,6 +288,42 @@ class FaceEngine:
 
         return True
 
+    def compute_torso_color_hist(self, image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
+        """
+        Extract upper body crop and compute normalized HSV histogram.
+        bbox is (top, right, bottom, left)
+        """
+        top, right, bottom, left = bbox
+        h, w, _ = image.shape
+        face_h = bottom - top
+        face_w = right - left
+        
+        # Estimate torso below the face
+        # Torso width is roughly 2.5x face width, height is roughly 2.0x face height
+        torso_top = bottom + int(face_h * 0.1) # small gap below chin
+        torso_bottom = min(h, torso_top + int(face_h * 2.0))
+        
+        torso_center_x = left + (face_w // 2)
+        torso_width = int(face_w * 2.5)
+        torso_left = max(0, torso_center_x - (torso_width // 2))
+        torso_right = min(w, torso_center_x + (torso_width // 2))
+        
+        if torso_bottom <= torso_top or torso_right <= torso_left:
+            # Fallback to zero histogram if bounding box is invalid/out of bounds
+            return np.zeros(256, dtype=np.float32)
+            
+        crop = image[torso_top:torso_bottom, torso_left:torso_right]
+        
+        # Convert RGB to HSV
+        hsv_crop = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+        
+        # Compute 2D histogram of Hue and Saturation
+        # Hue range: 0-180, Saturation: 0-256
+        hist = cv2.calcHist([hsv_crop], [0, 1], None, [16, 16], [0, 180, 0, 256])
+        cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        
+        return hist.flatten().astype(np.float32)
+
     def extract_faces_from_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
         Extract bounding boxes and 128-d facial embeddings from an image file on disk
@@ -335,9 +372,12 @@ class FaceEngine:
             else:
                 normalized_enc = enc.astype(np.float32)
 
+            color_hist = self.compute_torso_color_hist(image, loc)
+
             results.append({
                 "bbox": loc,
-                "encoding": normalized_enc
+                "encoding": normalized_enc,
+                "color_hist": color_hist
             })
 
         return results
@@ -387,9 +427,12 @@ class FaceEngine:
             else:
                 normalized_enc = enc.astype(np.float32)
 
+            color_hist = self.compute_torso_color_hist(image_np, loc)
+
             results.append({
                 "bbox": loc,
-                "encoding": normalized_enc
+                "encoding": normalized_enc,
+                "color_hist": color_hist
             })
         return results
 
@@ -445,6 +488,7 @@ class DatabaseManager:
                     bbox_bottom INTEGER NOT NULL,
                     bbox_left INTEGER NOT NULL,
                     encoding_blob BLOB NOT NULL,
+                    color_hist_blob BLOB,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (photo_id) REFERENCES photos (id) ON DELETE CASCADE
                 );
@@ -454,6 +498,14 @@ class DatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_faces_photo_id ON faces(photo_id);
                 CREATE INDEX IF NOT EXISTS idx_faces_vector_id ON faces(vector_id);
             """)
+            
+            # Migration
+            try:
+                conn.execute("ALTER TABLE faces ADD COLUMN color_hist_blob BLOB")
+                logger.info("Migrated faces table: added color_hist_blob column.")
+            except sqlite3.OperationalError:
+                pass # Column already exists or table is fresh
+                
             conn.commit()
         logger.info(f"SQLite metadata initialized at {self.db_path}")
 
@@ -585,10 +637,12 @@ class DatabaseManager:
                     vector_id = base_vector_id + idx + 1
                     bbox = face_data["bbox"]  # (top, right, bottom, left)
                     encoding = face_data["encoding"].astype(np.float32)
+                    color_hist = face_data.get("color_hist")
+                    color_blob = color_hist.tobytes() if color_hist is not None else None
 
                     conn.execute("""
-                        INSERT INTO faces (photo_id, vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left, encoding_blob)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO faces (photo_id, vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left, encoding_blob, color_hist_blob)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         photo_id,
                         vector_id,
@@ -596,7 +650,8 @@ class DatabaseManager:
                         int(bbox[1]),
                         int(bbox[2]),
                         int(bbox[3]),
-                        encoding.tobytes()
+                        encoding.tobytes(),
+                        color_blob
                     ))
 
                     faiss_vectors.append(encoding)
@@ -796,7 +851,7 @@ class DatabaseManager:
 
     def search_similar_faces(
         self,
-        query_encoding: np.ndarray,
+        query_faces: List[Dict[str, Any]],
         threshold: float = 0.75,
         top_k: int = 50,
         ride_filter: Optional[str] = None
@@ -805,43 +860,67 @@ class DatabaseManager:
         Query FAISS for matching faces above the similarity threshold and fetch photo details from SQLite.
         Inner product on unit-normalized vectors directly yields cosine similarity (0.0 to 1.0).
         Supports optional filtering by ride subfolder (e.g. 'BL' for Hot Air Balloon).
+        Applies score boost for matches with similar upper-body clothing color.
         """
         with self.lock:
             if not FAISS_AVAILABLE or self.index is None or self.index.ntotal == 0:
                 logger.warning("FAISS index is empty or unavailable.")
                 return []
 
-            # Ensure query vector is unit-normalized and 2D
-            norm = np.linalg.norm(query_encoding)
-            if norm > 0:
-                query_norm = (query_encoding / norm).astype(np.float32)
-            else:
-                query_norm = query_encoding.astype(np.float32)
-
-            query_matrix = np.expand_dims(query_norm, axis=0)
-
-            # Cap top_k to total vectors available
-            k = min(top_k, self.index.ntotal)
-            distances, indices = self.index.search(query_matrix, k)
-
-            matched_vector_ids = []
+            matched_vector_ids = set()
             scores_by_vid = {}
+            k = min(top_k, self.index.ntotal)
+            
+            # Helper to safely compute color boost
+            def get_color_boost(db_blob):
+                if not db_blob:
+                    return 0.0
+                try:
+                    db_hist = np.frombuffer(db_blob, dtype=np.float32)
+                    if db_hist.size != 256:
+                        return 0.0
+                    
+                    best_boost = 0.0
+                    for qf in query_faces:
+                        q_hist = qf.get("color_hist")
+                        if q_hist is not None and q_hist.size == 256:
+                            dist = cv2.compareHist(q_hist, db_hist, cv2.HISTCMP_BHATTACHARYYA)
+                            boost = max(0.0, 0.10 * (1.0 - dist))
+                            if boost > best_boost:
+                                best_boost = boost
+                    return best_boost
+                except Exception:
+                    return 0.0
 
-            # Parse results
-            for score, vid in zip(distances[0], indices[0]):
-                if vid != -1 and score >= threshold:
-                    matched_vector_ids.append(int(vid))
-                    scores_by_vid[int(vid)] = float(score)
+            for qf in query_faces:
+                q_enc = qf["encoding"]
+                norm = np.linalg.norm(q_enc)
+                if norm > 0:
+                    query_norm = (q_enc / norm).astype(np.float32)
+                else:
+                    query_norm = q_enc.astype(np.float32)
+
+                query_matrix = np.expand_dims(query_norm, axis=0)
+                distances, indices = self.index.search(query_matrix, k)
+                
+                for score, vid in zip(distances[0], indices[0]):
+                    if vid != -1 and score >= threshold:
+                        matched_vector_ids.add(int(vid))
+                        # Keep highest score if vector matches multiple poses
+                        if int(vid) not in scores_by_vid or score > scores_by_vid[int(vid)]:
+                            scores_by_vid[int(vid)] = float(score)
 
             if not matched_vector_ids:
                 return []
 
             # Query SQLite for corresponding photo information
-            placeholders = ",".join("?" for _ in matched_vector_ids)
+            matched_vector_ids_list = list(matched_vector_ids)
+            placeholders = ",".join("?" for _ in matched_vector_ids_list)
             query_sql = f"""
                 SELECT 
                     f.vector_id,
                     f.bbox_top, f.bbox_right, f.bbox_bottom, f.bbox_left,
+                    f.color_hist_blob,
                     p.id AS photo_id,
                     p.file_path,
                     p.file_name,
@@ -851,7 +930,7 @@ class DatabaseManager:
                 JOIN photos p ON f.photo_id = p.id
                 WHERE f.vector_id IN ({placeholders})
             """
-            params = list(matched_vector_ids)
+            params = matched_vector_ids_list.copy()
 
             # Apply ride subfolder filter if specified (e.g. 'BL' for Hot Air Balloon)
             if ride_filter and ride_filter.strip() and ride_filter.lower() not in ["all", "semua"]:
@@ -867,12 +946,17 @@ class DatabaseManager:
             results_by_photo: Dict[int, Dict[str, Any]] = {}
             for r in rows:
                 vid = r["vector_id"]
-                score = scores_by_vid.get(vid, 0.0)
+                base_score = scores_by_vid.get(vid, 0.0)
+                boost = get_color_boost(r["color_hist_blob"])
+                final_score = base_score + boost
+                
                 photo_id = r["photo_id"]
 
                 face_info = {
                     "vector_id": vid,
-                    "score": round(score, 4),
+                    "score": round(final_score, 4),
+                    "base_score": round(base_score, 4),
+                    "color_boost": round(boost, 4),
                     "bbox": [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]]
                 }
 
@@ -883,15 +967,15 @@ class DatabaseManager:
                         "file_name": r["file_name"],
                         "created_at": r["created_at"],
                         "num_faces": r["num_faces"],
-                        "max_score": round(score, 4),
+                        "max_score": round(final_score, 4),
                         "best_vector_id": vid,
                         "best_bbox": [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]],
                         "matched_faces": [face_info]
                     }
                 else:
                     results_by_photo[photo_id]["matched_faces"].append(face_info)
-                    if score > results_by_photo[photo_id]["max_score"]:
-                        results_by_photo[photo_id]["max_score"] = round(score, 4)
+                    if final_score > results_by_photo[photo_id]["max_score"]:
+                        results_by_photo[photo_id]["max_score"] = round(final_score, 4)
                         results_by_photo[photo_id]["best_vector_id"] = vid
                         results_by_photo[photo_id]["best_bbox"] = [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]]
 

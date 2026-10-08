@@ -331,56 +331,57 @@ async def trigger_reindex(force: bool = Query(True)):
 @app.post("/api/search")
 async def search_guest_photos(
     request: Request,
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     threshold: float = Form(DEFAULT_THRESHOLD),
     top_k: int = Form(50),
     ride_filter: Optional[str] = Form(None)
 ):
     """
     Search endpoint:
-    1. Reads reference photo of guest.
-    2. Extracts 128-d face vector.
-    3. Searches FAISS for matching faces above similarity threshold (with optional ride subfolder filter).
+    1. Reads reference photos of guest (Multi-pose).
+    2. Extracts 128-d face vector and HSV color histogram from each pose.
+    3. Searches FAISS for matching faces above similarity threshold.
     4. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks.
     5. Returns matches and network folder path.
     """
     start_time = time.time()
 
-    # Validate image format
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Uploaded file must be a valid image format.")
+    query_faces = []
+    
+    for file in files:
+        if not file.content_type.startswith("image/"):
+            continue
+            
+        try:
+            image_bytes = await file.read()
+            extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
+            
+            if extracted_faces:
+                # If multiple faces detected in one photo, select the largest one
+                if len(extracted_faces) > 1:
+                    extracted_faces.sort(
+                        key=lambda x: (x["bbox"][2] - x["bbox"][0]) * (x["bbox"][1] - x["bbox"][3]),
+                        reverse=True
+                    )
+                query_faces.append(extracted_faces[0])
+                
+        except Exception as e:
+            logger.error(f"Failed to process reference image: {e}")
+            continue
 
-    try:
-        image_bytes = await file.read()
-        extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
-    except Exception as e:
-        logger.error(f"Failed to process reference image: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to read image: {str(e)}")
-
-    if not extracted_faces:
+    if not query_faces:
         return JSONResponse(
             status_code=422,
             content={
                 "success": False,
-                "error": "No face detected in reference photo.",
-                "suggestion": "Please capture a clear, well-lit photo of the guest's face without heavy obstruction."
+                "error": "No face detected in reference photos.",
+                "suggestion": "Please capture clear, well-lit photos of the guest's face without heavy obstruction."
             }
         )
 
-    # If multiple faces detected in reference photo, select the largest one (most prominent)
-    if len(extracted_faces) > 1:
-        extracted_faces.sort(
-            key=lambda x: (x["bbox"][2] - x["bbox"][0]) * (x["bbox"][1] - x["bbox"][3]),
-            reverse=True
-        )
-        logger.info(f"Multiple faces detected in reference image ({len(extracted_faces)}). Selected largest face.")
-
-    query_face = extracted_faces[0]
-    query_encoding = query_face["encoding"]
-
     # FAISS Similarity Search with optional ride filter
     raw_matches = db_manager.search_similar_faces(
-        query_encoding=query_encoding,
+        query_faces=query_faces,
         threshold=threshold,
         top_k=top_k,
         ride_filter=ride_filter

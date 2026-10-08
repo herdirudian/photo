@@ -405,6 +405,7 @@
                   type="file" 
                   id="file-input" 
                   accept="image/jpeg,image/png,image/webp" 
+                  multiple
                   class="hidden" 
                   onchange="handleFileSelect(event)"
                 />
@@ -1075,7 +1076,7 @@
 
   <!-- Operational JavaScript -->
   <script>
-    let currentSelectedFile = null;
+    let currentSelectedFiles = [];
     let currentCustomerId = null;
     let activeMediaStream = null;
     let currentSelectedDeviceId = null;
@@ -1303,31 +1304,51 @@
         return;
       }
 
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+      currentSelectedFiles = []; // Reset array
+      const btnCapture = document.querySelector('button[onclick="captureSnapshot()"]');
+      if (btnCapture) btnCapture.disabled = true;
 
-      // Mirror snapshot jika opsi cermin aktif
-      if (isCameraMirrored) {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-      }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const captureFrame = (filenameSuffix, callback) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        if (isCameraMirrored) {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob(blob => {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const filename = `guest_scan_${timestamp}_${filenameSuffix}.jpg`;
+          const file = new File([blob], filename, { type: 'image/jpeg' });
+          currentSelectedFiles.push(file);
+          callback(canvas.toDataURL('image/jpeg', 0.9));
+        }, 'image/jpeg', 0.92);
+      };
 
-      canvas.toBlob(blob => {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `guest_scan_${timestamp}.jpg`;
-        currentSelectedFile = new File([blob], filename, { type: 'image/jpeg' });
-
-        document.getElementById('image-preview').src = canvas.toDataURL('image/jpeg', 0.9);
-        document.getElementById('selected-file-name').textContent = `Foto Kamera (${filename})`;
-        document.getElementById('upload-placeholder').classList.add('hidden');
-        document.getElementById('image-preview-container').classList.remove('hidden');
-
-        // Tutup feed kamera dan kembali ke tampilan preview
-        switchInputMode('upload');
-      }, 'image/jpeg', 0.92);
+      showCameraToast("📸 Pose 1 (Lurus Depan) diambil!");
+      
+      captureFrame('front', (preview1) => {
+        setTimeout(() => {
+          showCameraToast("📸 Pose 2 (Senyum/Miring)...");
+          
+          setTimeout(() => {
+            captureFrame('tilt', (preview2) => {
+              showCameraToast("Selesai! 2 pose tersimpan.");
+              document.getElementById('image-preview').src = preview1;
+              document.getElementById('selected-file-name').textContent = `Foto Kamera (2 Pose tersimpan)`;
+              document.getElementById('upload-placeholder').classList.add('hidden');
+              document.getElementById('image-preview-container').classList.remove('hidden');
+              
+              if (btnCapture) btnCapture.disabled = false;
+              setTimeout(() => switchInputMode('upload'), 800);
+            });
+          }, 1200); // Wait 1.2s to take the second photo
+        }, 500);
+      });
     }
 
     // Listener otomatis saat USB Webcam dicolokkan atau dicabut (Plug & Play)
@@ -1358,36 +1379,40 @@
       e.preventDefault();
       document.getElementById('drop-zone').classList.remove('border-lodge-500', 'bg-lodge-50/50');
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        processSelectedFile(e.dataTransfer.files[0]);
+        processSelectedFiles(e.dataTransfer.files);
       }
     }
 
     function handleFileSelect(e) {
       if (e.target.files && e.target.files.length > 0) {
-        processSelectedFile(e.target.files[0]);
+        processSelectedFiles(e.target.files);
       }
     }
 
-    function processSelectedFile(file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Please choose an image file (JPEG, PNG, or WebP).');
+    function processSelectedFiles(filesList) {
+      const validFiles = Array.from(filesList).filter(f => f.type.startsWith('image/'));
+      if (validFiles.length === 0) {
+        alert('Please choose valid image files (JPEG, PNG, or WebP).');
         return;
       }
-      currentSelectedFile = file;
-      document.getElementById('selected-file-name').textContent = file.name;
+      
+      currentSelectedFiles = validFiles;
+      
+      const fileNames = validFiles.map(f => f.name).join(', ');
+      document.getElementById('selected-file-name').textContent = validFiles.length > 1 ? `${validFiles.length} File: ${fileNames}` : fileNames;
       
       const reader = new FileReader();
       reader.onload = function(e) {
-        document.getElementById('image-preview').src = e.target.result;
+        document.getElementById('image-preview').src = e.target.result; // Just show the first one as preview
         document.getElementById('upload-placeholder').classList.add('hidden');
         document.getElementById('image-preview-container').classList.remove('hidden');
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(validFiles[0]);
     }
 
     function clearSelectedFile(e) {
       if (e) e.stopPropagation();
-      currentSelectedFile = null;
+      currentSelectedFiles = [];
       document.getElementById('file-input').value = '';
       document.getElementById('upload-placeholder').classList.remove('hidden');
       document.getElementById('image-preview-container').classList.add('hidden');
@@ -1412,8 +1437,8 @@
     async function executeSearch(e) {
       e.preventDefault();
 
-      if (!currentSelectedFile) {
-        alert('Please select or drop a guest reference photo first.');
+      if (currentSelectedFiles.length === 0) {
+        alert('Please select, drop, or capture a guest reference photo first.');
         return;
       }
 
@@ -1423,7 +1448,10 @@
       const rideFilter = rideFilterSelect ? rideFilterSelect.value : 'all';
 
       const formData = new FormData();
-      formData.append('file', currentSelectedFile);
+      currentSelectedFiles.forEach(f => {
+        formData.append('files', f);
+      });
+      
       formData.append('threshold', threshold);
       formData.append('top_k', topK);
       if (rideFilter && rideFilter !== 'all') {
