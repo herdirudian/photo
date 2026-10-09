@@ -2,71 +2,167 @@
 """
 download_models.py - InsightFace / ArcFace Offline Model Downloader.
 Downloads and caches official InsightFace ONNX models (buffalo_l or buffalo_sc)
-into local storage so the Theme Park Photo Retrieval System operates 100% offline
-in air-gapped environments without external internet connectivity.
+into local storage using standard Python libraries (no pip dependencies required).
+Prepares models for 100% offline air-gapped theme park deployments.
 """
 
 import os
 import sys
+import time
+import zipfile
 import argparse
-import logging
+import urllib.request
+import urllib.error
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("DownloadModels")
+OFFICIAL_URLS = {
+    "buffalo_l": [
+        "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+    ],
+    "buffalo_sc": [
+        "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_sc.zip"
+    ]
+}
 
 
-def ensure_model_downloaded(model_name: str, root_dir: str):
+def download_with_progress(url: str, dest_path: str):
+    """Download a file over HTTP/HTTPS with real-time progress display."""
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) InsightFace-Downloader/1.0"}
+    req = urllib.request.Request(url, headers=headers)
+
+    print(f"Mengunduh dari: {url}")
+    with urllib.request.urlopen(req, timeout=60) as response, open(dest_path, "wb") as out_file:
+        total_size = int(response.info().get("Content-Length", -1))
+        downloaded = 0
+        chunk_size = 1024 * 512 # 512 KB
+        start_time = time.time()
+
+        while True:
+            chunk = response.read(chunk_size)
+            if not chunk:
+                break
+            out_file.write(chunk)
+            downloaded += len(chunk)
+
+            if total_size > 0:
+                pct = downloaded * 100.0 / total_size
+                mb_down = downloaded / (1024 * 1024)
+                mb_total = total_size / (1024 * 1024)
+                elapsed = max(0.1, time.time() - start_time)
+                speed = mb_down / elapsed
+                sys.stdout.write(f"\r  Progress: [{pct:5.1f}%] {mb_down:.1f} MB / {mb_total:.1f} MB ({speed:.1f} MB/s)")
+            else:
+                mb_down = downloaded / (1024 * 1024)
+                sys.stdout.write(f"\r  Progress: {mb_down:.1f} MB diunduh...")
+            sys.stdout.flush()
+
+    print("\n  Unduhan selesai!")
+
+
+def ensure_model_downloaded(model_name: str, root_dir: str) -> bool:
     """
-    Download and initialize the InsightFace model pack using official InsightFace APIs.
+    Ensure the requested model pack is downloaded and unzipped into root_dir/models/{model_name}.
+    Uses pure standard library. No pip / insightface / onnxruntime installation required on host!
     """
-    os.makedirs(root_dir, exist_ok=True)
-    target_pack_dir = os.path.join(root_dir, "models", model_name)
+    models_dir = os.path.join(root_dir, "models")
+    target_pack_dir = os.path.join(models_dir, model_name)
+    os.makedirs(target_pack_dir, exist_ok=True)
 
-    logger.info(f"Checking InsightFace model '{model_name}' in: {target_pack_dir}")
+    print(f"\n[+] Memeriksa model '{model_name}' di: {target_pack_dir}")
 
     # Check if already downloaded
-    if os.path.exists(target_pack_dir):
-        onnx_files = [f for f in os.listdir(target_pack_dir) if f.endswith(".onnx")]
-        if len(onnx_files) >= 2:
-            logger.info(f"Model '{model_name}' is already downloaded ({len(onnx_files)} ONNX files found).")
-            for f in onnx_files:
-                logger.info(f"  - {f}")
-            return True
-
-    logger.info(f"Downloading model '{model_name}' to offline storage {root_dir}...")
-    try:
-        from insightface.app import FaceAnalysis
-        app = FaceAnalysis(name=model_name, root=root_dir, providers=['CPUExecutionProvider'])
-        app.prepare(ctx_id=-1, det_size=(640, 640))
-        logger.info(f"Model '{model_name}' successfully prepared and verified!")
-        
-        onnx_files = [f for f in os.listdir(target_pack_dir) if f.endswith(".onnx")]
-        logger.info(f"Verified {len(onnx_files)} ONNX model weights in {target_pack_dir}:")
-        for f in onnx_files:
-            logger.info(f"  ✔ {f}")
+    existing_onnx = [f for f in os.listdir(target_pack_dir) if f.endswith(".onnx")]
+    if len(existing_onnx) >= 2:
+        print(f"  ✔ Model '{model_name}' sudah terpasang lengkap ({len(existing_onnx)} file ONNX ditemukan):")
+        for f in sorted(existing_onnx):
+            sz_mb = os.path.getsize(os.path.join(target_pack_dir, f)) / (1024 * 1024)
+            print(f"     - {f} ({sz_mb:.1f} MB)")
         return True
-    except ImportError:
-        logger.error("insightface or onnxruntime is not installed. Please run: pip install insightface onnxruntime")
+
+    urls = OFFICIAL_URLS.get(model_name, [])
+    if not urls:
+        print(f"  [ERROR] Model '{model_name}' tidak dikenal. Pilihan: buffalo_l, buffalo_sc")
         return False
+
+    temp_zip = os.path.join(models_dir, f"{model_name}.zip")
+    download_ok = False
+
+    for url in urls:
+        try:
+            download_with_progress(url, temp_zip)
+            download_ok = True
+            break
+        except Exception as e:
+            print(f"  [GAGAL] Unduhan dari {url} error: {e}")
+            if os.path.exists(temp_zip):
+                try:
+                    os.remove(temp_zip)
+                except Exception:
+                    pass
+
+    if not download_ok or not os.path.exists(temp_zip):
+        print(f"  [ERROR] Gagal mengunduh archive zip untuk model '{model_name}'.")
+        return False
+
+    print(f"  Mengekstrak {model_name}.zip ke {target_pack_dir}...")
+    try:
+        with zipfile.ZipFile(temp_zip, "r") as z:
+            # Check if files inside zip are already prefixed with model_name/
+            namelist = z.namelist()
+            has_parent = any(name.startswith(f"{model_name}/") for name in namelist)
+            
+            if has_parent:
+                # Extract into models_dir directly
+                z.extractall(models_dir)
+            else:
+                # Extract directly into target_pack_dir
+                z.extractall(target_pack_dir)
+
+        # Cleanup zip file
+        try:
+            os.remove(temp_zip)
+        except Exception:
+            pass
+
+        # Verify extracted .onnx files
+        extracted_onnx = [f for f in os.listdir(target_pack_dir) if f.endswith(".onnx")]
+        if not extracted_onnx:
+            # Look in subdirectories if zip had an unexpected top-level folder
+            for root, _, files in os.walk(target_pack_dir):
+                for f in files:
+                    if f.endswith(".onnx"):
+                        src = os.path.join(root, f)
+                        dst = os.path.join(target_pack_dir, f)
+                        if src != dst:
+                            os.replace(src, dst)
+            extracted_onnx = [f for f in os.listdir(target_pack_dir) if f.endswith(".onnx")]
+
+        print(f"  ✔ Ekstraksi sukses! Ditemukan {len(extracted_onnx)} file ONNX model weights:")
+        for f in sorted(extracted_onnx):
+            sz_mb = os.path.getsize(os.path.join(target_pack_dir, f)) / (1024 * 1024)
+            print(f"     ✔ {f} ({sz_mb:.1f} MB)")
+        return True
+
     except Exception as e:
-        logger.error(f"Failed to download/prepare model '{model_name}': {e}")
+        print(f"  [ERROR] Gagal mengekstrak archive zip: {e}")
         return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download and cache InsightFace models for offline theme park kiosk.")
+    parser = argparse.ArgumentParser(
+        description="Unduh dan simpan model InsightFace / ArcFace untuk sistem foto offline."
+    )
     parser.add_argument(
         "--model", 
         type=str, 
         default="buffalo_l",
         choices=["buffalo_l", "buffalo_sc", "all"],
-        help="Model to download: 'buffalo_l' (ResNet-50 ArcFace, best accuracy) or 'buffalo_sc' (MobileFaceNet, ultra-fast) or 'all'."
+        help="Model: 'buffalo_l' (ResNet-50 ArcFace 512-D, akurasi tertinggi), 'buffalo_sc' (MobileFaceNet, cepat), atau 'all'."
     )
     parser.add_argument(
         "--output-dir", 
         type=str, 
         default="",
-        help="Target root folder (defaults to DB_DIR/../models/insightface or ./data/models/insightface)."
+        help="Direktori penyimpanan (default: DB_DIR/../models/insightface atau ./data/models/insightface)."
     )
 
     args = parser.parse_args()
@@ -78,26 +174,29 @@ def main():
         parent_dir = os.path.dirname(os.path.abspath(db_dir))
         root_dir = os.getenv("INSIGHTFACE_ROOT", os.path.join(parent_dir, "models", "insightface"))
 
-    models_to_download = ["buffalo_l", "buffalo_sc"] if args.model == "all" else [args.model]
+    models = ["buffalo_l", "buffalo_sc"] if args.model == "all" else [args.model]
 
-    print("=" * 65)
+    print("=" * 68)
     print("  The Lodge Maribaya - InsightFace ArcFace 512-D Model Downloader")
-    print("=" * 65)
-    print(f"Target Root: {root_dir}\n")
+    print("=" * 68)
+    print(f"Lokasi Target : {root_dir}")
+    print(f"Daftar Model  : {', '.join(models)}")
 
-    success_all = True
-    for m in models_to_download:
+    all_ok = True
+    for m in models:
         ok = ensure_model_downloaded(m, root_dir)
         if not ok:
-            success_all = False
+            all_ok = False
 
-    print("\n" + "=" * 65)
-    if success_all:
-        print("  Semua model InsightFace / ArcFace berhasil diunduh!")
-        print("  Sistem siap dijalankan 100% offline tanpa koneksi internet.")
+    print("\n" + "=" * 68)
+    if all_ok:
+        print("  STATUS: BERHASIL!")
+        print("  Semua bobot model ArcFace 512-D telah tersimpan di disk lokal.")
+        print("  Sistem siap dijalankan 100% offline (air-gapped) tanpa internet.")
     else:
-        print("  Ada model yang gagal diunduh. Periksa koneksi internet atau hak akses folder.")
-    print("=" * 65)
+        print("  STATUS: ADA MODEL YANG GAGAL DIUNDUH.")
+        print("  Periksa koneksi internet Anda atau coba jalankan kembali perintah ini.")
+    print("=" * 68)
 
 
 if __name__ == "__main__":
