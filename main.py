@@ -252,6 +252,89 @@ async def get_storage_status():
     return config_manager.inspect_storage_status(RAW_DIR)
 
 
+@app.get("/api/subfolders")
+@app.get("/api/admin/subfolders")
+async def list_subfolders():
+    """Return all detected ride subfolders and nested directories with photo counts."""
+    storage_info = config_manager.inspect_storage_status(RAW_DIR)
+    return {
+        "success": True,
+        "total_images": storage_info.get("total_images", 0),
+        "root_images": storage_info.get("root_images", 0),
+        "subfolder_count": storage_info.get("subfolder_count", 0),
+        "subfolders": storage_info.get("subfolders", [])
+    }
+
+
+@app.post("/api/admin/subfolders")
+async def create_new_subfolder(request: Request):
+    """Create a new ride subfolder in raw storage."""
+    data = await request.json()
+    folder_name = data.get("folder_name") or data.get("path") or data.get("name") or ""
+    try:
+        res = config_manager.create_subfolder(RAW_DIR, folder_name)
+        storage_info = config_manager.inspect_storage_status(RAW_DIR)
+        return {
+            "success": True,
+            "message": res["message"],
+            "folder": res,
+            "storage_status": storage_info
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error creating subfolder {folder_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal membuat subfolder: {e}")
+
+
+@app.delete("/api/admin/subfolders")
+async def delete_existing_subfolder(request: Request):
+    """Safely delete a ride subfolder from disk and immediately purge database/FAISS records."""
+    data = await request.json()
+    folder_path = data.get("folder_path") or data.get("folder_name") or data.get("path") or ""
+    try:
+        clean_sub = folder_path.strip().strip(r"\/").replace("\\", "/")
+        target_abs = os.path.abspath(os.path.join(RAW_DIR, clean_sub))
+
+        # 1. Purge from SQLite and FAISS
+        purge_res = db_manager.delete_folder(target_abs)
+
+        # 2. Delete directory tree from disk
+        del_disk_res = config_manager.delete_subfolder(RAW_DIR, clean_sub)
+
+        storage_info = config_manager.inspect_storage_status(RAW_DIR)
+        return {
+            "success": True,
+            "message": f"Subfolder '{clean_sub}' berhasil dihapus ({purge_res['deleted_photos']} foto dibersihkan dari database).",
+            "purged": purge_res,
+            "storage_status": storage_info
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error deleting subfolder {folder_path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal menghapus subfolder: {e}")
+
+
+@app.post("/api/admin/subfolders/scan")
+async def scan_specific_subfolder(request: Request):
+    """Trigger indexing scan on a specific subfolder."""
+    data = await request.json()
+    folder_path = data.get("folder_path") or data.get("path") or ""
+    try:
+        summary = indexer.scan_existing_files(force=False, target_subpath=folder_path)
+        storage_info = config_manager.inspect_storage_status(RAW_DIR)
+        return {
+            "success": True,
+            "message": f"Pemindaian subfolder '{folder_path}' selesai.",
+            "summary": summary,
+            "storage_status": storage_info
+        }
+    except Exception as e:
+        logger.error(f"Error scanning subfolder {folder_path}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/admin/purge-stale")
 async def purge_stale_records():
     """Manually trigger purging of photos missing from disk."""

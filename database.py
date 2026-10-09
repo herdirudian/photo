@@ -1063,6 +1063,79 @@ class DatabaseManager:
                 "purged_invalid_faces": invalid_face_stats.get("purged_faces", 0)
             }
 
+    def delete_photo_by_path(self, file_path: str) -> bool:
+        """
+        Immediately delete a photo from SQLite and remove all its face vectors from FAISS.
+        Called on Watchdog file deletion or manual purge.
+        """
+        file_path = os.path.abspath(file_path)
+        with self.lock:
+            vector_ids = []
+            photo_id = None
+            with self._get_connection() as conn:
+                row = conn.execute("SELECT id FROM photos WHERE file_path = ?", (file_path,)).fetchone()
+                if not row:
+                    return False
+                photo_id = row["id"]
+                face_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (photo_id,)).fetchall()
+                vector_ids = [r["vector_id"] for r in face_rows]
+                conn.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
+                conn.commit()
+
+            if vector_ids and FAISS_AVAILABLE and self.index is not None:
+                try:
+                    self.index.remove_ids(np.array(vector_ids, dtype=np.int64))
+                    self._save_faiss()
+                except Exception as e:
+                    logger.warning(f"Error removing vector IDs from FAISS ({e}). Rebuilding...")
+                    self._rebuild_faiss_from_sqlite()
+
+            logger.info(f"Deleted photo #{photo_id} ({os.path.basename(file_path)}) and {len(vector_ids)} vectors.")
+            return True
+
+    def delete_folder(self, folder_path: str) -> Dict[str, int]:
+        """
+        Immediately delete all photos located in or under folder_path from SQLite
+        and remove all associated face vectors from FAISS.
+        """
+        folder_path = os.path.abspath(folder_path).rstrip(r"\/")
+        prefix_slash = folder_path + "/"
+        prefix_backslash = folder_path + "\\"
+
+        with self.lock:
+            photo_ids = []
+            vector_ids = []
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT id FROM photos WHERE file_path = ? OR file_path LIKE ? OR file_path LIKE ?",
+                    (folder_path, prefix_slash + "%", prefix_backslash + "%")
+                ).fetchall()
+                photo_ids = [r["id"] for r in rows]
+
+                if not photo_ids:
+                    return {"deleted_photos": 0, "deleted_faces": 0}
+
+                placeholders = ",".join("?" for _ in photo_ids)
+                face_rows = conn.execute(
+                    f"SELECT vector_id FROM faces WHERE photo_id IN ({placeholders})",
+                    photo_ids
+                ).fetchall()
+                vector_ids = [r["vector_id"] for r in face_rows]
+
+                conn.execute(f"DELETE FROM photos WHERE id IN ({placeholders})", photo_ids)
+                conn.commit()
+
+            if vector_ids and FAISS_AVAILABLE and self.index is not None:
+                try:
+                    self.index.remove_ids(np.array(vector_ids, dtype=np.int64))
+                    self._save_faiss()
+                except Exception as e:
+                    logger.warning(f"Error removing vector IDs from FAISS ({e}). Rebuilding...")
+                    self._rebuild_faiss_from_sqlite()
+
+            logger.info(f"Deleted folder {folder_path}: {len(photo_ids)} photos, {len(vector_ids)} face vectors removed.")
+            return {"deleted_photos": len(photo_ids), "deleted_faces": len(vector_ids)}
+
     def purge_invalid_face_boxes(self) -> Dict[str, int]:
         """
         Scan existing face records in SQLite and purge false positives
@@ -1216,11 +1289,13 @@ class DatabaseManager:
             """
             params = matched_vector_ids_list.copy()
 
-            # Apply ride subfolder filter if specified (e.g. 'BL' for Hot Air Balloon)
+            # Apply ride subfolder filter if specified (e.g. 'Ayunan', '2026-10-10/Ayunan')
             if ride_filter and ride_filter.strip() and ride_filter.lower() not in ["all", "semua"]:
-                clean_rf = ride_filter.strip()
+                clean_rf = ride_filter.strip().strip("/\\")
+                rf_slash = clean_rf.replace("\\", "/")
+                rf_bslash = clean_rf.replace("/", "\\")
                 query_sql += " AND (p.file_path LIKE ? OR p.file_path LIKE ?)"
-                params.extend([f"%/{clean_rf}/%", f"%\\{clean_rf}\\%"])
+                params.extend([f"%/{rf_slash}/%", f"%\\{rf_bslash}\\%"])
 
             with self._get_connection() as conn:
                 cursor = conn.execute(query_sql, params)

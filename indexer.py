@@ -7,16 +7,16 @@ import os
 import time
 import logging
 import threading
-from typing import Set
+from typing import Set, Optional
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent
+from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent, FileDeletedEvent
 
 from database import DatabaseManager, FaceEngine
 
 # Configure logging
 logger = logging.getLogger("PhotoRetrieval.Indexer")
 
-SUPPORTED_EXTENSIONS: Set[str] = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+SUPPORTED_EXTENSIONS: Set[str] = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 
 def is_valid_image(file_path: str) -> bool:
@@ -122,13 +122,53 @@ class RawPhotoEventHandler(FileSystemEventHandler):
             except Exception:
                 pass
 
-    def on_created(self, event: FileCreatedEvent):
-        if not event.is_directory:
+    def process_directory(self, dir_path: str, force: bool = False):
+        """
+        Recursively scan and index all valid photos in a newly created or moved directory,
+        supporting arbitrary nested subfolder depths.
+        """
+        if not os.path.isdir(dir_path):
+            return
+        logger.info(f"Scanning directory recursively for photos: {dir_path}")
+        # Give remote write operations a moment to settle
+        time.sleep(0.5)
+        for root, _, files in os.walk(dir_path, followlinks=True):
+            for filename in sorted(files):
+                full_path = os.path.join(root, filename)
+                if is_valid_image(full_path):
+                    self.process_file(full_path, force=force)
+
+    def on_created(self, event):
+        if event.is_directory:
+            threading.Thread(
+                target=self.process_directory,
+                args=(event.src_path,),
+                daemon=True,
+                name=f"DirIndex-{os.path.basename(event.src_path)}"
+            ).start()
+        else:
             self.process_file(event.src_path)
 
-    def on_moved(self, event: FileMovedEvent):
-        if not event.is_directory:
+    def on_moved(self, event):
+        if event.is_directory:
+            self.db_manager.delete_folder(event.src_path)
+            threading.Thread(
+                target=self.process_directory,
+                args=(event.dest_path,),
+                daemon=True,
+                name=f"DirMove-{os.path.basename(event.dest_path)}"
+            ).start()
+        else:
+            self.db_manager.delete_photo_by_path(event.src_path)
             self.process_file(event.dest_path)
+
+    def on_deleted(self, event):
+        if event.is_directory:
+            logger.info(f"Directory deleted on disk: {event.src_path}. Purging database records...")
+            self.db_manager.delete_folder(event.src_path)
+        else:
+            logger.info(f"File deleted on disk: {event.src_path}. Purging database record...")
+            self.db_manager.delete_photo_by_path(event.src_path)
 
 
 class PhotoIndexer:
@@ -149,11 +189,11 @@ class PhotoIndexer:
         self._scan_lock = threading.Lock()
         os.makedirs(self.raw_dir, exist_ok=True)
 
-    def scan_existing_files(self, force: bool = False) -> dict:
+    def scan_existing_files(self, force: bool = False, target_subpath: Optional[str] = None) -> dict:
         """
-        Scan the raw directory recursively:
+        Scan the raw directory recursively (or a targeted subfolder if specified):
         1. Purge missing/stale photos and invalid pole/tree face records from SQLite & FAISS.
-        2. Index newly discovered photos across all ride subfolders (or re-process all if force=True).
+        2. Index newly discovered photos across all ride subfolders at any nested depth.
         Returns a dictionary of scan metrics.
         """
         if not self._scan_lock.acquire(blocking=False):
@@ -161,7 +201,14 @@ class PhotoIndexer:
             return {"status": "busy"}
 
         try:
-            logger.info(f"Starting directory scan on: {self.raw_dir} (force={force})")
+            if target_subpath and target_subpath.strip():
+                clean_target = target_subpath.strip().strip(r"\/").replace("\\", "/")
+                scan_dir = os.path.abspath(os.path.join(self.raw_dir, clean_target))
+            else:
+                clean_target = None
+                scan_dir = self.raw_dir
+
+            logger.info(f"Starting directory scan on: {scan_dir} (force={force})")
 
             # Step 1: Self-heal moved photos, purge deleted photos, and clean invalid face detections
             purge_stats = self.db_manager.purge_missing_photos(self.raw_dir)
@@ -177,18 +224,19 @@ class PhotoIndexer:
             scanned_count = 0
             new_indexed_count = 0
 
-            for root, _, files in os.walk(self.raw_dir):
-                for filename in files:
-                    full_path = os.path.join(root, filename)
-                    if is_valid_image(full_path):
-                        scanned_count += 1
-                        try:
-                            stat = os.stat(full_path)
-                            if force or not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
-                                handler.process_file(full_path, force=force)
-                                new_indexed_count += 1
-                        except Exception as e:
-                            logger.error(f"Error checking {full_path}: {e}")
+            if os.path.exists(scan_dir):
+                for root, _, files in os.walk(scan_dir, followlinks=True):
+                    for filename in files:
+                        full_path = os.path.join(root, filename)
+                        if is_valid_image(full_path):
+                            scanned_count += 1
+                            try:
+                                stat = os.stat(full_path)
+                                if force or not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
+                                    handler.process_file(full_path, force=force)
+                                    new_indexed_count += 1
+                            except Exception as e:
+                                logger.error(f"Error checking {full_path}: {e}")
 
             summary = {
                 "scanned": scanned_count,
@@ -196,7 +244,8 @@ class PhotoIndexer:
                 "purged_photos": purge_stats.get("purged_photos", 0),
                 "purged_faces": purge_stats.get("purged_faces", 0),
                 "purged_invalid_faces": purge_stats.get("purged_invalid_faces", 0),
-                "updated_paths": purge_stats.get("updated_paths", 0)
+                "updated_paths": purge_stats.get("updated_paths", 0),
+                "target": clean_target or "all"
             }
             logger.info(f"Scan complete. Scanned: {scanned_count}, Processed: {new_indexed_count}, Purged faces: {summary['purged_faces']}")
             return summary

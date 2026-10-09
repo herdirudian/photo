@@ -8,6 +8,7 @@ import os
 import json
 import time
 import socket
+import shutil
 import logging
 from typing import Dict, Any, List
 
@@ -148,45 +149,64 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
     """
     Inspect the active photo directory:
     - Checks disk read accessibility
-    - Counts image files
-    - Lists ride subfolders
+    - Recursively counts image files across all nested subdirectories
+    - Lists ride subfolders at any depth with exact photo counts
     - Detects if currently mounted
     """
     if not os.path.exists(raw_dir):
         return {
             "exists": False,
             "readable": False,
-            "total_files": 0,
+            "total_images": 0,
+            "root_images": 0,
+            "subfolder_count": 0,
             "subfolders": [],
             "status": "Direktori raw belum dibuat."
         }
 
     is_readable = os.access(raw_dir, os.R_OK)
-    subfolders: List[Dict[str, Any]] = []
+    valid_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+
+    subfolders_map: Dict[str, Dict[str, Any]] = {}
     total_images = 0
-    valid_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+    root_images = 0
 
     try:
-        entries = os.listdir(raw_dir)
-        for item in entries:
-            full_item_path = os.path.join(raw_dir, item)
-            if os.path.isdir(full_item_path):
-                # Count files inside this ride subfolder
-                count = 0
-                for root, _, files in os.walk(full_item_path):
-                    for f in files:
-                        if os.path.splitext(f)[1].lower() in valid_exts:
-                            count += 1
-                total_images += count
-                subfolders.append({
-                    "name": item,
-                    "photo_count": count
-                })
-            else:
-                if os.path.splitext(item)[1].lower() in valid_exts:
-                    total_images += 1
+        # 1. Count root images directly in raw_dir
+        for item in os.listdir(raw_dir):
+            full_p = os.path.join(raw_dir, item)
+            if os.path.isfile(full_p) and os.path.splitext(item)[1].lower() in valid_exts:
+                root_images += 1
+                total_images += 1
 
-        subfolders.sort(key=lambda x: x["name"])
+        # 2. Recursively discover all subdirectories and count images in each
+        for root, dirs, files in os.walk(raw_dir, followlinks=True):
+            if os.path.abspath(root) == os.path.abspath(raw_dir):
+                continue
+
+            rel_path = os.path.relpath(root, raw_dir).replace("\\", "/")
+            direct_imgs = sum(1 for f in files if os.path.splitext(f)[1].lower() in valid_exts)
+            total_images += direct_imgs
+
+            subfolders_map[rel_path] = {
+                "name": rel_path,
+                "relative_path": rel_path,
+                "direct_photo_count": direct_imgs,
+                "photo_count": 0,  # will accumulate subtree total
+                "depth": rel_path.count("/")
+            }
+
+        # 3. Accumulate subtree totals so parent folders (e.g. "2026-10-10") reflect nested photos ("2026-10-10/Ayunan")
+        for path_a, info_a in subfolders_map.items():
+            tot = info_a["direct_photo_count"]
+            prefix = path_a + "/"
+            for path_b, info_b in subfolders_map.items():
+                if path_b.startswith(prefix):
+                    tot += info_b["direct_photo_count"]
+            info_a["photo_count"] = tot
+
+        # 4. Sort alphabetically
+        subfolders = sorted(list(subfolders_map.values()), key=lambda x: x["name"].lower())
 
         # Check mount status in Linux via /proc/mounts
         is_mounted = False
@@ -209,6 +229,7 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
             "exists": True,
             "readable": is_readable,
             "total_images": total_images,
+            "root_images": root_images,
             "subfolder_count": len(subfolders),
             "subfolders": subfolders,
             "is_mounted": is_mounted,
@@ -223,8 +244,87 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
             "readable": False,
             "error": str(e),
             "total_images": 0,
+            "root_images": 0,
+            "subfolder_count": 0,
             "subfolders": []
         }
+
+
+def create_subfolder(raw_dir: str, subfolder_path: str) -> Dict[str, Any]:
+    """
+    Safely create a new subfolder inside raw_dir (supports nested paths like '2026-10-10/Ayunan').
+    Ensures path does not escape raw_dir.
+    """
+    if not subfolder_path or not subfolder_path.strip():
+        raise ValueError("Nama subfolder tidak boleh kosong.")
+
+    clean_sub = subfolder_path.strip().strip(r"\/").replace("\\", "/")
+    parts = [p.strip() for p in clean_sub.split("/") if p.strip()]
+    if not parts:
+        raise ValueError("Nama subfolder tidak valid.")
+    if ".." in parts:
+        raise ValueError("Karakter '..' tidak diizinkan.")
+
+    clean_rel = "/".join(parts)
+    raw_dir_abs = os.path.abspath(raw_dir)
+    target_abs = os.path.abspath(os.path.join(raw_dir_abs, clean_rel))
+
+    if not target_abs.startswith(raw_dir_abs):
+        raise ValueError("Target folder berada di luar direktori raw.")
+
+    os.makedirs(target_abs, mode=0o777, exist_ok=True)
+    try:
+        os.chmod(target_abs, 0o777)
+    except Exception:
+        pass
+
+    logger.info(f"Subfolder created successfully: {target_abs}")
+    return {
+        "success": True,
+        "name": clean_rel,
+        "path": target_abs,
+        "message": f"Subfolder '{clean_rel}' berhasil dibuat."
+    }
+
+
+def delete_subfolder(raw_dir: str, subfolder_path: str) -> Dict[str, Any]:
+    """
+    Safely delete a subfolder and all its contents inside raw_dir.
+    Ensures path does not escape raw_dir and prevents deleting raw_dir itself.
+    """
+    if not subfolder_path or not subfolder_path.strip():
+        raise ValueError("Nama subfolder tidak boleh kosong.")
+
+    clean_sub = subfolder_path.strip().strip(r"\/").replace("\\", "/")
+    parts = [p.strip() for p in clean_sub.split("/") if p.strip()]
+    if not parts:
+        raise ValueError("Nama subfolder tidak valid.")
+    if ".." in parts:
+        raise ValueError("Karakter '..' tidak diizinkan.")
+
+    clean_rel = "/".join(parts)
+    raw_dir_abs = os.path.abspath(raw_dir)
+    target_abs = os.path.abspath(os.path.join(raw_dir_abs, clean_rel))
+
+    if not target_abs.startswith(raw_dir_abs) or target_abs == raw_dir_abs:
+        raise ValueError("Tidak dapat menghapus direktori utama raw.")
+
+    if not os.path.exists(target_abs):
+        return {
+            "success": True,
+            "name": clean_rel,
+            "path": target_abs,
+            "message": f"Subfolder '{clean_rel}' sudah tidak ada di disk."
+        }
+
+    shutil.rmtree(target_abs)
+    logger.info(f"Subfolder deleted successfully from disk: {target_abs}")
+    return {
+        "success": True,
+        "name": clean_rel,
+        "path": target_abs,
+        "message": f"Subfolder '{clean_rel}' berhasil dihapus dari disk."
+    }
 
 
 def generate_mount_instructions(settings: Dict[str, Any], host_raw_path: str = "/opt/SistemPhoto/data/raw") -> Dict[str, str]:

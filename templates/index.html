@@ -2121,6 +2121,7 @@
     // Inisialisasi Mode Tamu & Layar Kunci Kiosk saat dokumen selesai dimuat
     document.addEventListener('DOMContentLoaded', () => {
       lockToGuestMode();
+      loadRideSubfolders();
 
       if (REQUIRE_PIN_GATE) {
         const isUnlocked = sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';
@@ -2136,6 +2137,29 @@
         }
       }
     });
+
+    async function loadRideSubfolders() {
+      try {
+        const res = await fetch('/api/subfolders');
+        if (!res.ok) return;
+        const data = await res.json();
+        const select = document.getElementById('ride-filter-select');
+        if (!select || !data.subfolders) return;
+
+        const currentVal = select.value;
+        let html = '<option value="all">🌟 Semua Wahana (Pencarian Menyeluruh)</option>';
+        data.subfolders.forEach(sub => {
+          const depthPrefix = (sub.depth && sub.depth > 0) ? '&nbsp;&nbsp;↳ ' : '';
+          html += `<option value="${sub.name}">${depthPrefix}🎡 Wahana: ${sub.name} (${sub.photo_count} foto)</option>`;
+        });
+        select.innerHTML = html;
+        if (currentVal && select.querySelector(`option[value="${currentVal}"]`)) {
+          select.value = currentVal;
+        }
+      } catch (e) {
+        console.warn("Could not dynamically refresh subfolders:", e);
+      }
+    }
 
     async function triggerReindex() {
       const btn = document.getElementById('btn-reindex');

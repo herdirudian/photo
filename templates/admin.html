@@ -433,17 +433,31 @@
               </div>
             </div>
 
-            <button 
-              type="button" 
-              onclick="refreshStorageInspection()" 
-              class="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition border border-slate-200 flex items-center space-x-1.5 focus-ring"
-              title="Perbarui status folder"
-            >
-              <svg id="refresh-icon" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Segarkan</span>
-            </button>
+            <div class="flex items-center space-x-2">
+              <button 
+                type="button" 
+                onclick="openCreateSubfolderModal()" 
+                class="px-2.5 py-1.5 bg-lodge-600 hover:bg-lodge-700 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 focus-ring shadow-xs"
+                title="Buat folder baru untuk wahana"
+              >
+                <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>+ Buat Subfolder</span>
+              </button>
+
+              <button 
+                type="button" 
+                onclick="refreshStorageInspection()" 
+                class="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition border border-slate-200 flex items-center space-x-1.5 focus-ring"
+                title="Perbarui status folder"
+              >
+                <svg id="refresh-icon" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Segarkan</span>
+              </button>
+            </div>
           </div>
 
           <div class="p-5 space-y-3">
@@ -697,6 +711,97 @@
     </div>
   </div>
 
+  <!-- Modal Buat Subfolder Baru -->
+  <div id="modal-create-subfolder" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-lodge-50 border border-lodge-100 text-lodge-700 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Buat Subfolder Wahana Baru</h3>
+          <p class="text-xs text-slate-500">Folder dibuat di direktori <code class="font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">data/raw</code></p>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label for="input-new-subfolder" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+          Nama atau Path Subfolder
+        </label>
+        <input 
+          type="text" 
+          id="input-new-subfolder" 
+          placeholder="Contoh: Ayunan atau 2026-10-10/Ayunan"
+          class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 transition outline-none"
+          onkeydown="if(event.key==='Enter') submitCreateSubfolder()"
+        />
+        <p class="text-[11px] text-slate-500 leading-normal">
+          Mendukung subfolder langsung (contoh: <span class="font-mono font-medium text-slate-700">Sky_Tree</span>) maupun bertingkat (contoh: <span class="font-mono font-medium text-slate-700">2026-10-10/ZipLine</span>).
+        </p>
+      </div>
+
+      <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button 
+          type="button" 
+          onclick="closeCreateSubfolderModal()" 
+          class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+        >
+          Batal
+        </button>
+        <button 
+          type="button" 
+          id="btn-confirm-create-subfolder"
+          onclick="submitCreateSubfolder()" 
+          class="px-4 py-2 bg-lodge-600 hover:bg-lodge-700 text-white rounded-xl text-xs font-semibold transition shadow-xs flex items-center space-x-1.5"
+        >
+          <span>Buat Folder</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Hapus Subfolder -->
+  <div id="modal-delete-subfolder" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Hapus Subfolder Wahana</h3>
+          <p class="text-xs text-slate-500">Konfirmasi penghapusan folder dan sinkronisasi data</p>
+        </div>
+      </div>
+
+      <div class="p-3 bg-rose-50/70 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
+        <p class="font-semibold">Peringatan Penghapusan:</p>
+        <p>Folder <span id="delete-subfolder-target-name" class="font-mono font-bold text-rose-900"></span> beserta seluruh foto di dalamnya akan dihapus dari disk fisik serta dibersihkan dari database SQLite & indeks FAISS.</p>
+      </div>
+
+      <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button 
+          type="button" 
+          onclick="closeDeleteSubfolderModal()" 
+          class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+        >
+          Batal
+        </button>
+        <button 
+          type="button" 
+          id="btn-confirm-delete-subfolder"
+          onclick="submitDeleteSubfolder()" 
+          class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition shadow-xs flex items-center space-x-1.5"
+        >
+          <span>Hapus Sekarang</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript Application Logic -->
   <script>
     let currentSettings = {};
@@ -922,6 +1027,136 @@
       }
     }
 
+    let pendingDeleteFolder = null;
+
+    function openCreateSubfolderModal() {
+      const input = document.getElementById('input-new-subfolder');
+      input.value = '';
+      document.getElementById('modal-create-subfolder').classList.remove('hidden');
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeCreateSubfolderModal() {
+      document.getElementById('modal-create-subfolder').classList.add('hidden');
+    }
+
+    async function submitCreateSubfolder() {
+      const input = document.getElementById('input-new-subfolder');
+      const folderName = input.value.trim();
+      if (!folderName) {
+        showToast('Nama subfolder tidak boleh kosong.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-confirm-create-subfolder');
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="w-3.5 h-3.5 animate-spin mr-1" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Membuat...</span>
+      `;
+
+      try {
+        const res = await fetch('/api/admin/subfolders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder_name: folderName })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message || 'Subfolder berhasil dibuat!', 'success');
+          closeCreateSubfolderModal();
+          await refreshStorageInspection();
+        } else {
+          showToast(data.detail || data.error || 'Gagal membuat subfolder.', 'error');
+        }
+      } catch (e) {
+        showToast('Terjadi kesalahan jaringan: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Buat Folder</span>';
+      }
+    }
+
+    function confirmDeleteSubfolder(folderName) {
+      pendingDeleteFolder = folderName;
+      document.getElementById('delete-subfolder-target-name').textContent = folderName;
+      document.getElementById('modal-delete-subfolder').classList.remove('hidden');
+    }
+
+    function closeDeleteSubfolderModal() {
+      pendingDeleteFolder = null;
+      document.getElementById('modal-delete-subfolder').classList.add('hidden');
+    }
+
+    async function submitDeleteSubfolder() {
+      if (!pendingDeleteFolder) return;
+      const folderName = pendingDeleteFolder;
+      const btn = document.getElementById('btn-confirm-delete-subfolder');
+      btn.disabled = true;
+      btn.innerHTML = `
+        <svg class="w-3.5 h-3.5 animate-spin mr-1" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Menghapus...</span>
+      `;
+
+      try {
+        const res = await fetch('/api/admin/subfolders', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder_path: folderName })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message || 'Subfolder berhasil dihapus!', 'success');
+          closeDeleteSubfolderModal();
+          await refreshStorageInspection();
+          await fetchSystemStats();
+        } else {
+          showToast(data.detail || data.error || 'Gagal menghapus subfolder.', 'error');
+        }
+      } catch (e) {
+        showToast('Terjadi kesalahan jaringan: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Hapus Sekarang</span>';
+      }
+    }
+
+    async function scanSubfolder(folderName, btnEl) {
+      if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.classList.add('animate-spin', 'text-lodge-600');
+      }
+      try {
+        const res = await fetch('/api/admin/subfolders/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder_path: folderName })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const s = data.summary || {};
+          showToast(`Selesai memindai '${folderName}': ${s.newly_indexed || 0} foto baru terindeks.`, 'success');
+          await refreshStorageInspection();
+          await fetchSystemStats();
+        } else {
+          showToast(data.detail || 'Gagal memindai subfolder.', 'error');
+        }
+      } catch (e) {
+        showToast('Terjadi kesalahan jaringan: ' + e.message, 'error');
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.classList.remove('animate-spin', 'text-lodge-600');
+        }
+      }
+    }
+
     async function refreshStorageInspection() {
       const container = document.getElementById('subfolder-list');
       const refreshIcon = document.getElementById('refresh-icon');
@@ -931,35 +1166,70 @@
         const res = await fetch('/api/admin/storage-status');
         const data = await res.json();
 
-        document.getElementById('stat-disk-photos').textContent = `${data.total_images} foto`;
-        document.getElementById('stat-subfolder-count').textContent = `${data.subfolder_count} wahana`;
-        document.getElementById('subfolder-total-photos').textContent = `${data.total_images} foto`;
+        document.getElementById('stat-disk-photos').textContent = `${data.total_images || 0} foto`;
+        document.getElementById('stat-subfolder-count').textContent = `${data.subfolder_count || 0} wahana`;
+        
+        const rootInfo = (data.root_images && data.root_images > 0) ? ` (${data.root_images} foto di root)` : '';
+        document.getElementById('subfolder-total-photos').textContent = `${data.total_images || 0} foto${rootInfo}`;
 
         container.innerHTML = '';
         if (data.subfolders && data.subfolders.length > 0) {
           data.subfolders.forEach(sub => {
+            const isNested = (sub.depth || 0) > 0;
             const item = document.createElement('div');
-            item.className = "flex items-center justify-between p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 border border-slate-200/70 text-xs transition";
+            item.className = `flex items-center justify-between p-2.5 rounded-xl bg-slate-50/80 hover:bg-slate-100/90 border border-slate-200/70 text-xs transition ${isNested ? 'ml-3 sm:ml-4 border-l-2 border-l-lodge-400' : ''}`;
+            
+            const safeName = encodeURIComponent(sub.name);
+            
             item.innerHTML = `
-              <div class="flex items-center space-x-2.5 min-w-0">
-                <svg class="w-4 h-4 text-lodge-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex items-center space-x-2.5 min-w-0 flex-1 mr-2">
+                <svg class="w-4 h-4 ${isNested ? 'text-amber-500' : 'text-lodge-600'} shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
-                <span class="font-semibold text-slate-800 truncate">${sub.name}</span>
+                <div class="min-w-0 flex-1 truncate">
+                  <div class="font-semibold text-slate-800 truncate flex items-center space-x-1.5">
+                    <span class="truncate">${sub.name}</span>
+                    ${isNested ? `<span class="px-1.5 py-0.2 rounded text-[10px] bg-amber-50 text-amber-700 font-mono">level ${sub.depth}</span>` : ''}
+                  </div>
+                </div>
               </div>
-              <span class="px-2.5 py-0.5 rounded-full bg-lodge-100 text-lodge-800 font-semibold text-[11px] shrink-0">
-                ${sub.photo_count} foto
-              </span>
+              <div class="flex items-center space-x-1.5 shrink-0">
+                <span class="px-2 py-0.5 rounded-full bg-lodge-100 text-lodge-800 font-semibold text-[11px]">
+                  ${sub.photo_count} foto
+                </span>
+                <button 
+                  type="button" 
+                  data-folder="${safeName}"
+                  onclick="scanSubfolder(decodeURIComponent('${safeName}'), this)" 
+                  class="p-1 rounded-lg hover:bg-white text-slate-500 hover:text-lodge-700 border border-transparent hover:border-slate-200 transition" 
+                  title="Pindai subfolder '${sub.name}'"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button 
+                  type="button" 
+                  data-folder="${safeName}"
+                  onclick="confirmDeleteSubfolder(decodeURIComponent('${safeName}'))" 
+                  class="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-transparent hover:border-rose-200 transition" 
+                  title="Hapus subfolder '${sub.name}'"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             `;
             container.appendChild(item);
           });
         } else {
           container.innerHTML = `
-            <div class="text-center py-8 text-slate-400 text-xs">
-              <svg class="w-8 h-8 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="text-center py-8 text-slate-400 text-xs space-y-2">
+              <svg class="w-8 h-8 mx-auto text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
               </svg>
-              ${data.readable ? 'Belum ada subfolder wahana di dalam folder sharing.' : 'Folder sharing belum terpasang atau belum dapat dibaca.'}
+              <p>${data.readable ? 'Belum ada subfolder wahana. Klik "+ Buat Subfolder" untuk menambah baru.' : 'Folder sharing belum terpasang atau belum dapat dibaca.'}</p>
             </div>
           `;
         }
