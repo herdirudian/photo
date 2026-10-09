@@ -55,11 +55,11 @@
     <!-- Background Nature Accent -->
     <div class="absolute inset-0 bg-gradient-to-b from-[#E8EFEB]/40 via-transparent to-[#D2DFD8]/20 pointer-events-none"></div>
 
-    <div class="relative w-full max-w-sm bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-7 shadow-xl text-center space-y-4">
+    <div class="relative w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-lg text-center space-y-5">
       
       <!-- Brand Logo Badge -->
       <div class="flex justify-center">
-        <div class="h-14 px-3.5 py-1.5 bg-white rounded-2xl shadow-2xs border border-slate-200/80 flex items-center justify-center">
+        <div class="h-14 px-4 py-2 bg-white rounded-xl border border-slate-200 flex items-center justify-center shadow-xs">
           {% if logo_base64 %}
             <img src="data:image/png;base64,{{ logo_base64 }}" alt="The Lodge Maribaya" class="h-9 w-auto object-contain" />
           {% else %}
@@ -69,20 +69,20 @@
       </div>
 
       <!-- Title & Instructions -->
-      <div class="space-y-0.5">
-        <h2 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight">
+      <div class="space-y-1">
+        <h2 class="text-lg font-bold text-slate-900 tracking-tight leading-tight">
           The Lodge Maribaya
         </h2>
-        <p class="text-xs font-semibold text-lodge-600">
+        <p class="text-xs font-semibold text-lodge-700">
           Galeri Foto Wahana
         </p>
-        <p class="text-xs text-slate-500 pt-1 leading-relaxed">
-          Masukkan PIN Keamanan untuk membuka akses pencarian foto.
+        <p class="text-xs text-slate-600 pt-1 leading-relaxed">
+          Masukkan PIN untuk membuka akses pencarian foto tamu.
         </p>
       </div>
 
       <!-- PIN Input Field & Form -->
-      <form id="form-gate-pin" onsubmit="submitGatePin(event)" class="space-y-3.5">
+      <form id="form-gate-pin" onsubmit="submitGatePin(event)" class="space-y-4">
         
         <div class="relative flex items-center justify-center">
           <input 
@@ -94,34 +94,38 @@
             pattern="[0-9]*"
             autocomplete="off"
             placeholder="••••" 
-            class="w-44 text-center text-3xl font-mono tracking-[0.4em] font-extrabold py-2 px-3 bg-slate-50 border-2 border-slate-300 rounded-2xl text-slate-900 focus:bg-white focus:border-lodge-600 focus:ring-4 focus:ring-lodge-600/10 outline-none transition"
+            class="w-44 text-center text-3xl font-mono tracking-[0.4em] font-extrabold py-2 px-3 bg-slate-50 border-2 border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 outline-none transition"
             required
             autofocus
+            aria-label="PIN Akses Pencarian"
           />
         </div>
 
         <!-- Error Alert -->
-        <div id="gate-pin-error" class="hidden text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-2.5 font-medium">
-          PIN yang Anda masukkan salah.
+        <div id="gate-pin-error" class="hidden text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl p-2.5 font-medium flex items-center justify-center space-x-1.5" role="alert">
+          <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>PIN tidak sesuai. Silakan coba lagi.</span>
         </div>
 
         <!-- Touch Virtual Keypad (3x4 Grid) -->
-        <div class="grid grid-cols-3 gap-2 pt-0.5">
-          <button type="button" onclick="appendGatePin('1')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">1</button>
-          <button type="button" onclick="appendGatePin('2')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">2</button>
-          <button type="button" onclick="appendGatePin('3')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">3</button>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" onclick="appendGatePin('1')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">1</button>
+          <button type="button" onclick="appendGatePin('2')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">2</button>
+          <button type="button" onclick="appendGatePin('3')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">3</button>
           
-          <button type="button" onclick="appendGatePin('4')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">4</button>
-          <button type="button" onclick="appendGatePin('5')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">5</button>
-          <button type="button" onclick="appendGatePin('6')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">6</button>
+          <button type="button" onclick="appendGatePin('4')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">4</button>
+          <button type="button" onclick="appendGatePin('5')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">5</button>
+          <button type="button" onclick="appendGatePin('6')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">6</button>
           
-          <button type="button" onclick="appendGatePin('7')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">7</button>
-          <button type="button" onclick="appendGatePin('8')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">8</button>
-          <button type="button" onclick="appendGatePin('9')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">9</button>
+          <button type="button" onclick="appendGatePin('7')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">7</button>
+          <button type="button" onclick="appendGatePin('8')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">8</button>
+          <button type="button" onclick="appendGatePin('9')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">9</button>
           
-          <button type="button" onclick="clearGatePin()" class="py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-200 text-slate-600 font-semibold text-sm transition focus:outline-none" title="Hapus Semua">C</button>
-          <button type="button" onclick="appendGatePin('0')" class="py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus:outline-none">0</button>
-          <button type="button" onclick="backspaceGatePin()" class="py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-200 text-slate-600 font-semibold text-base transition focus:outline-none flex items-center justify-center" title="Hapus Satu Angka">
+          <button type="button" onclick="clearGatePin()" class="min-h-[44px] py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-200 text-slate-700 font-semibold text-sm transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none" title="Hapus Semua">C</button>
+          <button type="button" onclick="appendGatePin('0')" class="min-h-[44px] py-3 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-800 font-bold text-lg transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none">0</button>
+          <button type="button" onclick="backspaceGatePin()" class="min-h-[44px] py-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-200 text-slate-700 font-semibold text-base transition focus-visible:ring-2 focus-visible:ring-lodge-600 focus:outline-none flex items-center justify-center" title="Hapus Satu Angka" aria-label="Hapus satu angka">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414-6.414A2 2 0 0110.828 5H20a2 2 0 012 2v10a2 2 0 01-2 2h-9.172a2 2 0 01-1.414-.586L3 12z" />
             </svg>
@@ -132,7 +136,7 @@
         <button 
           type="submit" 
           id="btn-unlock-gate"
-          class="w-full py-3 bg-lodge-600 hover:bg-lodge-700 active:bg-lodge-800 text-white font-semibold rounded-2xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-xs focus-ring"
+          class="w-full min-h-[44px] py-3 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold rounded-xl text-sm transition flex items-center justify-center space-x-2 shadow-xs focus-ring"
         >
           <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -143,8 +147,8 @@
       </form>
 
       <!-- Footer Info -->
-      <div class="pt-1.5 border-t border-slate-100 text-[11px] text-slate-400">
-        PIN default: <span class="font-mono font-bold text-slate-600">1234</span> &bull; Dapat diatur di Admin
+      <div class="pt-2 border-t border-slate-100 text-xs text-slate-600">
+        PIN default: <span class="font-mono font-bold text-slate-800">1234</span> &bull; Dapat diatur di Admin
       </div>
 
     </div>
@@ -224,27 +228,36 @@
   </header>
 
   <!-- Operator Active Alert Banner (Hanya terlihat jika Petugas login) -->
-  <div id="operator-status-banner" class="hidden bg-amber-500 text-amber-950 px-4 sm:px-6 lg:px-8 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600 shadow-xs sticky top-16 z-30">
+  <div id="operator-status-banner" class="hidden bg-amber-100 text-amber-950 px-4 sm:px-6 lg:px-8 py-2.5 text-xs font-semibold flex items-center justify-between border-b border-amber-300 shadow-xs sticky top-16 z-30">
     <div class="flex items-center space-x-2">
-      <span class="text-sm">⚠️</span>
-      <span>MODE PETUGAS AKTIF</span>
-      <span class="font-normal text-amber-950/80 hidden sm:inline">• Jalur folder Samba & tombol File Explorer dapat diakses.</span>
+      <svg class="w-4 h-4 text-amber-800 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="font-bold text-amber-900">Mode Petugas Aktif</span>
+      <span class="font-normal text-amber-800 hidden sm:inline">&bull; Jalur folder Samba dan fitur operasional dapat diakses.</span>
     </div>
     <div class="flex items-center space-x-2">
       <a 
         href="/admin" 
-        class="px-3 py-1 bg-lodge-900 hover:bg-lodge-950 text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1"
-        title="Buka Dashboard Admin untuk mengatur IP sharing folder & sistem"
+        class="px-3 py-1.5 bg-lodge-800 hover:bg-lodge-900 text-white rounded-lg text-xs font-medium transition shadow-2xs flex items-center space-x-1.5 focus-ring"
+        title="Buka Dashboard Admin untuk mengatur sistem"
       >
-        <span>⚙️ Pengaturan Admin</span>
+        <svg class="w-3.5 h-3.5 text-lodge-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span>Pengaturan Admin</span>
       </a>
       <button 
         type="button"
         onclick="lockToGuestMode()" 
-        class="px-3 py-1 bg-amber-950 hover:bg-black text-white rounded-lg text-xs font-semibold transition shadow-2xs flex items-center space-x-1"
-        title="Sembunyikan menu petugas sebelum menampilkan layar ke tamu"
+        class="px-3 py-1.5 bg-amber-900 hover:bg-amber-950 text-white rounded-lg text-xs font-medium transition shadow-2xs flex items-center space-x-1.5 focus-ring"
+        title="Kembali ke tampilan standar tamu"
       >
-        <span>👁️ Kunci ke Mode Tamu</span>
+        <svg class="w-3.5 h-3.5 text-amber-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <span>Kunci ke Mode Tamu</span>
       </button>
     </div>
   </div>
@@ -258,10 +271,10 @@
       <section class="lg:col-span-5 space-y-6">
 
         <!-- Search Card -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-xs p-6">
           <div class="border-b border-slate-100 pb-4 mb-5">
-            <h2 class="text-lg font-semibold text-slate-900">Pencarian Foto Tamu</h2>
-            <p class="text-sm text-slate-500 mt-0.5">Unggah berkas atau ambil foto tamu melalui kamera untuk mencari foto wahana The Lodge Maribaya.</p>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Pencarian Foto Tamu</h2>
+            <p class="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">Unggah berkas foto atau ambil potret melalui kamera counter untuk mencari foto dokumentasi wahana The Lodge Maribaya.</p>
           </div>
 
           <form id="search-form" onsubmit="executeSearch(event)" class="space-y-5">
@@ -277,7 +290,7 @@
                     type="button" 
                     id="btn-mode-upload"
                     onclick="switchInputMode('upload')"
-                    class="px-2.5 py-1 text-xs font-semibold rounded-md bg-lodge-100 text-lodge-800 border border-lodge-300 transition"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-lodge-700 text-white border border-lodge-700 shadow-2xs transition focus-ring"
                   >
                     Unggah Berkas
                   </button>
@@ -285,7 +298,7 @@
                     type="button" 
                     id="btn-mode-camera"
                     onclick="switchInputMode('camera')"
-                    class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center space-x-1"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200 border border-slate-300 transition flex items-center space-x-1 focus-ring"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -297,7 +310,7 @@
               </div>
 
               <!-- Live Webcam Scanning Panel with Multi-Camera / USB Support -->
-              <div id="camera-panel" class="hidden bg-slate-900 rounded-xl overflow-hidden border border-slate-300 relative shadow-sm">
+              <div id="camera-panel" class="hidden bg-slate-900 rounded-xl overflow-hidden border border-slate-300 relative shadow-xs">
                 
                 <!-- Camera Header with Device Selector & Options -->
                 <div class="p-2.5 bg-slate-950 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
@@ -319,8 +332,8 @@
                     <button 
                       type="button" 
                       onclick="refreshCameraDevicesList(true)" 
-                      title="Perbarui / Deteksi Ulang Kamera USB"
-                      class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition"
+                      title="Deteksi Ulang Kamera USB"
+                      class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition"
                     >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -331,8 +344,8 @@
                       type="button" 
                       id="btn-toggle-mirror"
                       onclick="toggleCameraMirror()" 
-                      title="Balik Cermin (Mirror on/off)"
-                      class="px-2 py-1 bg-lodge-600 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1"
+                      title="Balik Cermin (Mirror)"
+                      class="px-2 py-1 bg-lodge-700 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1"
                     >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -343,8 +356,8 @@
                     <button 
                       type="button" 
                       onclick="openCameraGuideModal()" 
-                      title="Bantuan Izin Kamera"
-                      class="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs font-bold transition flex items-center justify-center"
+                      title="Panduan Izin Akses Kamera"
+                      class="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg text-xs font-bold transition flex items-center justify-center"
                     >
                       ?
                     </button>
@@ -355,17 +368,17 @@
                 <div class="relative w-full aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
                   <video id="webcam-feed" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
                   
-                  <!-- Oval Face Framing Guide -->
+                  <!-- Face Framing Guide -->
                   <div class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                    <div class="w-36 h-48 border-2 border-dashed border-emerald-400 rounded-full opacity-85 shadow-[0_0_15px_rgba(52,211,153,0.3)]"></div>
-                    <span class="mt-2 text-[11px] text-white/95 bg-slate-900/80 px-2.5 py-0.5 rounded font-medium shadow">
+                    <div class="w-36 h-48 border-2 border-white/85 rounded-full"></div>
+                    <span class="mt-2 text-[11px] text-white bg-slate-950/85 px-2.5 py-0.5 rounded font-medium shadow-xs">
                       Posisikan wajah tamu di dalam oval
                     </span>
                   </div>
 
                   <!-- Toast Notification for USB Plug & Play -->
-                  <div id="camera-toast" class="hidden absolute top-3 bg-slate-900/90 text-emerald-400 border border-emerald-500/30 text-xs px-3 py-1.5 rounded-lg shadow-lg transition duration-300">
-                    Kamera baru terdeteksi!
+                  <div id="camera-toast" class="hidden absolute top-3 bg-slate-900/95 text-emerald-300 border border-emerald-500/40 text-xs px-3 py-1.5 rounded-lg shadow-md transition duration-300">
+                    Kamera baru terdeteksi
                   </div>
                 </div>
 
@@ -374,7 +387,7 @@
                   <button 
                     type="button" 
                     onclick="switchInputMode('upload')" 
-                    class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
+                    class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"
                   >
                     Batal
                   </button>
@@ -382,7 +395,7 @@
                   <button 
                     type="button" 
                     onclick="captureSnapshot()" 
-                    class="flex-1 py-2 bg-lodge-600 hover:bg-lodge-700 active:bg-lodge-800 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow"
+                    class="flex-1 py-2 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1.5 shadow-xs"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -399,7 +412,11 @@
                 ondragover="handleDragOver(event)"
                 ondragleave="handleDragLeave(event)"
                 ondrop="handleDrop(event)"
-                class="border-2 border-dashed border-slate-300 hover:border-lodge-600 bg-slate-50/50 hover:bg-lodge-50/50 rounded-xl p-6 text-center cursor-pointer transition relative group"
+                class="border-2 border-dashed border-slate-300 hover:border-lodge-600 bg-slate-50/70 hover:bg-lodge-50/40 rounded-xl p-6 text-center cursor-pointer transition relative group focus-ring"
+                tabindex="0"
+                role="button"
+                aria-label="Area unggah berkas foto tamu"
+                onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); document.getElementById('file-input').click(); }"
               >
                 <input 
                   type="file" 
@@ -412,32 +429,33 @@
 
                 <!-- Placeholder Preview -->
                 <div id="upload-placeholder" class="space-y-3">
-                  <div class="w-12 h-12 mx-auto bg-lodge-100 text-lodge-600 rounded-full flex items-center justify-center group-hover:scale-105 transition">
+                  <div class="w-12 h-12 mx-auto bg-lodge-100 text-lodge-800 rounded-full flex items-center justify-center group-hover:bg-lodge-200 transition">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                   </div>
                   <div>
-                    <span class="text-sm font-semibold text-lodge-700">Pilih foto tamu</span>
-                    <span class="text-sm text-slate-500"> atau seret file ke sini</span>
+                    <span class="text-sm font-semibold text-slate-900">Pilih foto tamu</span>
+                    <span class="text-sm text-slate-600"> atau seret berkas ke sini</span>
                   </div>
-                  <p class="text-xs text-slate-400">JPEG, PNG, atau WebP</p>
+                  <p class="text-xs text-slate-600">Format: JPEG, PNG, atau WebP (maks. 15 MB)</p>
                 </div>
 
                 <!-- Active Image Preview -->
                 <div id="image-preview-container" class="hidden space-y-3">
-                  <div class="relative w-36 h-36 mx-auto rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-900">
-                    <img id="image-preview" src="#" alt="Guest Reference" class="w-full h-full object-cover" />
+                  <div class="relative w-36 h-36 mx-auto rounded-lg overflow-hidden border border-slate-200 shadow-xs bg-slate-900">
+                    <img id="image-preview" src="#" alt="Pratinjau Referensi Tamu" class="w-full h-full object-cover" />
                     <button 
                       type="button" 
                       onclick="clearSelectedFile(event)" 
-                      title="Hapus foto"
+                      title="Hapus foto referensi"
+                      aria-label="Hapus foto referensi"
                       class="absolute top-1.5 right-1.5 w-6 h-6 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full flex items-center justify-center transition"
                     >
                       &times;
                     </button>
                   </div>
-                  <div class="text-xs text-slate-600 font-medium" id="selected-file-name">filename.jpg</div>
+                  <div class="text-xs text-slate-700 font-medium" id="selected-file-name">filename.jpg</div>
                 </div>
               </div>
             </div>
@@ -448,16 +466,16 @@
                 <label for="ride-filter-select" class="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
                   Filter Wahana (Opsional)
                 </label>
-                <span class="text-[11px] text-slate-500">Cari di wahana tertentu</span>
+                <span class="text-xs text-slate-600">Pilih wahana spesifik atau semua</span>
               </div>
               <select 
                 id="ride-filter-select"
-                class="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 transition focus:outline-none focus:ring-2 focus:ring-lodge-600 cursor-pointer"
+                class="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-900 transition focus:outline-none focus:ring-2 focus:ring-lodge-600 cursor-pointer"
               >
-                <option value="all">🌟 Semua Wahana (Pencarian Menyeluruh)</option>
+                <option value="all">Semua Wahana</option>
                 {% if subfolders %}
                   {% for sub in subfolders %}
-                    <option value="{{ sub }}">🎡 Wahana: {{ sub }}</option>
+                    <option value="{{ sub }}">{{ sub }}</option>
                   {% endfor %}
                 {% endif %}
               </select>
@@ -468,22 +486,22 @@
               <div class="flex items-center justify-between">
                 <div>
                   <div class="flex items-center space-x-2">
-                    <label for="threshold-slider" class="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
-                      Similarity Threshold (Tingkat Akurasi)
+                    <label for="threshold-slider" class="text-xs font-semibold text-slate-800 uppercase tracking-wider block">
+                      Tingkat Akurasi Kemiripan
                     </label>
-                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-700{% endif %}">
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-800 border border-slate-200{% endif %}">
                       {% if ai_engine == 'insightface' %}ArcFace 512-D{% else %}dlib 128-D{% endif %}
                     </span>
                   </div>
-                  <span class="text-[11px] text-slate-500">
+                  <span class="text-xs text-slate-600">
                     {% if ai_engine == 'insightface' %}
-                      Model ArcFace 512-D &bull; Tahan kacamata hitam, masker & sudut 60°
+                      Model ArcFace 512-D &bull; Tahan kacamata, bayangan, dan sudut 60°
                     {% else %}
-                      Model dlib 128-D &bull; Mencegah wajah orang lain ikut muncul
+                      Model dlib 128-D &bull; Menyaring foto berdasarkan kemiripan wajah
                     {% endif %}
                   </span>
                 </div>
-                <span id="threshold-val" class="text-sm font-bold text-lodge-800 bg-lodge-100 border border-lodge-200 px-2.5 py-0.5 rounded">
+                <span id="threshold-val" class="text-sm font-bold text-lodge-900 bg-lodge-100 border border-lodge-200 px-2.5 py-0.5 rounded">
                   {{ (default_threshold * 100)|int if default_threshold else (50 if ai_engine == 'insightface' else 82) }}%
                 </span>
               </div>
@@ -496,33 +514,33 @@
                 step="0.01" 
                 value="{{ default_threshold if default_threshold else (0.50 if ai_engine == 'insightface' else 0.82) }}" 
                 oninput="updateThresholdDisplay(this.value)"
-                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-lodge-600"
+                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-lodge-700"
               />
 
-              <div class="flex justify-between text-[11px] text-slate-500">
+              <div class="flex justify-between text-xs text-slate-600">
                 {% if ai_engine == 'insightface' %}
-                  <span>35% (Lebih Longgar)</span>
-                  <span class="font-bold text-lodge-800">48% - 52% (Rekomendasi ArcFace)</span>
-                  <span>80% (Sangat Ketat)</span>
+                  <span>35% (Pencarian Luas)</span>
+                  <span class="font-bold text-lodge-900">48% - 52% (Rekomendasi ArcFace)</span>
+                  <span>80% (Pencarian Ketat)</span>
                 {% else %}
-                  <span>70% (Lebih Longgar)</span>
-                  <span class="font-bold text-lodge-800">82% - 85% (Rekomendasi Wahana)</span>
-                  <span>95% (Sangat Ketat)</span>
+                  <span>70% (Pencarian Luas)</span>
+                  <span class="font-bold text-lodge-900">82% - 85% (Rekomendasi Wahana)</span>
+                  <span>95% (Pencarian Ketat)</span>
                 {% endif %}
               </div>
-              <p class="text-[11px] text-slate-500 bg-white p-2 rounded border border-slate-200/80 leading-relaxed">
+              <p class="text-xs text-slate-700 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed">
                 {% if ai_engine == 'insightface' %}
-                  🧠 <strong>Keunggulan ArcFace 512-D:</strong> Standar biometrik modern paling mutakhir di dunia. Sangat tahan terhadap kacamata hitam, masker tipis, bayangan pohon pinus, dan wajah dengan sudut ekstrem hingga 60°.
+                  <strong>Karakteristik ArcFace 512-D:</strong> Model biometrik dirancang untuk mengenali wajah di area terbuka dengan pencahayaan alami, bayangan pohon pinus, kacamata, dan sudut pose hingga 60 derajat. Ambang 48%–52% memberikan hasil seimbang antara akurasi dan kelengkapan.
                 {% else %}
-                  💡 <strong>Tips Akurasi:</strong> Jika foto orang lain masih ikut muncul, naikkan slider ke <strong>87% - 90%</strong>. Turunkan ke <strong>80%</strong> hanya jika tamu memakai kacamata hitam atau foto wahana redup.
+                  <strong>Petunjuk Akurasi:</strong> Jika foto pengunjung lain ikut muncul pada hasil pencarian, naikkan ambang batas ke <strong>87%–90%</strong>. Turunkan ke <strong>80%</strong> apabila tamu mengenakan kacamata atau foto wahana redup.
                 {% endif %}
               </p>
             </div>
 
             <!-- Top Results Limit -->
             <div class="flex items-center justify-between pt-1">
-              <span class="text-xs font-medium text-slate-600">Batas maksimal foto yang ditampilkan:</span>
-              <select id="top-k-select" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus-ring">
+              <span class="text-xs font-medium text-slate-700">Batas maksimal foto yang ditampilkan:</span>
+              <select id="top-k-select" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-800 focus-ring">
                 <option value="25">25 foto</option>
                 <option value="50" selected>50 foto</option>
                 <option value="100">100 foto</option>
@@ -533,75 +551,75 @@
             <button 
               type="submit" 
               id="submit-btn" 
-              class="w-full min-h-[46px] bg-lodge-600 hover:bg-lodge-700 active:bg-lodge-800 text-white font-semibold rounded-lg px-4 py-2.5 shadow transition flex items-center justify-center space-x-2 focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full min-h-[46px] bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold rounded-xl px-4 py-2.5 shadow-xs transition flex items-center justify-center space-x-2 focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg class="w-5 h-5 text-lodge-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <span>Scan Wajah & Cari Foto Wahana</span>
+              <span>Cari Foto Tamu</span>
             </button>
 
           </form>
         </div>
 
         <!-- Guest Welcome & Instructions Card (Default Kiosk Mode) -->
-        <div id="guest-welcome-card" class="bg-white rounded-xl border border-lodge-200 shadow-xs p-5 space-y-3.5 text-xs text-slate-600">
+        <div id="guest-welcome-card" class="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4 text-xs text-slate-700">
           <div class="flex items-center space-x-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-lodge-600"></span>
             <h3 class="font-bold text-lodge-900 text-xs uppercase tracking-wider">Panduan Pencarian Foto Tamu</h3>
           </div>
           <p class="text-slate-600 text-xs leading-relaxed">
-            Temukan kenangan liburan Anda di wahana The Lodge Maribaya dengan cepat dan mudah melalui langkah berikut:
+            Temukan kenangan liburan Anda di wahana The Lodge Maribaya melalui langkah berikut:
           </p>
-          <div class="space-y-2.5 pt-1">
+          <div class="space-y-3 pt-0.5">
             <div class="flex items-start space-x-3">
-              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+              <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-xs">1</span>
               <div>
-                <strong class="text-slate-800">Scan atau Unggah Foto:</strong>
-                <p class="text-slate-500 text-[11px] mt-0.5">Arahkan wajah ke kamera counter atau unggah foto selfie Anda yang jelas.</p>
+                <strong class="text-slate-900 font-semibold">Ambil atau Unggah Foto:</strong>
+                <p class="text-slate-600 text-xs mt-0.5 leading-relaxed">Arahkan wajah ke kamera counter atau unggah foto selfie yang jelas.</p>
               </div>
             </div>
             <div class="flex items-start space-x-3">
-              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+              <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-xs">2</span>
               <div>
-                <strong class="text-slate-800">Pilih Foto Favorit:</strong>
-                <p class="text-slate-500 text-[11px] mt-0.5">Sistem akan menampilkan foto-foto Anda di berbagai wahana. Klik foto untuk melihat perbesaran dan zoom wajah.</p>
+                <strong class="text-slate-900 font-semibold">Pilih Foto Favorit:</strong>
+                <p class="text-slate-600 text-xs mt-0.5 leading-relaxed">Sistem mencocokkan wajah tamu dengan database foto wahana. Klik foto untuk melihat perbesaran atau zoom wajah.</p>
               </div>
             </div>
             <div class="flex items-start space-x-3">
-              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+              <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0 text-xs">3</span>
               <div>
-                <strong class="text-slate-800">Tunjukkan Nomor Foto ke Petugas:</strong>
-                <p class="text-slate-500 text-[11px] mt-0.5">Catat nomor foto yang Anda sukai (misal: Foto #01) dan sampaikan ke kasir untuk proses cetak atau transfer berkas.</p>
+                <strong class="text-slate-900 font-semibold">Konfirmasi ke Petugas:</strong>
+                <p class="text-slate-600 text-xs mt-0.5 leading-relaxed">Catat nomor foto yang dipilih (misal: Foto #01) dan informasikan ke kasir untuk cetak atau salin berkas.</p>
               </div>
             </div>
           </div>
-          <div class="pt-2 border-t border-slate-100 flex items-center space-x-2 text-[11px] text-emerald-800 bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-100">
-            <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="pt-2 border-t border-slate-100 flex items-center space-x-2 text-xs text-lodge-900 bg-lodge-50/70 p-3 rounded-lg border border-lodge-200">
+            <svg class="w-4 h-4 text-lodge-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
-            <span>Privasi Anda terjaga. Sistem hanya mencari foto dalam database kunjungan hari ini.</span>
+            <span class="leading-relaxed">Privasi pengunjung terjaga. Pencarian diproses secara lokal pada server The Lodge Maribaya untuk dokumentasi kunjungan hari ini.</span>
           </div>
         </div>
 
         <!-- System Architecture Information Card (Hanya Mode Petugas) -->
-        <div id="operator-architecture-card" class="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3 text-xs text-slate-600">
+        <div id="operator-architecture-card" class="hidden bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-3.5 text-xs text-slate-700">
           <div class="flex items-center justify-between">
-            <div class="font-semibold text-lodge-800 uppercase tracking-wider text-[11px]">Alur Kerja Sistem The Lodge (Petugas)</div>
-            <span class="text-[10px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-200">Mode Petugas</span>
+            <div class="font-bold text-lodge-900 uppercase tracking-wider text-xs">Alur Kerja Sistem The Lodge (Petugas)</div>
+            <span class="text-[11px] bg-amber-100 text-amber-900 font-semibold px-2 py-0.5 rounded border border-amber-300">Mode Petugas</span>
           </div>
-          <div class="space-y-2">
-            <div class="flex items-start space-x-2">
-              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">1</span>
-              <p><strong class="text-slate-800">Penyimpanan Otomatis:</strong> File foto dari fotografer wahana yang masuk ke <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-800">raw/</code> diproses otomatis oleh Watchdog ke vektor FAISS.</p>
+          <div class="space-y-2.5">
+            <div class="flex items-start space-x-2.5">
+              <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">1</span>
+              <p><strong class="text-slate-900">Penyimpanan Otomatis:</strong> Berkas foto dari fotografer wahana yang masuk ke <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800 font-mono">raw/</code> diproses otomatis oleh Watchdog ke indeks vektor FAISS.</p>
             </div>
-            <div class="flex items-start space-x-2">
-              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">2</span>
-              <p><strong class="text-slate-800">Pencarian Wajah:</strong> Operator mengunggah atau memotret wajah tamu, FAISS mencari kemiripan dalam hitungan milidetik.</p>
+            <div class="flex items-start space-x-2.5">
+              <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">2</span>
+              <p><strong class="text-slate-900">Pencarian Wajah:</strong> Operator mengunggah atau memotret wajah tamu, FAISS mencocokkan kemiripan vektor dalam hitungan milidetik.</p>
             </div>
-            <div class="flex items-start space-x-2">
-              <span class="w-5 h-5 rounded-full bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">3</span>
-              <p><strong class="text-slate-800">Salin Hasil (Samba):</strong> Sistem menyiapkan folder <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-800">Customer_{ID}</code> siap salin atau buka di File Explorer.</p>
+            <div class="flex items-start space-x-2.5">
+              <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center shrink-0">3</span>
+              <p><strong class="text-slate-900">Salin Hasil (Samba):</strong> Sistem menyiapkan folder <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800 font-mono">Customer_{ID}</code> siap disalin atau dibuka di File Explorer.</p>
             </div>
           </div>
         </div>
@@ -612,38 +630,38 @@
       <section class="lg:col-span-7 space-y-6">
 
         <!-- Default Empty State -->
-        <div id="state-empty" class="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center space-y-4">
-          <div class="w-16 h-16 mx-auto bg-lodge-50 rounded-full flex items-center justify-center text-lodge-600">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <div id="state-empty" class="bg-white rounded-xl border border-slate-200 shadow-xs p-12 text-center space-y-4">
+          <div class="w-14 h-14 mx-auto bg-lodge-50 text-lodge-700 rounded-xl flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
           <div>
-            <h3 class="text-base font-semibold text-slate-800">Belum Ada Pencarian Foto</h3>
-            <p class="text-sm text-slate-500 max-w-sm mx-auto mt-1">Unggah berkas atau ambil foto tamu untuk mencari koleksi foto wahana The Lodge Maribaya.</p>
+            <h3 class="text-base font-bold text-slate-900">Belum Ada Pencarian Foto</h3>
+            <p class="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto mt-1 leading-relaxed">Unggah berkas foto atau gunakan kamera di panel kiri untuk mencari koleksi foto wahana The Lodge Maribaya.</p>
           </div>
         </div>
 
         <!-- Loading State -->
-        <div id="state-loading" class="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center space-y-4">
-          <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-lodge-600 border-t-transparent"></div>
+        <div id="state-loading" class="hidden bg-white rounded-xl border border-slate-200 shadow-xs p-12 text-center space-y-4">
+          <div class="inline-block animate-spin rounded-full h-10 w-10 border-3 border-lodge-700 border-t-transparent"></div>
           <div>
-            <h3 class="text-base font-semibold text-slate-800">Sedang Mencari Foto di Database...</h3>
-            <p class="text-sm text-slate-500 max-w-sm mx-auto mt-1">Mengekstrak landmark wajah dan mencocokkan kemiripan vektor FAISS...</p>
+            <h3 class="text-base font-bold text-slate-900">Sedang Mencari Foto di Database...</h3>
+            <p class="text-xs sm:text-sm text-slate-600 max-w-sm mx-auto mt-1 leading-relaxed">Mengekstrak landmark wajah dan mencocokkan kemiripan vektor FAISS...</p>
           </div>
         </div>
 
         <!-- Error State -->
-        <div id="state-error" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 space-y-2">
+        <div id="state-error" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-5 text-rose-900 space-y-2">
           <div class="flex items-center space-x-2">
-            <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <h4 class="font-semibold text-sm" id="error-title">Pencarian Gagal</h4>
+            <h4 class="font-bold text-sm text-rose-950" id="error-title">Pencarian Tidak Berhasil</h4>
           </div>
-          <p class="text-xs text-rose-700" id="error-message">Wajah tidak terdeteksi pada gambar.</p>
-          <div class="pt-2">
-            <button onclick="dismissError()" class="text-xs font-semibold text-rose-800 hover:text-rose-950 underline">Coba lagi</button>
+          <p class="text-xs text-rose-800 leading-relaxed" id="error-message">Wajah tidak terdeteksi pada gambar referensi.</p>
+          <div class="pt-1.5">
+            <button onclick="dismissError()" class="text-xs font-semibold text-rose-800 hover:text-rose-950 underline focus-ring rounded">Coba lagi</button>
           </div>
         </div>
 
@@ -651,37 +669,37 @@
         <div id="state-results" class="hidden space-y-6">
 
           <!-- Customer Folder Header & Samba Network Path Card -->
-          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-4">
             
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
-                <span class="text-[11px] font-bold text-lodge-800 bg-lodge-100 px-2 py-0.5 rounded border border-lodge-200" id="res-customer-id">
+                <span class="text-xs font-mono font-bold text-lodge-900 bg-lodge-100 px-2.5 py-1 rounded-md border border-lodge-200 inline-block" id="res-customer-id">
                   Customer_00000000
                 </span>
-                <h3 class="text-lg font-bold text-slate-900 mt-1">Hasil Foto Wahana Ditemukan</h3>
+                <h3 class="text-lg font-bold text-slate-900 mt-1.5 tracking-tight">Hasil Foto Wahana Ditemukan</h3>
               </div>
-              <div class="flex items-center space-x-3 text-xs text-slate-500">
+              <div class="flex items-center space-x-3 text-xs text-slate-600">
                 <span id="res-match-count" class="font-semibold text-slate-900 text-sm">0 foto cocok</span>
-                <span>dalam <strong id="res-query-time" class="text-slate-700">0 ms</strong></span>
+                <span>dalam <strong id="res-query-time" class="text-slate-800 font-semibold">0 ms</strong></span>
               </div>
             </div>
 
             <!-- Guest Friendly Selection Banner -->
-            <div id="guest-order-guide" class="bg-gradient-to-r from-emerald-50 to-lodge-50 border border-emerald-200/80 rounded-xl p-4 flex items-center justify-between gap-4">
+            <div id="guest-order-guide" class="bg-lodge-50/70 border border-lodge-200/90 rounded-xl p-4 flex items-center justify-between gap-4">
               <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <div class="w-10 h-10 rounded-xl bg-lodge-700 text-white flex items-center justify-center shrink-0 shadow-xs">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </div>
                 <div>
                   <h4 class="font-bold text-slate-900 text-xs sm:text-sm">Silakan Pilih & Catat Nomor Foto Favorit Anda</h4>
-                  <p class="text-slate-600 text-[11px] sm:text-xs mt-0.5">Klik foto untuk melihat pratinjau besar atau fitur Zoom Wajah. Sebutkan nomor foto (contoh: <strong class="text-emerald-800">Foto #01</strong>) kepada kasir dokumentasi kami.</p>
+                  <p class="text-slate-700 text-xs mt-0.5 leading-relaxed">Klik foto untuk melihat pratinjau penuh atau Zoom Wajah. Sebutkan nomor foto (contoh: <strong class="text-lodge-900">Foto #01</strong>) kepada kasir dokumentasi kami.</p>
                 </div>
               </div>
               <div class="hidden sm:flex flex-col items-end shrink-0">
-                <span class="text-[10px] text-slate-400 font-medium">Bantuan Petugas?</span>
-                <button type="button" onclick="openOperatorPinModal()" class="text-[11px] text-lodge-700 hover:text-lodge-900 font-semibold underline">Mode Petugas</button>
+                <span class="text-xs text-slate-600 font-medium">Menu Staf:</span>
+                <button type="button" onclick="openOperatorPinModal()" class="text-xs text-lodge-800 hover:text-lodge-950 font-semibold underline focus-ring rounded">Mode Petugas</button>
               </div>
             </div>
 
@@ -689,15 +707,15 @@
             <div id="operator-samba-box" class="hidden space-y-2 pt-3 border-t border-slate-200">
               <div class="flex items-center justify-between">
                 <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
-                  <svg class="w-4 h-4 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-4 h-4 text-lodge-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                   </svg>
-                  <span>Lokasi Folder Foto Windows (Samba / Jaringan)</span>
+                  <span>Lokasi Folder Foto Jaringan (Samba / Windows)</span>
                 </label>
                 <button 
                   type="button" 
                   onclick="openExplorerGuideModal()" 
-                  class="text-[11px] text-lodge-600 hover:text-lodge-800 font-semibold hover:underline flex items-center space-x-1"
+                  class="text-xs text-lodge-700 hover:text-lodge-900 font-semibold hover:underline flex items-center space-x-1 focus-ring rounded"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -707,7 +725,7 @@
               </div>
 
               <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-800 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
+                <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-900 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
                   \\192.168.100.90\park-photos\results\Customer_XXXX
                 </div>
 
@@ -716,10 +734,10 @@
                     type="button" 
                     onclick="openFolderInExplorer()" 
                     id="btn-open-explorer"
-                    class="flex-1 sm:flex-none px-4 py-2.5 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold text-xs rounded-lg transition focus-ring shadow-sm flex items-center justify-center space-x-1.5"
+                    class="flex-1 sm:flex-none px-4 py-2.5 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold text-xs rounded-lg transition focus-ring shadow-2xs flex items-center justify-center space-x-1.5"
                     title="Buka folder foto customer langsung di Windows File Explorer"
                   >
-                    <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                     </svg>
                     <span>Buka di File Explorer</span>
@@ -729,10 +747,10 @@
                     type="button" 
                     onclick="copySambaPath()" 
                     id="btn-copy-samba"
-                    class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg transition border border-slate-300 focus-ring flex items-center justify-center space-x-1"
+                    class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-semibold text-xs rounded-lg transition border border-slate-300 focus-ring flex items-center justify-center space-x-1"
                     title="Salin jalur folder ke Clipboard"
                   >
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                     </svg>
                     <span id="copy-btn-text">Salin Path</span>
@@ -740,14 +758,14 @@
                 </div>
               </div>
 
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-slate-500 gap-1 pt-1">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-1 pt-1">
                 <p>
-                  ⚡ Tips: Tekan <strong>Win + R</strong> lalu <strong>Ctrl + V</strong> dan <strong>Enter</strong> untuk langsung membuka folder di Windows.
+                  Petunjuk: Tekan <strong>Win + R</strong> lalu <strong>Ctrl + V</strong> dan <strong>Enter</strong> untuk langsung membuka folder di Windows.
                 </p>
                 <a 
                   id="btn-download-zip" 
                   href="#" 
-                  class="inline-flex items-center space-x-1.5 text-lodge-700 hover:text-lodge-900 font-semibold hover:underline"
+                  class="inline-flex items-center space-x-1.5 text-lodge-800 hover:text-lodge-950 font-semibold hover:underline focus-ring rounded"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -791,21 +809,27 @@
             type="button" 
             id="btn-lightbox-full" 
             onclick="switchLightboxMode('full')" 
-            class="px-3 py-1 bg-lodge-600 text-white rounded text-xs font-semibold shadow flex items-center space-x-1 transition"
+            class="px-3 py-1 bg-lodge-700 text-white rounded text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition"
           >
-            <span>🖼️ Foto Wahana</span>
+            <svg class="w-3.5 h-3.5 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>Foto Wahana</span>
           </button>
           <button 
             type="button" 
             id="btn-lightbox-crop" 
             onclick="switchLightboxMode('crop')" 
-            class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1 transition"
+            class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1.5 transition"
           >
-            <span>🔍 Zoom Wajah Tamu</span>
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+            </svg>
+            <span>Zoom Wajah Tamu</span>
           </button>
         </div>
 
-        <button onclick="closeLightbox()" class="text-slate-400 hover:text-white text-lg font-bold px-2 py-1">&times;</button>
+        <button onclick="closeLightbox()" aria-label="Tutup pratinjau foto" class="text-slate-400 hover:text-white text-lg font-bold px-2 py-1 focus-ring rounded">&times;</button>
       </div>
 
       <!-- Preview Image Canvas -->
@@ -817,8 +841,8 @@
       <div class="p-3 bg-slate-900 text-xs text-slate-300 flex justify-between items-center">
         <span id="modal-info">Akurasi Kemiripan: 85%</span>
         <div class="flex items-center space-x-3">
-          <span id="modal-guest-watermark-note" class="text-[11px] text-slate-400">Pratinjau Layar Wisatawan The Lodge Maribaya</span>
-          <a id="modal-download-link" href="#" target="_blank" class="operator-only-action hidden text-emerald-300 hover:text-white underline font-semibold">Buka Resolusi Asli (Petugas)</a>
+          <span id="modal-guest-watermark-note" class="text-xs text-slate-400">Dokumentasi Wisatawan The Lodge Maribaya</span>
+          <a id="modal-download-link" href="#" target="_blank" class="operator-only-action hidden text-emerald-300 hover:text-white underline font-semibold focus-ring rounded">Buka Resolusi Asli (Petugas)</a>
         </div>
       </div>
 
@@ -826,13 +850,13 @@
   </div>
 
   <!-- Modal Panduan Izin Akses Kamera (Chrome / Edge HTTP) -->
-  <div id="modal-camera-guide" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div id="modal-camera-guide" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs hidden items-center justify-center p-4">
     <div class="relative max-w-xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       
       <!-- Header -->
-      <div class="bg-gradient-to-r from-lodge-900 via-lodge-800 to-lodge-700 p-5 text-white flex justify-between items-start">
+      <div class="bg-lodge-900 p-5 text-white flex justify-between items-start border-b border-lodge-800">
         <div class="space-y-1">
-          <div class="inline-flex items-center space-x-1.5 bg-white/10 px-2.5 py-0.5 rounded text-[11px] font-semibold text-emerald-200">
+          <div class="inline-flex items-center space-x-1.5 bg-white/10 px-2.5 py-0.5 rounded text-xs font-semibold text-emerald-200">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -840,22 +864,22 @@
           </div>
           <h3 class="text-base font-bold">Cara Mengaktifkan Kamera di Google Chrome / Edge</h3>
         </div>
-        <button onclick="closeCameraGuideModal()" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+        <button onclick="closeCameraGuideModal()" aria-label="Tutup panduan kamera" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1 focus-ring rounded">&times;</button>
       </div>
 
       <!-- Body / Steps -->
       <div class="p-6 space-y-4 text-xs text-slate-700 leading-relaxed">
         <div class="bg-amber-50 border border-amber-200 p-3.5 rounded-xl text-xs space-y-1">
-          <p class="font-bold text-amber-900">Mengapa popup error ini muncul?</p>
+          <p class="font-bold text-amber-900">Catatan Izin Perangkat Webcam</p>
           <p class="text-amber-800">
-            Browser modern (Chrome/Edge) membatasi akses webcam pada alamat IP jaringan lokal non-HTTPS. Agar kamera laptop dan webcam USB Plug & Play dapat digunakan, cukup berikan izin 1 kali pada komputer operator ini:
+            Browser modern (Chrome/Edge) membatasi akses webcam pada alamat IP jaringan lokal non-HTTPS. Agar kamera laptop dan webcam USB Plug & Play dapat digunakan, berikan izin satu kali pada komputer operator ini:
           </p>
         </div>
 
         <div class="space-y-3">
           <!-- Step 1 -->
           <div class="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-            <span class="w-6 h-6 rounded-full bg-lodge-600 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow">1</span>
+            <span class="w-6 h-6 rounded-md bg-lodge-700 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow-2xs">1</span>
             <div class="flex-1 space-y-1.5">
               <p class="font-semibold text-slate-900">Buka pengaturan Flags di tab baru browser:</p>
               <div class="flex items-center space-x-2">
@@ -864,23 +888,23 @@
                   readonly 
                   id="flag-url-input" 
                   value="chrome://flags/#unsafely-treat-insecure-origin-as-secure" 
-                  class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-[11px] font-mono select-all text-slate-800"
+                  class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-mono select-all text-slate-900"
                 />
                 <button 
                   type="button" 
                   onclick="copyTextFromElement('flag-url-input', this)" 
-                  class="shrink-0 px-3 py-1.5 bg-lodge-600 hover:bg-lodge-700 text-white font-semibold rounded-lg text-xs transition"
+                  class="shrink-0 px-3 py-1.5 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-lg text-xs transition focus-ring"
                 >
                   Salin
                 </button>
               </div>
-              <p class="text-[11px] text-slate-500">*(Jika memakai Microsoft Edge, buka: <code class="font-mono bg-slate-200/70 px-1 py-0.5 rounded">edge://flags/#unsafely-treat-insecure-origin-as-secure</code>)</p>
+              <p class="text-xs text-slate-600">*(Jika memakai Microsoft Edge, buka: <code class="font-mono bg-slate-200/80 px-1 py-0.5 rounded text-slate-800">edge://flags/#unsafely-treat-insecure-origin-as-secure</code>)</p>
             </div>
           </div>
 
           <!-- Step 2 -->
           <div class="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-            <span class="w-6 h-6 rounded-full bg-lodge-600 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow">2</span>
+            <span class="w-6 h-6 rounded-md bg-lodge-700 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow-2xs">2</span>
             <div class="flex-1 space-y-1.5">
               <p class="font-semibold text-slate-900">Aktifkan opsi & masukkan alamat IP server ini:</p>
               <p class="text-slate-600">Ubah dropdown dari <strong>Disabled</strong> menjadi <strong>Enabled</strong>, lalu isi kotak teks dengan:</p>
@@ -890,12 +914,12 @@
                   readonly 
                   id="server-url-input" 
                   value="http://192.168.100.90:8000" 
-                  class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-[11px] font-mono select-all font-bold text-lodge-800"
+                  class="flex-1 bg-white border border-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-mono select-all font-bold text-lodge-900"
                 />
                 <button 
                   type="button" 
                   onclick="copyTextFromElement('server-url-input', this)" 
-                  class="shrink-0 px-3 py-1.5 bg-lodge-600 hover:bg-lodge-700 text-white font-semibold rounded-lg text-xs transition"
+                  class="shrink-0 px-3 py-1.5 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-lg text-xs transition focus-ring"
                 >
                   Salin
                 </button>
@@ -905,10 +929,10 @@
 
           <!-- Step 3 -->
           <div class="flex items-start space-x-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-            <span class="w-6 h-6 rounded-full bg-lodge-600 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow">3</span>
+            <span class="w-6 h-6 rounded-md bg-lodge-700 text-white font-bold flex items-center justify-center shrink-0 text-xs shadow-2xs">3</span>
             <div class="flex-1 space-y-1">
               <p class="font-semibold text-slate-900">Klik tombol "Relaunch" di pojok kanan bawah Chrome</p>
-              <p class="text-slate-600">Browser akan me-restart seketika. Buka kembali halaman ini, lalu klik tombol <strong>"Buka Kamera"</strong> dan pilih <strong>"Allow"</strong>.</p>
+              <p class="text-slate-600">Browser akan memuat ulang. Buka kembali halaman ini, klik tombol <strong>"Buka Kamera"</strong> dan pilih <strong>"Allow"</strong>.</p>
             </div>
           </div>
         </div>
@@ -916,8 +940,8 @@
 
       <!-- Footer -->
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-        <button type="button" onclick="closeCameraGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition">
-          Saya Mengerti / Tutup
+        <button type="button" onclick="closeCameraGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition focus-ring">
+          Tutup
         </button>
       </div>
 
@@ -925,13 +949,13 @@
   </div>
 
   <!-- Modal Panduan Buka File Explorer & Setup 1-Klik -->
-  <div id="modal-explorer-guide" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="relative max-w-xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-150">
+  <div id="modal-explorer-guide" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="relative max-w-xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       
       <!-- Header -->
-      <div class="bg-gradient-to-r from-lodge-900 via-lodge-800 to-lodge-700 p-5 text-white flex justify-between items-start">
+      <div class="bg-lodge-900 p-5 text-white flex justify-between items-start border-b border-lodge-800">
         <div class="space-y-1">
-          <div class="inline-flex items-center space-x-1.5 bg-white/10 px-2.5 py-0.5 rounded text-[11px] font-semibold text-emerald-200">
+          <div class="inline-flex items-center space-x-1.5 bg-white/10 px-2.5 py-0.5 rounded text-xs font-semibold text-emerald-200">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
@@ -939,7 +963,7 @@
           </div>
           <h3 class="text-base font-bold">Akses Folder Foto Tamu di Windows</h3>
         </div>
-        <button onclick="closeExplorerGuideModal()" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+        <button onclick="closeExplorerGuideModal()" aria-label="Tutup panduan explorer" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1 focus-ring rounded">&times;</button>
       </div>
 
       <!-- Body -->
@@ -947,21 +971,25 @@
         
         <!-- Clipboard Status Banner -->
         <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl flex items-start space-x-3">
-          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">✓</div>
+          <div class="w-6 h-6 rounded-md bg-emerald-700 text-white flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
           <div class="flex-1 space-y-1.5">
-            <p class="font-bold text-emerald-950 text-xs">Jalur Folder Otomatis Tersalin ke Clipboard!</p>
+            <p class="font-bold text-emerald-950 text-xs">Jalur Folder Otomatis Tersalin ke Clipboard</p>
             <div class="flex items-center space-x-2">
               <input 
                 type="text" 
                 id="modal-guide-path" 
                 readonly 
-                class="flex-1 bg-white border border-emerald-300 font-mono text-[11px] text-slate-800 px-2.5 py-1.5 rounded select-all"
+                class="flex-1 bg-white border border-emerald-300 font-mono text-xs text-slate-900 px-2.5 py-1.5 rounded-lg select-all"
                 value="\\192.168.100.90\park-photos\results\Customer_XXXX"
               />
               <button 
                 type="button" 
                 onclick="copyTextFromElement('modal-guide-path', this)" 
-                class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded text-xs transition shrink-0"
+                class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition shrink-0 focus-ring"
               >
                 Salin Ulang
               </button>
@@ -969,29 +997,29 @@
           </div>
         </div>
 
-        <!-- Cara 1: Shortcut Cepat (1 Detik, Tanpa Install Apapun) -->
+        <!-- Cara 1: Shortcut Cepat (Keyboard Windows) -->
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
           <div class="flex items-center space-x-2">
-            <span class="px-2 py-0.5 bg-lodge-100 text-lodge-800 font-bold rounded text-[11px] border border-lodge-200">CARA CEPAT (1 DETIK)</span>
-            <span class="font-bold text-slate-800 text-xs">Buka Langsung dengan Keyboard Windows</span>
+            <span class="px-2 py-0.5 bg-lodge-100 text-lodge-800 font-bold rounded text-xs border border-lodge-200">Metode Cepat</span>
+            <span class="font-bold text-slate-900 text-xs">Buka Langsung dengan Keyboard Windows</span>
           </div>
-          <p class="text-slate-600 text-[11px]">Karena jalur folder sudah tersalin di clipboard komputer Anda, cukup tekan 3 tombol ini:</p>
+          <p class="text-slate-600 text-xs">Karena jalur folder sudah tersalin di clipboard komputer Anda, cukup tekan 3 langkah ini:</p>
           
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-center font-mono">
             <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
-              <div class="text-[10px] text-slate-400 uppercase font-sans font-bold">Langkah 1</div>
-              <div class="font-bold text-slate-800 text-sm mt-0.5">⊞ Win + R</div>
-              <div class="text-[10px] text-slate-500 font-sans mt-0.5">Buka kotak dialog Run</div>
+              <div class="text-xs text-slate-500 uppercase font-sans font-bold">Langkah 1</div>
+              <div class="font-bold text-slate-900 text-sm mt-0.5">Win + R</div>
+              <div class="text-xs text-slate-600 font-sans mt-0.5">Buka dialog Run</div>
             </div>
             <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
-              <div class="text-[10px] text-slate-400 uppercase font-sans font-bold">Langkah 2</div>
-              <div class="font-bold text-slate-800 text-sm mt-0.5">Ctrl + V</div>
-              <div class="text-[10px] text-slate-500 font-sans mt-0.5">Paste jalur folder</div>
+              <div class="text-xs text-slate-500 uppercase font-sans font-bold">Langkah 2</div>
+              <div class="font-bold text-slate-900 text-sm mt-0.5">Ctrl + V</div>
+              <div class="text-xs text-slate-600 font-sans mt-0.5">Tempel jalur folder</div>
             </div>
             <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
-              <div class="text-[10px] text-slate-400 uppercase font-sans font-bold">Langkah 3</div>
-              <div class="font-bold text-slate-800 text-sm mt-0.5">Enter ↵</div>
-              <div class="text-[10px] text-slate-500 font-sans mt-0.5">Folder langsung terbuka!</div>
+              <div class="text-xs text-slate-500 uppercase font-sans font-bold">Langkah 3</div>
+              <div class="font-bold text-slate-900 text-sm mt-0.5">Enter</div>
+              <div class="text-xs text-slate-600 font-sans mt-0.5">Folder terbuka</div>
             </div>
           </div>
         </div>
@@ -999,23 +1027,23 @@
         <!-- Cara 2: Aktifkan 1-Klik Otomatis (Opsional) -->
         <div class="bg-lodge-50/60 border border-lodge-200 rounded-xl p-4 space-y-2.5">
           <div class="flex items-center space-x-2">
-            <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[11px] border border-emerald-200">OPSI 1-KLIK OTOMATIS</span>
-            <span class="font-bold text-slate-800 text-xs">Aktifkan Buka Langsung Tanpa Tombol Run</span>
+            <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-xs border border-emerald-200">Protokol 1-Klik</span>
+            <span class="font-bold text-slate-900 text-xs">Aktifkan Buka Otomatis Tanpa Dialog Run</span>
           </div>
-          <p class="text-slate-600 text-[11px]">
-            Ingin agar tombol <strong>"Buka di File Explorer"</strong> langsung membuka folder secara otomatis dalam 1 klik? Pasang konfigurasi registri aman berikut sekali saja pada PC operator:
+          <p class="text-slate-600 text-xs">
+            Ingin agar tombol <strong>"Buka di File Explorer"</strong> langsung membuka folder secara otomatis dalam 1 klik? Pasang konfigurasi registri aman berikut satu kali pada PC operator:
           </p>
           <div class="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <a 
               href="/api/setup-explorer-protocol" 
-              class="inline-flex items-center justify-center space-x-2 px-4 py-2 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-lg text-xs transition shadow-sm"
+              class="inline-flex items-center justify-center space-x-2 px-4 py-2 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-lg text-xs transition shadow-2xs focus-ring"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               <span>Unduh Aktifkan_Buka_File_Explorer.reg</span>
             </a>
-            <span class="text-[10px] text-slate-500 italic">Double-click file yang diunduh lalu pilih Yes. (Tidak perlu izin Administrator)</span>
+            <span class="text-xs text-slate-600 italic">Double-click berkas yang diunduh lalu pilih Yes. (Tidak memerlukan izin Administrator)</span>
           </div>
         </div>
 
@@ -1023,7 +1051,7 @@
 
       <!-- Footer -->
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-        <button type="button" onclick="closeExplorerGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition">
+        <button type="button" onclick="closeExplorerGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition focus-ring">
           Tutup
         </button>
       </div>
@@ -1032,27 +1060,29 @@
   </div>
 
   <!-- Modal PIN Akses Petugas / Operator Authentication -->
-  <div id="modal-operator-pin" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="relative max-w-sm w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-150">
+  <div id="modal-operator-pin" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="relative max-w-sm w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       
       <!-- Header -->
-      <div class="bg-gradient-to-r from-lodge-900 to-lodge-800 p-5 text-white flex justify-between items-start">
+      <div class="bg-lodge-900 p-5 text-white flex justify-between items-start border-b border-lodge-800">
         <div class="flex items-center space-x-2.5">
-          <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-lg">
-            🔒
+          <div class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-emerald-200">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
           </div>
           <div>
             <h3 class="text-sm font-bold leading-tight">Autentikasi Petugas</h3>
-            <p class="text-[11px] text-lodge-200 mt-0.5">Akses Khusus Staf & Operasional</p>
+            <p class="text-xs text-lodge-200 mt-0.5">Akses Khusus Staf & Operasional</p>
           </div>
         </div>
-        <button type="button" onclick="closeOperatorPinModal()" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+        <button type="button" onclick="closeOperatorPinModal()" aria-label="Tutup autentikasi petugas" class="text-lodge-200 hover:text-white text-2xl font-bold leading-none p-1 focus-ring rounded">&times;</button>
       </div>
 
       <!-- Body / Form -->
       <form id="form-operator-pin" onsubmit="submitOperatorPin(event)" class="p-5 space-y-4">
         <div class="space-y-1.5">
-          <label for="operator-pin-input" class="block text-xs font-semibold text-slate-700">
+          <label for="operator-pin-input" class="block text-xs font-semibold text-slate-800">
             Masukkan PIN Keamanan Petugas
           </label>
           <div class="relative">
@@ -1067,11 +1097,11 @@
               required
             />
           </div>
-          <p class="text-[11px] text-slate-500 text-center">PIN default counter: <code class="bg-slate-100 font-mono px-1.5 py-0.5 rounded text-slate-700">1234</code></p>
+          <p class="text-xs text-slate-600 text-center">PIN standar counter: <code class="bg-slate-100 font-mono px-1.5 py-0.5 rounded text-slate-800">1234</code></p>
         </div>
 
         <div id="pin-error-alert" class="hidden bg-rose-50 border border-rose-200 rounded-lg p-2.5 text-xs text-rose-800 text-center font-medium">
-          PIN salah. Silakan coba lagi atau periksa dengan staf IT.
+          PIN salah. Silakan coba lagi atau hubungi administrator.
         </div>
 
         <div class="pt-2 flex items-center space-x-2">
@@ -1151,19 +1181,15 @@
       if (mode === 'camera') {
         document.getElementById('drop-zone').classList.add('hidden');
         document.getElementById('camera-panel').classList.remove('hidden');
-        document.getElementById('btn-mode-camera').classList.add('bg-lodge-100', 'text-lodge-800', 'border-lodge-300');
-        document.getElementById('btn-mode-camera').classList.remove('bg-slate-100', 'text-slate-600');
-        document.getElementById('btn-mode-upload').classList.remove('bg-lodge-100', 'text-lodge-800', 'border-lodge-300');
-        document.getElementById('btn-mode-upload').classList.add('bg-slate-100', 'text-slate-600');
+        document.getElementById('btn-mode-camera').className = "px-2.5 py-1 text-xs font-semibold rounded-lg bg-lodge-700 text-white border border-lodge-700 shadow-2xs transition flex items-center space-x-1 focus-ring";
+        document.getElementById('btn-mode-upload').className = "px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200 border border-slate-300 transition focus-ring";
         await startCamera(currentSelectedDeviceId);
       } else {
         closeCamera();
         document.getElementById('drop-zone').classList.remove('hidden');
         document.getElementById('camera-panel').classList.add('hidden');
-        document.getElementById('btn-mode-upload').classList.add('bg-lodge-100', 'text-lodge-800', 'border-lodge-300');
-        document.getElementById('btn-mode-upload').classList.remove('bg-slate-100', 'text-slate-600');
-        document.getElementById('btn-mode-camera').classList.remove('bg-lodge-100', 'text-lodge-800', 'border-lodge-300');
-        document.getElementById('btn-mode-camera').classList.add('bg-slate-100', 'text-slate-600');
+        document.getElementById('btn-mode-upload').className = "px-2.5 py-1 text-xs font-semibold rounded-lg bg-lodge-700 text-white border border-lodge-700 shadow-2xs transition focus-ring";
+        document.getElementById('btn-mode-camera').className = "px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:text-slate-900 hover:bg-slate-200 border border-slate-300 transition flex items-center space-x-1 focus-ring";
       }
     }
 
@@ -1255,14 +1281,12 @@
             label = `Kamera ${idx + 1}`;
           }
 
-          // Berikan icon & petunjuk apakah ini USB Camera atau Kamera Laptop
+          // Berikan petunjuk apakah ini USB Camera atau Kamera Laptop tanpa emoji
           const lower = label.toLowerCase();
           if (lower.includes('usb') || lower.includes('uvc') || lower.includes('plug')) {
-            label = `🔌 ${label} (USB Plug & Play)`;
+            label = `${label} (USB Plug & Play)`;
           } else if (lower.includes('integrated') || lower.includes('internal') || lower.includes('facetime') || lower.includes('front') || lower.includes('hd web')) {
-            label = `💻 ${label} (Kamera Bawaan Laptop)`;
-          } else {
-            label = `📷 ${label}`;
+            label = `${label} (Kamera Bawaan Laptop)`;
           }
 
           opt.textContent = label;
@@ -1300,11 +1324,11 @@
       
       if (isCameraMirrored) {
         video.classList.add('-scale-x-100');
-        btn.classList.add('bg-lodge-600', 'text-white');
+        btn.classList.add('bg-lodge-700', 'text-white');
         btn.classList.remove('bg-slate-800', 'text-slate-300');
       } else {
         video.classList.remove('-scale-x-100');
-        btn.classList.remove('bg-lodge-600', 'text-white');
+        btn.classList.remove('bg-lodge-700', 'text-white');
         btn.classList.add('bg-slate-800', 'text-slate-300');
       }
     }
@@ -1350,17 +1374,17 @@
         }, 'image/jpeg', 0.92);
       };
 
-      showCameraToast("📸 Pose 1 (Lurus Depan) diambil!");
+      showCameraToast("Pose 1 (pandangan depan) berhasil diambil.");
       
       captureFrame('front', (preview1) => {
         setTimeout(() => {
-          showCameraToast("📸 Pose 2 (Senyum/Miring)...");
+          showCameraToast("Pose 2 (senyum atau sudut miring)...");
           
           setTimeout(() => {
             captureFrame('tilt', (preview2) => {
-              showCameraToast("Selesai! 2 pose tersimpan.");
+              showCameraToast("Selesai. Dua pose tersimpan.");
               document.getElementById('image-preview').src = preview1;
-              document.getElementById('selected-file-name').textContent = `Foto Kamera (2 Pose tersimpan)`;
+              document.getElementById('selected-file-name').textContent = `Foto Kamera (2 pose tersimpan)`;
               document.getElementById('upload-placeholder').classList.add('hidden');
               document.getElementById('image-preview-container').classList.remove('hidden');
               
@@ -1529,8 +1553,8 @@
       if (data.matches.length === 0) {
         grid.innerHTML = `
           <div class="col-span-full bg-amber-50 border border-amber-200 rounded-xl p-8 text-center text-amber-900">
-            <p class="font-semibold text-sm">Tidak ada foto yang cocok pada akurasi ${(data.threshold * 100).toFixed(0)}%</p>
-            <p class="text-xs text-amber-700 mt-1">Coba turunkan slider akurasi ke 75% jika foto wahana redup atau posisi wajah tamu agak miring.</p>
+            <p class="font-semibold text-sm">Tidak ada foto yang cocok pada tingkat akurasi ${(data.threshold * 100).toFixed(0)}%</p>
+            <p class="text-xs text-amber-800 mt-1">Coba sesuaikan slider akurasi jika foto wahana redup atau posisi wajah tamu agak miring.</p>
           </div>
         `;
       } else {
@@ -1539,25 +1563,25 @@
           const photoNum = index + 1;
           const photoTag = 'Foto #' + (photoNum < 10 ? '0' + photoNum : photoNum);
           const card = document.createElement('div');
-          card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow transition flex flex-col group";
+          card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow transition flex flex-col group";
 
           card.innerHTML = `
             <div class="relative bg-slate-900 aspect-video overflow-hidden cursor-pointer group/img" onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}', '${photoTag}')">
               <img src="${item.preview_url}" alt="${photoTag}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
               
               <!-- Match score badge -->
-              <div class="absolute top-2 right-2 bg-emerald-600 text-white font-bold text-xs px-2.5 py-0.5 rounded shadow flex items-center space-x-1">
-                <span>✓ ${matchPercent}% Cocok</span>
+              <div class="absolute top-2 right-2 bg-emerald-800 text-white font-semibold text-xs px-2.5 py-0.5 rounded shadow-xs flex items-center space-x-1">
+                <span>${matchPercent}% Cocok</span>
               </div>
 
               <!-- Zoom Face Mini-Avatar Inset (Auto-Crop Close-Up) -->
               ${item.crop_url ? `
                 <div 
-                  class="absolute top-2 left-2 flex items-center space-x-1.5 bg-slate-900/90 hover:bg-black backdrop-blur-xs p-1 rounded-lg border border-emerald-500/60 shadow-lg cursor-pointer transition hover:scale-105"
+                  class="absolute top-2 left-2 flex items-center space-x-1.5 bg-slate-900/90 hover:bg-black p-1 rounded-lg border border-slate-700 shadow-md cursor-pointer transition hover:scale-105"
                   onclick="event.stopPropagation(); openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}', '${photoTag}')"
-                  title="Klik untuk melihat Zoom Close-up wajah tamu dari dekat"
+                  title="Klik untuk melihat Zoom close-up wajah tamu"
                 >
-                  <img src="${item.crop_url}" alt="Zoom Tamu" class="w-9 h-9 rounded object-cover border border-emerald-400" />
+                  <img src="${item.crop_url}" alt="Zoom Wajah Tamu" class="w-9 h-9 rounded object-cover border border-slate-600" />
                   <div class="pr-1.5 hidden sm:block">
                     <span class="block text-[9px] font-bold text-emerald-300 uppercase leading-tight">Zoom Wajah</span>
                     <span class="block text-[8px] text-slate-300">Close-Up</span>
@@ -1566,25 +1590,28 @@
               ` : ''}
 
               <!-- Guest-friendly Photo Tag & Operator Filename -->
-              <div class="absolute bottom-2 left-2 bg-slate-950/85 backdrop-blur-xs text-white text-[11px] px-2.5 py-1 rounded-lg font-semibold flex items-center space-x-2 shadow-sm">
-                <span class="text-emerald-400 font-bold">${photoTag}</span>
+              <div class="absolute bottom-2 left-2 bg-slate-950/90 text-white text-[11px] px-2.5 py-1 rounded-md font-semibold flex items-center space-x-2 shadow-xs">
+                <span class="text-emerald-300 font-bold">${photoTag}</span>
                 <span class="operator-only-inline text-slate-400 font-mono text-[10px] hidden">${item.file_name}</span>
               </div>
             </div>
 
             <div class="p-3 flex justify-between items-center text-xs bg-slate-50 border-t border-slate-100 gap-1.5">
-              <span class="text-slate-600 font-medium truncate max-w-[42%]" title="${item.num_faces > 1 ? item.num_faces + ' orang (Kotak Hijau = Tamu)' : '1 orang'}">
-                ${item.num_faces > 1 ? `👥 ${item.num_faces} orang` : '👤 1 orang'}
+              <span class="text-slate-700 font-medium truncate max-w-[44%] flex items-center space-x-1.5" title="${item.num_faces > 1 ? item.num_faces + ' orang terdeteksi' : '1 orang terdeteksi'}">
+                <svg class="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>${item.num_faces > 1 ? `${item.num_faces} orang` : '1 orang'}</span>
               </span>
               <div class="flex items-center space-x-1.5 shrink-0">
                 ${item.crop_url ? `
                   <button 
                     type="button" 
                     onclick="openLightbox('${item.crop_url}', '${item.file_name}', '${matchPercent}%', true, '${item.preview_url}', '${photoTag}')"
-                    class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded font-semibold text-[11px] flex items-center space-x-1 transition shadow-2xs"
+                    class="px-2.5 py-1 bg-lodge-50 hover:bg-lodge-100 text-lodge-800 border border-lodge-200 rounded font-semibold text-xs flex items-center space-x-1 transition focus-ring"
                     title="Zoom close-up wajah tamu yang terdeteksi"
                   >
-                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-3.5 h-3.5 text-lodge-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                     </svg>
                     <span>Zoom</span>
@@ -1593,10 +1620,10 @@
                 <button 
                   type="button" 
                   onclick="openPhotoInExplorer('${item.file_name}', '${item.samba_file_path || ''}')"
-                  class="operator-only-action hidden px-2 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-200 hover:border-lodge-300 rounded font-semibold text-[11px] items-center space-x-1 transition shadow-2xs"
+                  class="operator-only-action hidden px-2 py-1 bg-white hover:bg-lodge-50 text-lodge-800 hover:text-lodge-900 border border-slate-300 rounded font-semibold text-xs items-center space-x-1 transition focus-ring"
                   title="Buka file foto ini di File Explorer (Petugas)"
                 >
-                  <svg class="w-3.5 h-3.5 text-lodge-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-3.5 h-3.5 text-lodge-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                   </svg>
                   <span>Buka File</span>
@@ -1604,7 +1631,7 @@
                 <button 
                   type="button" 
                   onclick="openLightbox('${item.preview_url}', '${item.file_name}', '${matchPercent}%', false, '${item.crop_url || ''}', '${photoTag}')"
-                  class="px-2 py-1 text-lodge-600 hover:text-lodge-800 font-semibold text-[11px] hover:underline"
+                  class="px-2 py-1 text-lodge-700 hover:text-lodge-900 font-semibold text-xs hover:underline focus-ring rounded"
                 >
                   Perbesar
                 </button>
@@ -1802,11 +1829,11 @@
       const btnCrop = document.getElementById('btn-lightbox-crop');
       if (btnFull && btnCrop) {
         if (isLightboxInCropMode) {
-          btnCrop.className = "px-3 py-1 bg-emerald-600 text-white rounded text-xs font-semibold shadow flex items-center space-x-1 transition";
-          btnFull.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1 transition";
+          btnCrop.className = "px-3 py-1 bg-lodge-700 text-white rounded text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition";
+          btnFull.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1.5 transition";
         } else {
-          btnFull.className = "px-3 py-1 bg-lodge-600 text-white rounded text-xs font-semibold shadow flex items-center space-x-1 transition";
-          btnCrop.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1 transition";
+          btnFull.className = "px-3 py-1 bg-lodge-700 text-white rounded text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition";
+          btnCrop.className = "px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center space-x-1.5 transition";
         }
         btnCrop.style.display = currentLightboxCropUrl ? 'inline-flex' : 'none';
       }
@@ -2076,9 +2103,9 @@
           headerControls.classList.add('flex', 'opacity-100');
         }
         if (toggleBtn) {
-          toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-400 bg-amber-500 hover:bg-amber-600 text-amber-950 text-xs font-bold transition focus-ring min-h-[36px] shadow-sm";
+          toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-semibold transition focus-ring min-h-[36px] shadow-xs";
         }
-        if (toggleIcon) toggleIcon.textContent = "🔓";
+        if (toggleIcon) toggleIcon.textContent = "";
         if (toggleText) toggleText.textContent = "Keluar Petugas";
 
         document.querySelectorAll('.operator-only-action').forEach(el => el.classList.remove('hidden'));
@@ -2095,7 +2122,7 @@
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs";
         }
-        if (toggleIcon) toggleIcon.textContent = "🔒";
+        if (toggleIcon) toggleIcon.textContent = "";
         if (toggleText) toggleText.textContent = "Mode Petugas";
 
         document.querySelectorAll('.operator-only-action').forEach(el => el.classList.add('hidden'));
@@ -2147,10 +2174,10 @@
         if (!select || !data.subfolders) return;
 
         const currentVal = select.value;
-        let html = '<option value="all">🌟 Semua Wahana (Pencarian Menyeluruh)</option>';
+        let html = '<option value="all">Semua Wahana</option>';
         data.subfolders.forEach(sub => {
           const depthPrefix = (sub.depth && sub.depth > 0) ? '&nbsp;&nbsp;↳ ' : '';
-          html += `<option value="${sub.name}">${depthPrefix}🎡 Wahana: ${sub.name} (${sub.photo_count} foto)</option>`;
+          html += `<option value="${sub.name}">${depthPrefix}${sub.name} (${sub.photo_count} foto)</option>`;
         });
         select.innerHTML = html;
         if (currentVal && select.querySelector(`option[value="${currentVal}"]`)) {
