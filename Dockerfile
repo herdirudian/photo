@@ -29,10 +29,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install offline model weights for face_recognition
-RUN pip install --no-cache-dir git+https://github.com/ageitgey/face_recognition_models
+RUN pip install --no-cache-dir git+https://github.com/ageitgey/face_recognition_models || true
 
-# Create application directories for storage, database, and symlink results
-RUN mkdir -p /app/data/raw /app/data/results /app/data/db /app/templates /app/static
+# Create application directories for storage, database, symlink results, and offline AI models
+RUN mkdir -p /app/data/raw /app/data/results /app/data/db /app/data/models/insightface /app/templates /app/static /app/img
+
+# Set InsightFace offline model root path
+ENV INSIGHTFACE_ROOT=/app/data/models/insightface
 
 # Copy application source code
 COPY . /app

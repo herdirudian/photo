@@ -30,13 +30,102 @@ except ImportError:
     FACE_REC_AVAILABLE = False
     logger.warning("face_recognition library not installed. Face extraction will be disabled.")
 
+try:
+    import insightface
+    from insightface.app import FaceAnalysis
+    INSIGHTFACE_AVAILABLE = True
+except ImportError:
+    INSIGHTFACE_AVAILABLE = False
+    FaceAnalysis = None
+    logger.info("InsightFace library not yet installed. dlib will serve as fallback engine.")
+
+try:
+    import onnxruntime
+    ONNXRUNTIME_AVAILABLE = True
+except ImportError:
+    ONNXRUNTIME_AVAILABLE = False
+
 
 class FaceEngine:
-    """Wrapper for face detection and 128-d embedding extraction."""
+    """
+    Unified Biometric Face Recognition Engine.
 
-    def __init__(self, model: str = "hog"):
-        self.model = model  # "hog" (fast CPU) or "cnn" (GPU)
-        self.dimension = 128  # standard face_recognition dlib ResNet-34 vector size
+    Engines supported:
+    1. 'insightface' (ArcFace / RetinaFace via ONNX Runtime - 512-Dimensional Vector):
+       - Global biometric industry standard.
+       - Outstanding resistance against sunglasses, masks, dappled tree shadows,
+         and extreme head poses up to 60 degrees.
+       - Model packs: 'buffalo_l' (ResNet-50 ArcFace) or 'buffalo_sc' (MobileFaceNet ArcFace).
+    2. 'dlib' (dlib ResNet-34 - 128-Dimensional Vector):
+       - Ultra-low CPU fallback for legacy servers.
+    """
+
+    def __init__(
+        self,
+        engine: str = "insightface",
+        model: str = "buffalo_l",
+        model_root: Optional[str] = None,
+        det_thresh: float = 0.50,
+        det_size: Tuple[int, int] = (640, 640)
+    ):
+        self.requested_engine = (engine or "insightface").lower()
+        self.model_name = model or "buffalo_l"
+        self.det_thresh = det_thresh
+        self.det_size = det_size
+
+        # Model root path for offline cache
+        if not model_root:
+            base_dir = os.getenv("DB_DIR", "./data/db")
+            data_parent = os.path.dirname(os.path.abspath(base_dir))
+            self.model_root = os.getenv("INSIGHTFACE_ROOT", os.path.join(data_parent, "models", "insightface"))
+        else:
+            self.model_root = model_root
+
+        os.makedirs(self.model_root, exist_ok=True)
+
+        self.engine_name = "insightface"
+        self.dimension = 512
+        self.insight_app = None
+        self.model = "hog"
+
+        if self.requested_engine == "insightface":
+            if INSIGHTFACE_AVAILABLE and FaceAnalysis is not None:
+                try:
+                    logger.info(f"Initializing InsightFace ArcFace Engine (model: {self.model_name}, root: {self.model_root})...")
+                    providers = ['CPUExecutionProvider']
+                    if ONNXRUNTIME_AVAILABLE:
+                        try:
+                            available_p = onnxruntime.get_available_providers()
+                            if 'CUDAExecutionProvider' in available_p:
+                                providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                        except Exception:
+                            pass
+
+                    self.insight_app = FaceAnalysis(
+                        name=self.model_name,
+                        root=self.model_root,
+                        providers=providers
+                    )
+                    ctx_id = 0 if ('CUDAExecutionProvider' in providers) else -1
+                    self.insight_app.prepare(ctx_id=ctx_id, det_size=self.det_size)
+                    self.engine_name = "insightface"
+                    self.dimension = 512
+                    logger.info(f"InsightFace ArcFace 512-D initialized successfully with {providers[0]}")
+                except Exception as e:
+                    logger.warning(f"Could not load InsightFace ({e}). Falling back to dlib ResNet-34 128-D.")
+                    self._init_dlib_fallback(model)
+            else:
+                logger.warning("InsightFace/ONNXRuntime not installed. Falling back to dlib ResNet-34 128-D.")
+                self._init_dlib_fallback(model)
+        else:
+            self._init_dlib_fallback(model)
+
+    def _init_dlib_fallback(self, model: str):
+        self.engine_name = "dlib"
+        self.dimension = 128
+        self.model = model if model in ["hog", "cnn"] else "hog"
+        self.insight_app = None
+        logger.info(f"Active Face Engine: dlib ResNet-34 (128-D, detector: {self.model})")
 
     @staticmethod
     def _compute_iou(boxA: Tuple[int, int, int, int], boxB: Tuple[int, int, int, int]) -> float:
@@ -326,13 +415,136 @@ class FaceEngine:
 
     def extract_faces_from_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
-        Extract bounding boxes and 128-d facial embeddings from an image file on disk
-        using intelligent multi-scale tiled detection with anatomical landmark validation.
-        Eliminates poles, trees, pine bark, and park equipment from face index.
-        Returns list of {'bbox': (top, right, bottom, left), 'encoding': np.ndarray}
+        Extract bounding boxes and facial embeddings from an image file on disk.
+        Routes to InsightFace (512-D ArcFace) or dlib (128-D ResNet) based on active engine.
+        """
+        if self.engine_name == "insightface" and self.insight_app is not None:
+            return self._extract_insightface_file(file_path)
+        return self._extract_dlib_file(file_path)
+
+    def _extract_insightface_file(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        High-Performance 512-Dimensional ArcFace embedding extraction using ONNX Runtime.
+        Highly resilient against sunglasses, hats, masks, dappled tree shadows,
+        and extreme face pose angles up to 60 degrees.
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Image not found at {file_path}")
+
+        try:
+            with open(file_path, "rb") as f:
+                img_bytes = f.read()
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        except Exception as e:
+            logger.error(f"Failed to read image file {file_path}: {e}")
+            return []
+
+        if image_bgr is None:
+            logger.error(f"Failed to decode image file {file_path}")
+            return []
+
+        h, w = image_bgr.shape[:2]
+        all_raw_faces = []
+
+        # 1. Main Global Detection Pass
+        try:
+            global_faces = self.insight_app.get(image_bgr)
+            all_raw_faces.extend(global_faces)
+        except Exception as e:
+            logger.error(f"InsightFace inference error on {file_path}: {e}")
+            return []
+
+        # 2. Targeted Ride Zone Crop for Balloon Basket / Distant Swing if high-resolution
+        # In Hot Air Balloon photos, 6 guests stand packed in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
+        if max(h, w) > 1800:
+            by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
+            basket_crop = image_bgr[by1:by2, bx1:bx2]
+            if basket_crop.size > 0:
+                try:
+                    basket_faces = self.insight_app.get(basket_crop)
+                    for bf in basket_faces:
+                        # Translate bbox to full frame coordinates
+                        bx1_c, by1_c, bx2_c, by2_c = bf.bbox
+                        bf.bbox = np.array([
+                            bx1_c + bx1,
+                            by1_c + by1,
+                            bx2_c + bx1,
+                            by2_c + by1
+                        ])
+                        all_raw_faces.append(bf)
+                except Exception:
+                    pass
+
+        # 3. Filter, validate, normalize, and extract upper-body color histograms
+        image_rgb = None
+        results = []
+        for face in all_raw_faces:
+            det_score = float(getattr(face, "det_score", 1.0))
+            if det_score < self.det_thresh:
+                continue
+
+            bbox = face.bbox
+            x1, y1, x2, y2 = int(round(bbox[0])), int(round(bbox[1])), int(round(bbox[2])), int(round(bbox[3]))
+            left = max(0, min(w - 1, x1))
+            top = max(0, min(h - 1, y1))
+            right = max(left + 1, min(w, x2))
+            bottom = max(top + 1, min(h, y2))
+
+            box_w = right - left
+            box_h = bottom - top
+
+            # Filter tiny noise (< 16px)
+            if box_w < 16 or box_h < 16:
+                continue
+
+            # Aspect ratio check: accommodates natural head tilts on swings/rides
+            ratio = float(box_h) / float(box_w)
+            if ratio < 0.50 or ratio > 1.80:
+                continue
+
+            # Deduplicate overlapping detections via IoU check
+            box_tuple = (top, right, bottom, left)
+            overlap = False
+            for sf in results:
+                if self._compute_iou(box_tuple, sf["bbox"]) > 0.40:
+                    overlap = True
+                    break
+            if overlap:
+                continue
+
+            # Extract 512-d normalized embedding
+            if hasattr(face, "normed_embedding") and face.normed_embedding is not None:
+                embedding = face.normed_embedding.astype(np.float32)
+            else:
+                raw_emb = face.embedding
+                norm = np.linalg.norm(raw_emb)
+                embedding = (raw_emb / norm if norm > 0 else raw_emb).astype(np.float32)
+
+            if embedding.shape[0] != 512:
+                continue
+
+            # Torso color histogram for clothing matching boost
+            if image_rgb is None:
+                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+            color_hist = self.compute_torso_color_hist(image_rgb, box_tuple)
+
+            results.append({
+                "bbox": box_tuple,
+                "encoding": embedding,
+                "color_hist": color_hist,
+                "det_score": det_score,
+                "pose": getattr(face, "pose", None)
+            })
+
+        return results
+
+    def _extract_dlib_file(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Extract bounding boxes and 128-d facial embeddings using dlib ResNet-34.
         """
         if not FACE_REC_AVAILABLE:
-            raise RuntimeError("face_recognition is not available in current environment")
+            raise RuntimeError("face_recognition / dlib is not available in current environment")
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Image not found at {file_path}")
@@ -343,13 +555,10 @@ class FaceEngine:
             logger.error(f"Failed to read image file {file_path}: {e}")
             return []
 
-        # Find all face candidate locations via multi-scale scan
         candidate_locations = self.detect_multiscale_locations(image)
-
         if not candidate_locations:
             return []
 
-        # Validate each face candidate through strict anatomical landmark checks
         valid_locations = []
         for loc in candidate_locations:
             if self.is_valid_human_face(image, loc):
@@ -360,40 +569,93 @@ class FaceEngine:
         if not valid_locations:
             return []
 
-        # Compute 128-d encodings using the high-accuracy 68-landmark model ONLY for verified human faces
         encodings = face_recognition.face_encodings(image, known_face_locations=valid_locations, num_jitters=1, model="large")
-
         results = []
         for loc, enc in zip(valid_locations, encodings):
-            # Normalize vector to unit length for cosine similarity via inner product
             norm = np.linalg.norm(enc)
-            if norm > 0:
-                normalized_enc = (enc / norm).astype(np.float32)
-            else:
-                normalized_enc = enc.astype(np.float32)
-
+            normalized_enc = (enc / norm).astype(np.float32) if norm > 0 else enc.astype(np.float32)
             color_hist = self.compute_torso_color_hist(image, loc)
-
             results.append({
                 "bbox": loc,
                 "encoding": normalized_enc,
                 "color_hist": color_hist
             })
-
         return results
 
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
-        """Extract face locations and encodings from in-memory bytes with autocontrast and landmark validation."""
+        """
+        Extract face locations and encodings from in-memory bytes for guest reference selfies.
+        """
+        if self.engine_name == "insightface" and self.insight_app is not None:
+            return self._extract_insightface_bytes(image_bytes)
+        return self._extract_dlib_bytes(image_bytes)
+
+    def _extract_insightface_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
+        """
+        Extract 512-d ArcFace embedding from in-memory selfie upload using InsightFace.
+        """
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            image_rgb = np.array(pil_img)
+            image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+        h, w = image_bgr.shape[:2]
+        raw_faces = self.insight_app.get(image_bgr)
+
+        # Fallback with relaxed det_thresh if tricky webcam lighting
+        if not raw_faces and self.det_thresh > 0.35:
+            # Re-check detections
+            raw_faces = [f for f in self.insight_app.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
+
+        image_rgb = None
+        results = []
+        for face in raw_faces:
+            det_score = float(getattr(face, "det_score", 1.0))
+            bbox = face.bbox
+            x1, y1, x2, y2 = int(round(bbox[0])), int(round(bbox[1])), int(round(bbox[2])), int(round(bbox[3]))
+            left = max(0, min(w - 1, x1))
+            top = max(0, min(h - 1, y1))
+            right = max(left + 1, min(w, x2))
+            bottom = max(top + 1, min(h, y2))
+
+            box_tuple = (top, right, bottom, left)
+
+            if hasattr(face, "normed_embedding") and face.normed_embedding is not None:
+                embedding = face.normed_embedding.astype(np.float32)
+            else:
+                raw_emb = face.embedding
+                norm = np.linalg.norm(raw_emb)
+                embedding = (raw_emb / norm if norm > 0 else raw_emb).astype(np.float32)
+
+            if embedding.shape[0] != 512:
+                continue
+
+            if image_rgb is None:
+                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+            color_hist = self.compute_torso_color_hist(image_rgb, box_tuple)
+
+            results.append({
+                "bbox": box_tuple,
+                "encoding": embedding,
+                "color_hist": color_hist,
+                "det_score": det_score,
+                "pose": getattr(face, "pose", None)
+            })
+
+        return results
+
+    def _extract_dlib_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
+        """Extract face locations and encodings from in-memory bytes using dlib ResNet-34."""
         if not FACE_REC_AVAILABLE:
             raise RuntimeError("face_recognition is not available in current environment")
 
         image_obj = Image.open(io.BytesIO(image_bytes))
-        # Ensure RGB format
         if image_obj.mode != "RGB":
             image_obj = image_obj.convert("RGB")
         
         image_np = np.array(image_obj)
-
         locations = face_recognition.face_locations(image_np, number_of_times_to_upsample=1, model=self.model)
         if not locations:
             locations = face_recognition.face_locations(image_np, number_of_times_to_upsample=2, model=self.model)
@@ -401,34 +663,19 @@ class FaceEngine:
         if not locations:
             return []
 
-        # Validate human face geometry for webcam/uploaded photo
-        valid_locations = [
-            loc for loc in locations
-            if self.is_valid_human_face(image_np, loc)
-        ]
-
-        # Sane aspect ratio fallback for webcam closeups if extreme lighting
+        valid_locations = [loc for loc in locations if self.is_valid_human_face(image_np, loc)]
         if not valid_locations:
-            valid_locations = [
-                loc for loc in locations
-                if 0.65 <= ((loc[2] - loc[0]) / max(1, loc[1] - loc[3])) <= 1.55
-            ]
+            valid_locations = [loc for loc in locations if 0.65 <= ((loc[2] - loc[0]) / max(1, loc[1] - loc[3])) <= 1.55]
 
         if not valid_locations:
             return []
 
-        # For the query guest photo, use num_jitters=2 and model="large" to produce an ultra-stable embedding
         encodings = face_recognition.face_encodings(image_np, known_face_locations=valid_locations, num_jitters=2, model="large")
         results = []
         for loc, enc in zip(valid_locations, encodings):
             norm = np.linalg.norm(enc)
-            if norm > 0:
-                normalized_enc = (enc / norm).astype(np.float32)
-            else:
-                normalized_enc = enc.astype(np.float32)
-
+            normalized_enc = (enc / norm).astype(np.float32) if norm > 0 else enc.astype(np.float32)
             color_hist = self.compute_torso_color_hist(image_np, loc)
-
             results.append({
                 "bbox": loc,
                 "encoding": normalized_enc,
@@ -443,7 +690,7 @@ class DatabaseManager:
     Provides thread-safe atomic operations.
     """
 
-    def __init__(self, db_dir: str = "/app/data/db", vector_dim: int = 128):
+    def __init__(self, db_dir: str = "/app/data/db", vector_dim: int = 512):
         self.db_dir = db_dir
         os.makedirs(self.db_dir, exist_ok=True)
         self.db_path = os.path.join(self.db_dir, "metadata.db")
@@ -519,8 +766,18 @@ class DatabaseManager:
             if os.path.exists(self.faiss_index_path):
                 try:
                     self.index = faiss.read_index(self.faiss_index_path)
-                    logger.info(f"Loaded existing FAISS index with {self.index.ntotal} vectors.")
-                    return
+                    if self.index.d != self.vector_dim:
+                        logger.warning(
+                            f"FAISS index on disk has dimension {self.index.d}, but current engine uses {self.vector_dim}-D. "
+                            f"Rebuilding fresh {self.vector_dim}-D index from SQLite..."
+                        )
+                        base_index = faiss.IndexFlatIP(self.vector_dim)
+                        self.index = faiss.IndexIDMap2(base_index)
+                        self._rebuild_faiss_from_sqlite()
+                        return
+                    else:
+                        logger.info(f"Loaded existing FAISS index with {self.index.ntotal} vectors ({self.index.d}-D).")
+                        return
                 except Exception as e:
                     logger.warning(f"Could not load existing FAISS index ({e}). Rebuilding from SQLite...")
 
@@ -545,6 +802,7 @@ class DatabaseManager:
 
         ids = []
         vectors = []
+        mismatched_dim = 0
         for row in rows:
             v_id = row["vector_id"]
             blob = row["encoding_blob"]
@@ -552,12 +810,20 @@ class DatabaseManager:
             if len(vec) == self.vector_dim:
                 ids.append(v_id)
                 vectors.append(vec)
+            else:
+                mismatched_dim += 1
+
+        if mismatched_dim > 0:
+            logger.info(
+                f"Skipped {mismatched_dim} face vector(s) in SQLite with dimension != {self.vector_dim}-D. "
+                "Trigger 'Pindai Ulang Sekarang' to re-extract with active AI engine."
+            )
 
         if vectors:
             v_array = np.vstack(vectors).astype(np.float32)
             id_array = np.array(ids, dtype=np.int64)
             self.index.add_with_ids(v_array, id_array)
-            logger.info(f"Rebuilt FAISS index with {len(ids)} vectors from database.")
+            logger.info(f"Rebuilt FAISS index with {len(ids)} vectors from database ({self.vector_dim}-D).")
             self._save_faiss()
 
     def _save_faiss(self):
@@ -569,16 +835,26 @@ class DatabaseManager:
                 logger.error(f"Error saving FAISS index: {e}")
 
     def is_photo_indexed(self, file_path: str, file_mtime: float, file_size: int) -> bool:
-        """Check if a file has already been indexed with matching modification time and size."""
+        """Check if a file has already been indexed with matching modification time, size, and vector dimension."""
         with self.lock, self._get_connection() as conn:
             cursor = conn.execute(
-                "SELECT id, file_mtime, file_size, status FROM photos WHERE file_path = ?",
+                "SELECT id, file_mtime, file_size, num_faces, status FROM photos WHERE file_path = ?",
                 (file_path,)
             )
             row = cursor.fetchone()
             if row:
                 # If modified or size changed, need re-indexing
                 if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
+                    # If photo has registered faces, ensure stored vector dimension matches current engine dimension
+                    if row["num_faces"] > 0:
+                        face_cur = conn.execute(
+                            "SELECT LENGTH(encoding_blob) AS blob_size FROM faces WHERE photo_id = ? LIMIT 1",
+                            (row["id"],)
+                        )
+                        f_row = face_cur.fetchone()
+                        if f_row and f_row["blob_size"] != (self.vector_dim * 4):
+                            # Stored vector dimension changed (e.g. 128-d vs 512-d); needs re-indexing with upgraded engine
+                            return False
                     return True
             return False
 
@@ -809,11 +1085,11 @@ class DatabaseManager:
                     h = r["bbox_bottom"] - r["bbox_top"]
 
                     is_invalid = False
-                    if w < 32 or h < 32:
+                    if w < 16 or h < 16:
                         is_invalid = True
                     else:
                         ratio = float(h) / float(w)
-                        if ratio < 0.70 or ratio > 1.48:
+                        if ratio < 0.50 or ratio > 1.80:
                             is_invalid = True
 
                     if is_invalid:
@@ -851,10 +1127,11 @@ class DatabaseManager:
 
     def search_similar_faces(
         self,
-        query_faces: List[Dict[str, Any]],
-        threshold: float = 0.75,
+        query_faces: Optional[List[Dict[str, Any]]] = None,
+        threshold: float = 0.50,
         top_k: int = 50,
-        ride_filter: Optional[str] = None
+        ride_filter: Optional[str] = None,
+        query_encoding: Optional[np.ndarray] = None
     ) -> List[Dict[str, Any]]:
         """
         Query FAISS for matching faces above the similarity threshold and fetch photo details from SQLite.
@@ -862,6 +1139,13 @@ class DatabaseManager:
         Supports optional filtering by ride subfolder (e.g. 'BL' for Hot Air Balloon).
         Applies score boost for matches with similar upper-body clothing color.
         """
+        if query_faces is None:
+            if query_encoding is not None:
+                query_faces = [{"encoding": query_encoding, "color_hist": None}]
+            else:
+                return []
+        elif isinstance(query_faces, np.ndarray):
+            query_faces = [{"encoding": query_faces, "color_hist": None}]
         with self.lock:
             if not FAISS_AVAILABLE or self.index is None or self.index.ntotal == 0:
                 logger.warning("FAISS index is empty or unavailable.")
@@ -1010,6 +1294,9 @@ class DatabaseManager:
             "photos_without_faces": no_faces,
             "indexing_errors": errors,
             "faiss_indexed_vectors": faiss_total,
+            "vector_dim": self.vector_dim,
+            "vector_dimension": self.vector_dim,
             "faiss_ready": FAISS_AVAILABLE and (self.index is not None),
-            "face_rec_ready": FACE_REC_AVAILABLE
+            "face_rec_ready": FACE_REC_AVAILABLE,
+            "insightface_ready": INSIGHTFACE_AVAILABLE and ONNXRUNTIME_AVAILABLE
         }

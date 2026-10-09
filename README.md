@@ -14,19 +14,19 @@ flowchart TD
 
     subgraph "Background Ingestion (Watchdog)"
         B -->|Watchdog on_created / on_moved| C[indexer.py: Event Handler]
-        C -->|Debounce file write completion| D[Face Extraction: dlib/ResNet]
+        C -->|Debounce file write completion| D["AI Engine: InsightFace ArcFace (512-D)"]
         D -->|Save Photo Metadata| E[(SQLite: metadata.db)]
-        D -->|Insert 128-d L2 Vectors| F[(FAISS: IndexIDMap2 + FlatIP)]
+        D -->|Insert 512-d L2 Vectors| F[(FAISS: IndexIDMap2 + FlatIP)]
     end
 
     subgraph "Front-Desk Retrieval (FastAPI & Web UI)"
         G[Front Desk Operator] -->|Upload Guest Face| H[Web UI /api/search]
-        H -->|Extract Reference Face Vector| I[Cosine Similarity Query]
-        I -->|Search Top-K >= Threshold| F
+        H -->|Extract 512-d ArcFace Vector| I[Cosine Similarity Query]
+        I -->|Search Top-K >= Threshold ~0.50| F
         F -->|Return Vector IDs & Scores| E
-        E -->|Resolve Original File Paths| J[Symlink Generator]
+        E -->|Resolve Original File Paths| J[Symlink / Hardlink Generator]
         J -->|Generate Virtual Folder| K["/app/data/results/Customer_{UUID}"]
-        K -->|Symlinks to Raw Photos| L[Samba Network Share]
+        K -->|Hardlinks / Symlinks to Raw Photos| L[Samba Network Share]
         L -->|1-Click Copy / Print| G
     end
 ```
@@ -35,12 +35,14 @@ flowchart TD
 
 ## 2. Key Features
 
+- **Mesin AI InsightFace / ArcFace (512-Dimensi ONNX Runtime)**: Standar industri biometrik modern paling mutakhir di dunia. Menghasilkan vektor fitur 512-dimensi yang sangat tahan terhadap kacamata hitam, masker tipis, bayangan pohon Maribaya, dan wajah dengan sudut kemiringan ekstrem hingga 60°.
+- **Dual Engine Architecture**: Mendukung mesin utama **InsightFace (ArcFace 512-D)** serta mesin fallback **dlib (ResNet-34 128-D)** dengan auto-detection dan switching via Admin Dashboard.
 - **Automated Real-time Ingestion**: Powered by `watchdog`, newly dropped photos in `/app/data/raw` (including nested ride subdirectories) are detected, debounced for write-completion, and indexed automatically in background threads.
 - **Group Shot Multi-Face Extraction**: Roller-coaster photos with 4 to 12 people are fully parsed. Each face is individually located with bounding boxes and mapped to the parent photo in SQLite.
-- **Fast Vector Similarity Search**: Leverages **FAISS** (`IndexIDMap2` with `IndexFlatIP`) performing L2-normalized cosine similarity queries in sub-millisecond time.
-- **Zero-Copy Virtual Folders (Linux Symlinks)**: Generates instantaneous customer folders containing relative symlinks pointing to raw photos without duplicating high-resolution photo storage.
+- **Fast Vector Similarity Search**: Leverages **FAISS** (`IndexIDMap2` with `IndexFlatIP`) performing L2-normalized cosine similarity queries in sub-millisecond time across 512-d hyperspace.
+- **Zero-Copy Virtual Folders (Linux Symlinks / Hardlinks)**: Generates instantaneous customer folders containing native links pointing to raw photos without duplicating high-resolution photo storage.
 - **Samba Network Drive Friendly**: Symlinks are generated with portable relative paths so Windows and macOS front-desk operators can open the network share (`\\samba-server\park-photos\results\Customer_{UUID}`) and copy photos directly into customer media or print queues.
-- **Offline & Self-Contained**: No external cloud API calls, no third-party telemetry, fully operational in an isolated theme park local network (air-gapped environment).
+- **Offline & Self-Contained**: No external cloud API calls, no third-party telemetry, fully operational in an isolated theme park local network (air-gapped environment). Model weights are cached locally in `./data/models/insightface`.
 
 ---
 

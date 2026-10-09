@@ -35,17 +35,26 @@ RAW_DIR = os.getenv("RAW_DIR", os.path.abspath("./data/raw"))
 RESULTS_DIR = os.getenv("RESULTS_DIR", os.path.abspath("./data/results"))
 DB_DIR = os.getenv("DB_DIR", os.path.abspath("./data/db"))
 SAMBA_PREFIX = os.getenv("SAMBA_NETWORK_PREFIX", r"\\samba-server\park-photos\results")
-DEFAULT_THRESHOLD = float(os.getenv("DEFAULT_SIMILARITY_THRESHOLD", "0.82"))
+
+# Singletons configuration
+app_settings = config_manager.load_settings()
+AI_ENGINE = os.getenv("AI_ENGINE", app_settings.get("ai_engine", "insightface"))
+INSIGHTFACE_MODEL = os.getenv("INSIGHTFACE_MODEL", app_settings.get("insightface_model", "buffalo_l"))
 FACE_MODEL = os.getenv("FACE_DETECTION_MODEL", "hog")
+DEFAULT_THRESHOLD = float(app_settings.get("default_threshold", 0.50 if AI_ENGINE == "insightface" else 0.82))
 
 # Ensure required directories exist
-for directory in [RAW_DIR, RESULTS_DIR, DB_DIR]:
+MODELS_DIR = os.getenv("MODELS_DIR", os.path.join(os.path.dirname(os.path.abspath(DB_DIR)), "models", "insightface"))
+for directory in [RAW_DIR, RESULTS_DIR, DB_DIR, MODELS_DIR]:
     os.makedirs(directory, exist_ok=True)
 
-# Singletons
-app_settings = config_manager.load_settings()
-db_manager = DatabaseManager(db_dir=DB_DIR)
-face_engine = FaceEngine(model=FACE_MODEL)
+# Singletons initialization
+face_engine = FaceEngine(
+    engine=AI_ENGINE,
+    model=INSIGHTFACE_MODEL if AI_ENGINE == "insightface" else FACE_MODEL,
+    model_root=MODELS_DIR
+)
+db_manager = DatabaseManager(db_dir=DB_DIR, vector_dim=face_engine.dimension)
 indexer = PhotoIndexer(
     raw_dir=RAW_DIR, 
     db_manager=db_manager, 
@@ -150,6 +159,9 @@ async def serve_dashboard(request: Request):
     context = {
         "request": request,
         "stats": stats,
+        "ai_engine": face_engine.engine_name,
+        "vector_dim": face_engine.dimension,
+        "model_name": face_engine.model_name,
         "default_threshold": cfg.get("default_threshold", DEFAULT_THRESHOLD),
         "samba_prefix": cfg.get("samba_network_prefix", SAMBA_PREFIX),
         "raw_dir": RAW_DIR,
@@ -178,6 +190,9 @@ async def serve_admin_dashboard(request: Request):
     context = {
         "request": request,
         "stats": stats,
+        "ai_engine": face_engine.engine_name,
+        "vector_dim": face_engine.dimension,
+        "model_name": face_engine.model_name,
         "logo_base64": get_logo_base64()
     }
     try:
@@ -295,8 +310,12 @@ async def health_check():
     stats = db_manager.get_stats()
     return {
         "status": "online",
+        "ai_engine": face_engine.engine_name,
+        "vector_dimension": face_engine.dimension,
+        "model_name": face_engine.model_name,
         "faiss_ready": stats["faiss_ready"],
         "face_rec_ready": stats["face_rec_ready"],
+        "insightface_ready": stats.get("insightface_ready", False),
         "indexed_photos": stats["total_photos"],
         "indexed_faces": stats["total_faces"],
         "timestamp": time.time()
@@ -310,6 +329,9 @@ async def get_system_stats():
     stats["raw_dir"] = RAW_DIR
     stats["results_dir"] = RESULTS_DIR
     stats["samba_prefix"] = SAMBA_PREFIX
+    stats["ai_engine"] = face_engine.engine_name
+    stats["vector_dimension"] = face_engine.dimension
+    stats["model_name"] = face_engine.model_name
     return stats
 
 

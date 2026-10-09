@@ -42,7 +42,7 @@ fi
 
 # 3. Prepare data directories & Samba share
 echo -e "\n${YELLOW}[3/5] Menyiapkan struktur folder data & Windows File Share (Samba)...${NC}"
-mkdir -p data/raw data/results data/db img static templates
+mkdir -p data/raw data/results data/db data/models/insightface img static templates
 sudo chmod -R 777 data
 
 # Install & configure Samba automatically so operators can open \\IP\park-photos\raw

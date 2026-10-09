@@ -163,11 +163,16 @@
           </svg>
         </div>
         <div class="min-w-0 flex-1">
-          <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-            Wajah Terindeks (AI)
-          </span>
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              Wajah Terindeks (AI)
+            </span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-700{% endif %}">
+              {% if ai_engine == 'insightface' %}ArcFace 512-D{% else %}dlib 128-D{% endif %}
+            </span>
+          </div>
           <span id="stat-indexed-faces" class="text-sm font-bold text-slate-900 mt-0.5 block truncate">
-            {{ stats.total_faces }} wajah
+            {{ stats.total_faces }} wajah ({{ vector_dim or 512 }}-D)
           </span>
         </div>
       </div>
@@ -455,6 +460,77 @@
           </div>
         </div>
 
+        <!-- Kartu Mesin Pengenalan Wajah AI (InsightFace ArcFace 512-D) -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">Mesin AI & Biometrik Wajah</h3>
+                <p class="text-[11px] text-slate-500">Standar industri ArcFace 512-Dimensi</p>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide">
+              512-Dimensi
+            </span>
+          </div>
+
+          <div class="space-y-3.5 text-xs">
+            <div>
+              <label for="ai_engine" class="block font-semibold text-slate-700 mb-1">
+                Pilihan Mesin Pengenalan Wajah
+              </label>
+              <select 
+                id="ai_engine" 
+                onchange="handleEngineChange(this.value)"
+                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs font-medium focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+              >
+                <option value="insightface" selected>InsightFace / ArcFace (512-Dimensi ONNX Runtime) - Rekomendasi Utama</option>
+                <option value="dlib">dlib ResNet-34 (128-Dimensi) - Fallback Hemat CPU</option>
+              </select>
+              <div id="engine-desc" class="text-[11px] text-slate-500 mt-1.5 p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl text-emerald-900 leading-relaxed">
+                <strong>Standar Biometrik Modern Global:</strong> Vektor 512-dimensi menghasilkan pemisahan identitas superior. Sangat tahan terhadap kacamata hitam, masker tipis, bayangan pohon Maribaya, serta kemiringan wajah hingga 60°.
+              </div>
+            </div>
+
+            <div id="insightface-options" class="space-y-3 pt-2 border-t border-slate-100">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label for="insightface_model" class="block font-semibold text-slate-700 mb-1">
+                    Profil Model ArcFace
+                  </label>
+                  <select 
+                    id="insightface_model" 
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+                  >
+                    <option value="buffalo_l" selected>buffalo_l (ResNet-50 ArcFace - Akurasi Maksimal)</option>
+                    <option value="buffalo_sc">buffalo_sc (MobileFaceNet - Cepat & Hemat RAM)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="admin_default_threshold" class="block font-semibold text-slate-700 mb-1">
+                    Ambang Batas Default
+                  </label>
+                  <input 
+                    type="number" 
+                    id="admin_default_threshold" 
+                    min="0.10" 
+                    max="0.95" 
+                    step="0.01" 
+                    value="0.50" 
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs font-mono focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+                  />
+                  <span class="text-[10px] text-slate-500 mt-0.5 block">ArcFace standar: 0.50 (50%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Kartu Pengaturan Pemindaian & Akses Keamanan -->
         <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 space-y-4">
           <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
@@ -651,6 +727,16 @@
           document.getElementById('polling_interval').value = data.polling_interval || '15';
           document.getElementById('operator_pin').value = data.operator_pin || '1234';
           document.getElementById('admin_pin').value = data.admin_pin || '1234';
+          if (document.getElementById('ai_engine')) {
+            document.getElementById('ai_engine').value = data.ai_engine || 'insightface';
+            handleEngineChange(data.ai_engine || 'insightface');
+          }
+          if (document.getElementById('insightface_model')) {
+            document.getElementById('insightface_model').value = data.insightface_model || 'buffalo_l';
+          }
+          if (document.getElementById('admin_default_threshold')) {
+            document.getElementById('admin_default_threshold').value = data.default_threshold !== undefined ? data.default_threshold : 0.50;
+          }
           const pinToggle = document.getElementById('require_pin_to_access');
           if (pinToggle) pinToggle.checked = (data.require_pin_to_access !== false);
           updateMountCommandDisplay();
@@ -784,7 +870,10 @@
         polling_interval: parseInt(document.getElementById('polling_interval').value) || 15,
         operator_pin: document.getElementById('operator_pin').value.trim() || '1234',
         admin_pin: document.getElementById('admin_pin').value.trim() || '1234',
-        require_pin_to_access: document.getElementById('require_pin_to_access') ? document.getElementById('require_pin_to_access').checked : true
+        require_pin_to_access: document.getElementById('require_pin_to_access') ? document.getElementById('require_pin_to_access').checked : true,
+        ai_engine: document.getElementById('ai_engine') ? document.getElementById('ai_engine').value : 'insightface',
+        insightface_model: document.getElementById('insightface_model') ? document.getElementById('insightface_model').value : 'buffalo_l',
+        default_threshold: document.getElementById('admin_default_threshold') ? parseFloat(document.getElementById('admin_default_threshold').value) : 0.50
       };
 
       try {
@@ -804,6 +893,32 @@
         alert('Gagal menyimpan pengaturan. Periksa koneksi ke server.');
       } finally {
         saveBtn.disabled = false;
+      }
+    }
+
+    function handleEngineChange(engine) {
+      const desc = document.getElementById('engine-desc');
+      const opt = document.getElementById('insightface-options');
+      const threshInput = document.getElementById('admin_default_threshold');
+
+      if (engine === 'insightface') {
+        if (opt) opt.classList.remove('hidden');
+        if (desc) {
+          desc.className = "text-[11px] text-slate-500 mt-1.5 p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl text-emerald-900 leading-relaxed";
+          desc.innerHTML = "<strong>Standar Biometrik Modern Global:</strong> Vektor 512-dimensi menghasilkan pemisahan identitas superior. Sangat tahan terhadap kacamata hitam, masker tipis, bayangan pohon Maribaya, serta kemiringan wajah hingga 60°.";
+        }
+        if (threshInput && (parseFloat(threshInput.value) >= 0.70 || !threshInput.value)) {
+          threshInput.value = "0.50";
+        }
+      } else {
+        if (opt) opt.classList.add('hidden');
+        if (desc) {
+          desc.className = "text-[11px] text-slate-500 mt-1.5 p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 leading-relaxed";
+          desc.innerHTML = "<strong>dlib ResNet-34 (128-D):</strong> Mesin hemat CPU untuk server dengan spesifikasi terbatas. Membutuhkan wajah relatif tegak dan pencahayaan jelas.";
+        }
+        if (threshInput && (parseFloat(threshInput.value) <= 0.60 || !threshInput.value)) {
+          threshInput.value = "0.82";
+        }
       }
     }
 

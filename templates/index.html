@@ -467,34 +467,55 @@
             <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
               <div class="flex items-center justify-between">
                 <div>
-                  <label for="threshold-slider" class="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
-                    Similarity Threshold (Tingkat Akurasi)
-                  </label>
-                  <span class="text-[11px] text-slate-500">Mencegah muka orang lain ikut muncul</span>
+                  <div class="flex items-center space-x-2">
+                    <label for="threshold-slider" class="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+                      Similarity Threshold (Tingkat Akurasi)
+                    </label>
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-700{% endif %}">
+                      {% if ai_engine == 'insightface' %}ArcFace 512-D{% else %}dlib 128-D{% endif %}
+                    </span>
+                  </div>
+                  <span class="text-[11px] text-slate-500">
+                    {% if ai_engine == 'insightface' %}
+                      Model ArcFace 512-D &bull; Tahan kacamata hitam, masker & sudut 60°
+                    {% else %}
+                      Model dlib 128-D &bull; Mencegah wajah orang lain ikut muncul
+                    {% endif %}
+                  </span>
                 </div>
                 <span id="threshold-val" class="text-sm font-bold text-lodge-800 bg-lodge-100 border border-lodge-200 px-2.5 py-0.5 rounded">
-                  {{ (default_threshold * 100)|int if default_threshold else 82 }}%
+                  {{ (default_threshold * 100)|int if default_threshold else (50 if ai_engine == 'insightface' else 82) }}%
                 </span>
               </div>
 
               <input 
                 type="range" 
                 id="threshold-slider" 
-                min="0.70" 
-                max="0.95" 
+                min="{{ '0.30' if ai_engine == 'insightface' else '0.70' }}" 
+                max="{{ '0.85' if ai_engine == 'insightface' else '0.95' }}" 
                 step="0.01" 
-                value="{{ default_threshold if default_threshold else 0.82 }}" 
+                value="{{ default_threshold if default_threshold else (0.50 if ai_engine == 'insightface' else 0.82) }}" 
                 oninput="updateThresholdDisplay(this.value)"
                 class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-lodge-600"
               />
 
               <div class="flex justify-between text-[11px] text-slate-500">
-                <span>70% (Lebih Longgar)</span>
-                <span class="font-bold text-lodge-800">82% - 85% (Rekomendasi Wahana)</span>
-                <span>95% (Sangat Ketat)</span>
+                {% if ai_engine == 'insightface' %}
+                  <span>35% (Lebih Longgar)</span>
+                  <span class="font-bold text-lodge-800">48% - 52% (Rekomendasi ArcFace)</span>
+                  <span>80% (Sangat Ketat)</span>
+                {% else %}
+                  <span>70% (Lebih Longgar)</span>
+                  <span class="font-bold text-lodge-800">82% - 85% (Rekomendasi Wahana)</span>
+                  <span>95% (Sangat Ketat)</span>
+                {% endif %}
               </div>
-              <p class="text-[11px] text-slate-500 bg-white p-2 rounded border border-slate-200/80">
-                💡 <strong>Tips Akurasi:</strong> Jika foto orang lain masih ikut muncul, naikkan slider ke <strong>87% - 90%</strong>. Turunkan ke <strong>80%</strong> hanya jika tamu memakai kacamata hitam atau foto wahana redup.
+              <p class="text-[11px] text-slate-500 bg-white p-2 rounded border border-slate-200/80 leading-relaxed">
+                {% if ai_engine == 'insightface' %}
+                  🧠 <strong>Keunggulan ArcFace 512-D:</strong> Standar biometrik modern paling mutakhir di dunia. Sangat tahan terhadap kacamata hitam, masker tipis, bayangan pohon pinus, dan wajah dengan sudut ekstrem hingga 60°.
+                {% else %}
+                  💡 <strong>Tips Akurasi:</strong> Jika foto orang lain masih ikut muncul, naikkan slider ke <strong>87% - 90%</strong>. Turunkan ke <strong>80%</strong> hanya jika tamu memakai kacamata hitam atau foto wahana redup.
+                {% endif %}
               </p>
             </div>
 

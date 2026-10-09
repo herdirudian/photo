@@ -25,7 +25,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "smb_domain": "",
     "local_path": "/app/data/raw",
     "polling_interval": 15,
-    "default_threshold": 0.82,
+    "ai_engine": "insightface",  # "insightface" (ArcFace 512-D) or "dlib" (ResNet-34 128-D)
+    "insightface_model": "buffalo_l",  # "buffalo_l" (ResNet-50 highest accuracy) or "buffalo_sc" (fast CPU)
+    "insightface_det_thresh": 0.50,
+    "default_threshold": 0.50,  # 0.50 for InsightFace 512-D; 0.82 for dlib 128-D
+    "default_threshold_insightface": 0.50,
+    "default_threshold_dlib": 0.82,
     "admin_pin": "BI5mill4h@@@",
     "operator_pin": "BI5mill4h@@@",
     "require_pin_to_access": True,
@@ -50,6 +55,11 @@ def load_settings() -> Dict[str, Any]:
             with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
                 saved = json.load(f)
                 settings.update(saved)
+                
+                # Intelligent threshold migration: if upgraded to insightface but old dlib threshold (0.82 or 0.86) is saved
+                if settings.get("ai_engine") == "insightface" and settings.get("default_threshold", 0.50) >= 0.80:
+                    logger.info("Auto-adjusting similarity threshold from dlib (>=0.80) to InsightFace ArcFace 512-D standard (0.50)")
+                    settings["default_threshold"] = float(settings.get("default_threshold_insightface", 0.50))
         except Exception as e:
             logger.error(f"Error loading {CONFIG_FILE_PATH}: {e}")
     else:
