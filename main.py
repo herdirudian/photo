@@ -253,8 +253,7 @@ async def get_storage_status():
 
 
 @app.get("/api/subfolders")
-@app.get("/api/admin/subfolders")
-async def list_subfolders():
+async def get_guest_subfolders():
     """Return all detected ride subfolders and nested directories with photo counts."""
     storage_info = config_manager.inspect_storage_status(RAW_DIR)
     return {
@@ -264,6 +263,12 @@ async def list_subfolders():
         "subfolder_count": storage_info.get("subfolder_count", 0),
         "subfolders": storage_info.get("subfolders", [])
     }
+
+
+@app.get("/api/admin/subfolders")
+async def get_admin_subfolders():
+    """Admin endpoint for ride subfolders."""
+    return await get_guest_subfolders()
 
 
 @app.post("/api/admin/subfolders")
