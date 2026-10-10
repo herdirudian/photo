@@ -4,6 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pengaturan Sumber Foto & Sistem - The Lodge Maribaya</title>
+
+  <!-- Progressive Web App (PWA) Meta & Links -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#1E2B25">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Foto The Lodge">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1335,6 +1346,21 @@
             icon.classList.remove('text-emerald-600');
           }
         }, 2000);
+      });
+    }
+  </script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then((registration) => {
+            console.log('PWA ServiceWorker registered with scope:', registration.scope);
+          })
+          .catch((err) => {
+            console.warn('PWA ServiceWorker registration failed:', err);
+          });
       });
     }
   </script>

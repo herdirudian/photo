@@ -150,6 +150,32 @@ async def serve_logo():
     raise HTTPException(status_code=404, detail="Logo not found")
 
 
+@app.get("/manifest.json")
+async def serve_manifest():
+    """Serve PWA Web App Manifest."""
+    manifest_path = os.path.join(STATIC_DIR, "manifest.json")
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="Manifest not found")
+
+
+@app.get("/sw.js")
+async def serve_service_worker():
+    """Serve PWA Service Worker script with root scope permission."""
+    sw_path = os.path.join(STATIC_DIR, "sw.js")
+    if os.path.exists(sw_path):
+        return FileResponse(
+            sw_path, 
+            media_type="application/javascript",
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            }
+        )
+    raise HTTPException(status_code=404, detail="Service worker not found")
+
+
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
     stats = db_manager.get_stats()
