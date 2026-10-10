@@ -100,6 +100,20 @@
 
       <!-- Action Nav -->
       <div class="flex items-center space-x-2.5 text-xs">
+        <button 
+          id="btn-pwa-install" 
+          type="button"
+          onclick="triggerPWAInstall()" 
+          class="hidden items-center space-x-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg border border-emerald-500/80 transition focus-ring min-h-[36px] text-xs font-semibold shadow-2xs cursor-pointer"
+          title="Pasang aplikasi Galeri Foto The Lodge di perangkat ini"
+        >
+          <svg class="w-3.5 h-3.5 text-emerald-100 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span class="hidden sm:inline">Install Aplikasi</span>
+          <span class="sm:hidden">Install</span>
+        </button>
+
         <a 
           href="/" 
           class="flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 active:bg-lodge-750 text-lodge-100 hover:text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px] text-xs font-medium shadow-2xs"
@@ -1350,8 +1364,10 @@
     }
   </script>
 
-  <!-- PWA Service Worker Registration -->
+  <!-- PWA Service Worker & Install Script -->
   <script>
+    let deferredPWAInstallPrompt = null;
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js', { scope: '/' })
@@ -1362,6 +1378,48 @@
             console.warn('PWA ServiceWorker registration failed:', err);
           });
       });
+    }
+
+    // Capture install prompt event from browser
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPWAInstallPrompt = e;
+      const installBtn = document.getElementById('btn-pwa-install');
+      if (installBtn && !window.matchMedia('(display-mode: standalone)').matches) {
+        installBtn.classList.remove('hidden');
+        installBtn.classList.add('flex');
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA was installed successfully');
+      deferredPWAInstallPrompt = null;
+      const installBtn = document.getElementById('btn-pwa-install');
+      if (installBtn) installBtn.classList.add('hidden');
+    });
+
+    async function triggerPWAInstall() {
+      if (deferredPWAInstallPrompt) {
+        deferredPWAInstallPrompt.prompt();
+        const { outcome } = await deferredPWAInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          console.log('User accepted PWA installation');
+          const installBtn = document.getElementById('btn-pwa-install');
+          if (installBtn) installBtn.classList.add('hidden');
+        }
+        deferredPWAInstallPrompt = null;
+      } else {
+        alert(
+          "Panduan Memasang Aplikasi The Lodge Maribaya:\n\n" +
+          "• Google Chrome / Microsoft Edge Desktop:\n" +
+          "  Klik ikon komputer/install di sebelah kanan bilah URL (address bar) di bagian atas browser.\n\n" +
+          "• Android (Chrome):\n" +
+          "  Buka menu titik tiga (⋮) di kanan atas browser -> Pilih 'Install Aplikasi' atau 'Tambahkan ke Layar Utama'.\n\n" +
+          "• iPad / iPhone (Safari):\n" +
+          "  Ketuk tombol Bagikan/Share (ikon kotak dengan panah ke atas) -> Pilih 'Tambahkan ke Layar Utama' (Add to Home Screen).\n\n" +
+          "Penting: PWA mewajibkan web diakses melalui alamat HTTPS yang aman."
+        );
+      }
     }
   </script>
 </body>
