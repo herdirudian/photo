@@ -31,9 +31,9 @@
   </script>
   <style>
     /* Custom scrollbar and focus rings */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #f1f5f9; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
     ::-webkit-scrollbar-thumb:hover { background: #49655A; }
     
     .focus-ring:focus-visible {
@@ -155,69 +155,92 @@
   </div>
 
   <!-- Top Navigation & System Status Bar -->
-  <header class="bg-lodge-900 text-white border-b border-lodge-800 sticky top-0 z-40 shadow-md">
+  <header class="bg-lodge-900 text-white border-b border-lodge-800 sticky top-0 z-40 shadow-xs">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       
-      <div class="flex items-center space-x-3 sm:space-x-3.5">
-        <div class="h-11 px-3 py-1.5 bg-white rounded-xl shadow-xs border border-white/20 flex items-center justify-center shrink-0">
-          <img src="/img/logotlm.png" alt="The Lodge Maribaya" class="h-8 w-auto max-h-full object-contain" onerror="this.onerror=null; this.src='/logo.png';" />
-        </div>
+      <!-- Brand & Title -->
+      <a href="/" class="flex items-center gap-3 group focus-ring rounded-lg py-1 px-1.5 transition">
+        {% if logo_base64 %}
+          <img 
+            src="data:image/png;base64,{{ logo_base64 }}" 
+            alt="The Lodge Maribaya" 
+            class="h-8 sm:h-9 w-auto object-contain brightness-0 invert opacity-95 group-hover:opacity-100 transition-opacity" 
+          />
+        {% else %}
+          <img 
+            src="/img/logotlm.png" 
+            alt="The Lodge Maribaya" 
+            class="h-8 sm:h-9 w-auto object-contain brightness-0 invert opacity-95 group-hover:opacity-100 transition-opacity" 
+            onerror="this.onerror=null; this.src='/logo.png';" 
+          />
+        {% endif %}
+        <div class="h-6 w-px bg-lodge-700/80 hidden sm:block"></div>
         <div class="flex flex-col justify-center">
-          <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
+          <span class="text-xs sm:text-sm font-bold tracking-tight text-white leading-tight">
+            Galeri Foto Wahana
+          </span>
+          <span class="text-[11px] text-emerald-200/80 font-medium leading-none mt-0.5">
             The Lodge Maribaya
-          </h1>
-          <p class="text-xs text-emerald-200/90 font-medium leading-normal mt-0.5">Galeri Foto Wahana</p>
+          </span>
         </div>
-      </div>
+      </a>
 
       <!-- Real-time Metrics & Operator Controls -->
-      <div class="flex items-center space-x-2.5 sm:space-x-3 text-xs">
-        <div id="header-operator-controls" class="hidden lg:flex items-center space-x-3 bg-lodge-950/70 px-3 py-1.5 rounded-lg border border-lodge-700/80 opacity-60 hover:opacity-100 transition">
+      <div class="flex items-center space-x-2 sm:space-x-2.5 text-xs">
+        
+        <!-- Metrics Pill (Accessible Contrast, Calm Status Dot) -->
+        <div 
+          id="header-operator-controls" 
+          class="hidden lg:flex items-center space-x-3 bg-lodge-950/80 px-3 py-1.5 rounded-lg border border-lodge-700/80"
+          title="Status pangkalan data foto dan pengenalan wajah"
+        >
           <div class="flex items-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span class="text-lodge-200 font-medium">Pemantau Foto:</span>
-            <span class="text-white font-semibold" id="stat-photos">{{ stats.total_photos }} foto</span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20"></span>
+            <span class="text-lodge-200 font-medium">Foto:</span>
+            <span class="text-white font-semibold tabular-nums" id="stat-photos">{{ stats.total_photos }} foto</span>
           </div>
           <span class="text-lodge-700">|</span>
           <div class="flex items-center space-x-1.5">
-            <span class="text-lodge-200 font-medium">Wajah Terindeks:</span>
-            <span class="text-white font-semibold" id="stat-faces">{{ stats.total_faces }}</span>
+            <span class="text-lodge-200 font-medium">Wajah:</span>
+            <span class="text-white font-semibold tabular-nums" id="stat-faces">{{ stats.total_faces }}</span>
           </div>
         </div>
 
+        <!-- Tombol Pindai Ulang -->
         <button 
           id="btn-reindex" 
           onclick="triggerReindex()"
-          title="Pindai folder raw untuk mencari foto wahana baru"
-          class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px]"
+          title="Pindai folder foto untuk mencari foto wahana baru"
+          class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 active:bg-lodge-750 text-lodge-100 hover:text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px] text-xs font-medium shadow-2xs cursor-pointer"
         >
-          <svg class="w-4 h-4 text-lodge-200" id="reindex-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3.5 h-3.5 text-lodge-200 shrink-0" id="reindex-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          <span class="font-medium">Pindai Ulang</span>
+          <span>Pindai Ulang</span>
         </button>
 
-        <!-- Tombol Akses Admin & Kunci Layar Kiosk -->
+        <!-- Tombol Akses Admin -->
         <a 
           href="/admin" 
-          class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/30 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs"
+          class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 active:bg-lodge-750 text-lodge-100 hover:text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px] text-xs font-medium shadow-2xs"
           title="Buka Pengaturan Administrator"
         >
-          <svg class="w-3.5 h-3.5 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3.5 h-3.5 text-lodge-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <span>Admin</span>
         </a>
 
+        <!-- Tombol Kunci Layar Kiosk -->
         <button 
           id="btn-lock-kiosk" 
           type="button"
           onclick="lockKioskScreen()" 
-          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/30 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs"
+          class="flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 active:bg-lodge-750 text-lodge-100 hover:text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px] text-xs font-medium shadow-2xs cursor-pointer"
           title="Kunci layar kembali dengan PIN keamanan"
         >
-          <svg class="w-3.5 h-3.5 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3.5 h-3.5 text-lodge-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
           <span>Kunci Layar</span>
@@ -2099,8 +2122,8 @@
         if (archCard) archCard.classList.remove('hidden');
         if (guestCard) guestCard.classList.add('hidden');
         if (headerControls) {
-          headerControls.classList.remove('hidden', 'lg:flex', 'opacity-60');
-          headerControls.classList.add('flex', 'opacity-100');
+          headerControls.classList.remove('hidden', 'lg:flex');
+          headerControls.classList.add('flex');
         }
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-semibold transition focus-ring min-h-[36px] shadow-xs";
@@ -2116,8 +2139,8 @@
         if (archCard) archCard.classList.add('hidden');
         if (guestCard) guestCard.classList.remove('hidden');
         if (headerControls) {
-          headerControls.classList.remove('flex', 'opacity-100');
-          headerControls.classList.add('hidden', 'lg:flex', 'opacity-60');
+          headerControls.classList.remove('flex');
+          headerControls.classList.add('hidden', 'lg:flex');
         }
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs";
@@ -2220,7 +2243,7 @@
       try {
         const res = await fetch('/api/stats');
         const data = await res.json();
-        document.getElementById('stat-photos').textContent = `${data.total_photos} photos`;
+        document.getElementById('stat-photos').textContent = `${data.total_photos} foto`;
         document.getElementById('stat-faces').textContent = data.total_faces;
       } catch (e) {
         console.error("Stats refresh error:", e);
