@@ -507,21 +507,12 @@
             <!-- Match Similarity Threshold Slider -->
             <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
               <div class="flex items-center justify-between">
-                <div>
-                  <div class="flex items-center space-x-2">
-                    <label for="threshold-slider" class="text-xs font-semibold text-slate-800 uppercase tracking-wider block">
-                      Tingkat Akurasi Kemiripan
-                    </label>
-                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-800 border border-slate-200{% endif %}">
-                      {% if ai_engine == 'insightface' %}ArcFace 512-D{% else %}dlib 128-D{% endif %}
-                    </span>
-                  </div>
-                  <span class="text-xs text-slate-600">
-                    {% if ai_engine == 'insightface' %}
-                      Model ArcFace 512-D &bull; Tahan kacamata, bayangan, dan sudut 60°
-                    {% else %}
-                      Model dlib 128-D &bull; Menyaring foto berdasarkan kemiripan wajah
-                    {% endif %}
+                <div class="flex items-center space-x-2">
+                  <label for="threshold-slider" class="text-xs font-semibold text-slate-800 uppercase tracking-wider block">
+                    Tingkat Akurasi Kemiripan
+                  </label>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-800 border border-slate-200{% endif %}">
+                    {% if ai_engine == 'insightface' %}ArcFace 512-D{% else %}dlib 128-D{% endif %}
                   </span>
                 </div>
                 <span id="threshold-val" class="text-sm font-bold text-lodge-900 bg-lodge-100 border border-lodge-200 px-2.5 py-0.5 rounded">
@@ -551,13 +542,6 @@
                   <span>95% (Pencarian Ketat)</span>
                 {% endif %}
               </div>
-              <p class="text-xs text-slate-700 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed">
-                {% if ai_engine == 'insightface' %}
-                  <strong>Karakteristik ArcFace 512-D:</strong> Model biometrik dirancang untuk mengenali wajah di area terbuka dengan pencahayaan alami, bayangan pohon pinus, kacamata, dan sudut pose hingga 60 derajat. Ambang 48%–52% memberikan hasil seimbang antara akurasi dan kelengkapan.
-                {% else %}
-                  <strong>Petunjuk Akurasi:</strong> Jika foto pengunjung lain ikut muncul pada hasil pencarian, naikkan ambang batas ke <strong>87%–90%</strong>. Turunkan ke <strong>80%</strong> apabila tamu mengenakan kacamata atau foto wahana redup.
-                {% endif %}
-              </p>
             </div>
 
             <!-- Top Results Limit -->
