@@ -595,8 +595,8 @@
           </form>
         </div>
 
-        <!-- Guest Welcome & Instructions Card (Default Kiosk Mode) -->
-        <div id="guest-welcome-card" class="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4 text-xs text-slate-700">
+        <!-- Guest Welcome & Instructions Card (Default Kiosk Mode - Hidden per User Request) -->
+        <div id="guest-welcome-card" class="hidden bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4 text-xs text-slate-700">
           <div class="flex items-center space-x-2">
             <span class="w-2.5 h-2.5 rounded-full bg-lodge-600"></span>
             <h3 class="font-bold text-lodge-900 text-xs uppercase tracking-wider">Panduan Pencarian Foto Tamu</h3>
@@ -2147,7 +2147,7 @@
         if (banner) banner.classList.add('hidden');
         if (sambaBox) sambaBox.classList.add('hidden');
         if (archCard) archCard.classList.add('hidden');
-        if (guestCard) guestCard.classList.remove('hidden');
+        if (guestCard) guestCard.classList.add('hidden');
         if (headerControls) {
           headerControls.classList.remove('flex');
           headerControls.classList.add('hidden', 'lg:flex');
