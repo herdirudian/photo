@@ -1226,6 +1226,7 @@ class DatabaseManager:
 
             matched_vector_ids = set()
             scores_by_vid = {}
+            member_scores_by_vid: Dict[int, Dict[int, float]] = {}
             k = self.index.ntotal if top_k <= 0 else min(top_k, self.index.ntotal)
             
             # Helper to safely compute color boost
@@ -1250,6 +1251,7 @@ class DatabaseManager:
                     return 0.0
 
             for qf in query_faces:
+                q_member_id = qf.get("member_id", 1)
                 q_enc = qf["encoding"]
                 norm = np.linalg.norm(q_enc)
                 if norm > 0:
@@ -1262,10 +1264,18 @@ class DatabaseManager:
                 
                 for score, vid in zip(distances[0], indices[0]):
                     if vid != -1 and score >= threshold:
-                        matched_vector_ids.add(int(vid))
+                        vid_int = int(vid)
+                        matched_vector_ids.add(vid_int)
+                        
+                        # Track member-specific scores for each vector
+                        if vid_int not in member_scores_by_vid:
+                            member_scores_by_vid[vid_int] = {}
+                        if q_member_id not in member_scores_by_vid[vid_int] or score > member_scores_by_vid[vid_int][q_member_id]:
+                            member_scores_by_vid[vid_int][q_member_id] = float(score)
+
                         # Keep highest score if vector matches multiple poses
-                        if int(vid) not in scores_by_vid or score > scores_by_vid[int(vid)]:
-                            scores_by_vid[int(vid)] = float(score)
+                        if vid_int not in scores_by_vid or score > scores_by_vid[vid_int]:
+                            scores_by_vid[vid_int] = float(score)
 
             if not matched_vector_ids:
                 return []
@@ -1311,11 +1321,16 @@ class DatabaseManager:
                 
                 photo_id = r["photo_id"]
 
+                # Determine which family/group member matched this specific face best
+                member_map = member_scores_by_vid.get(vid, {})
+                best_member_id = max(member_map.keys(), key=lambda m: member_map[m]) if member_map else 1
+
                 face_info = {
                     "vector_id": vid,
                     "score": round(final_score, 4),
                     "base_score": round(base_score, 4),
                     "color_boost": round(boost, 4),
+                    "member_id": best_member_id,
                     "bbox": [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]]
                 }
 
@@ -1329,21 +1344,35 @@ class DatabaseManager:
                         "max_score": round(final_score, 4),
                         "best_vector_id": vid,
                         "best_bbox": [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]],
-                        "matched_faces": [face_info]
+                        "matched_faces": [face_info],
+                        "matched_member_ids": {best_member_id}
                     }
                 else:
                     results_by_photo[photo_id]["matched_faces"].append(face_info)
+                    results_by_photo[photo_id]["matched_member_ids"].add(best_member_id)
                     if final_score > results_by_photo[photo_id]["max_score"]:
                         results_by_photo[photo_id]["max_score"] = round(final_score, 4)
                         results_by_photo[photo_id]["best_vector_id"] = vid
                         results_by_photo[photo_id]["best_bbox"] = [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]]
 
-            # Sort results descending by highest similarity score
+            # Convert matched_member_ids to sorted list and calculate count
+            for p in results_by_photo.values():
+                m_ids = p.get("matched_member_ids", set())
+                p["matched_member_count"] = len(m_ids)
+                p["matched_member_ids"] = sorted(list(m_ids))
+
+            # Sort results descending: Photos with more family members together rank FIRST,
+            # followed by highest similarity score.
             sorted_results = sorted(
                 results_by_photo.values(),
-                key=lambda x: x["max_score"],
+                key=lambda x: (
+                    x.get("matched_member_count", 1),
+                    x["max_score"]
+                ),
                 reverse=True
             )
+            if top_k > 0 and len(sorted_results) > top_k:
+                return sorted_results[:top_k]
             return sorted_results
 
     def get_stats(self) -> Dict[str, Any]:

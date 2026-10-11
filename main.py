@@ -482,9 +482,9 @@ async def search_guest_photos(
     """
     start_time = time.time()
 
-    query_faces = []
+    raw_query_faces = []
     
-    for file in files:
+    for file_idx, file in enumerate(files):
         if not file.content_type.startswith("image/"):
             continue
             
@@ -493,19 +493,25 @@ async def search_guest_photos(
             extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
             
             if extracted_faces:
-                # If multiple faces detected in one photo, select the largest one
-                if len(extracted_faces) > 1:
-                    extracted_faces.sort(
-                        key=lambda x: (x["bbox"][2] - x["bbox"][0]) * (x["bbox"][1] - x["bbox"][3]),
-                        reverse=True
-                    )
-                query_faces.append(extracted_faces[0])
+                # If multiple faces detected in one photo, filter out tiny background passerby faces
+                # Keep faces that are at least 12% the size of the largest face in that image
+                max_face_area = max(
+                    (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][1] - f["bbox"][3])
+                    for f in extracted_faces
+                )
+                min_valid_area = max(400, int(max_face_area * 0.12))
+
+                for face in extracted_faces:
+                    area = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][1] - face["bbox"][3])
+                    if area >= min_valid_area:
+                        face["source_file_idx"] = file_idx
+                        raw_query_faces.append(face)
                 
         except Exception as e:
             logger.error(f"Failed to process reference image: {e}")
             continue
 
-    if not query_faces:
+    if not raw_query_faces:
         return JSONResponse(
             status_code=422,
             content={
@@ -515,9 +521,50 @@ async def search_guest_photos(
             }
         )
 
+    # Cluster extracted faces into distinct family / group members
+    # Cosine similarity >= 0.62 indicates different poses/photos of the SAME individual
+    # Similarity < 0.62 indicates a DIFFERENT family member
+    members = []
+    for face in raw_query_faces:
+        face_enc = face["encoding"]
+        src_idx = face.get("source_file_idx", 0)
+        
+        best_sim = -1.0
+        best_member = None
+        
+        for m in members:
+            # Faces from the same photo cannot belong to the same person
+            if any(mf.get("source_file_idx") == src_idx for mf in m["faces"]):
+                continue
+            
+            for mf in m["faces"]:
+                sim = float(np.dot(face_enc, mf["encoding"]))
+                if sim > best_sim:
+                    best_sim = sim
+                    if sim >= 0.62:
+                        best_member = m
+        
+        if best_member is not None and best_sim >= 0.62:
+            face["member_id"] = best_member["member_id"]
+            best_member["faces"].append(face)
+        else:
+            new_id = len(members) + 1
+            face["member_id"] = new_id
+            members.append({
+                "member_id": new_id,
+                "name": f"Anggota {new_id}",
+                "faces": [face]
+            })
+
+    total_members = len(members)
+    logger.info(
+        f"Reference processing complete: {len(raw_query_faces)} face(s) clustered into "
+        f"{total_members} distinct member(s) across {len(files)} uploaded file(s)."
+    )
+
     # FAISS Similarity Search with optional ride filter
     raw_matches = db_manager.search_similar_faces(
-        query_faces=query_faces,
+        query_faces=raw_query_faces,
         threshold=threshold,
         top_k=top_k,
         ride_filter=ride_filter
@@ -544,8 +591,15 @@ async def search_guest_photos(
 
     created_symlinks = []
     used_filenames = set()
+    together_count = 0
+    single_count = 0
 
     for item in matched_photos:
+        if item.get("matched_member_count", 1) >= 2:
+            together_count += 1
+        else:
+            single_count += 1
+
         src_path = item["file_path"]
         if not os.path.exists(src_path):
             continue
@@ -581,13 +635,19 @@ async def search_guest_photos(
                 except OSError:
                     pass
 
-        # Attach preview URL pointing specifically to the matched customer face
+        # Attach preview URL pointing specifically to the matched customer faces
+        matched_vids = [str(f["vector_id"]) for f in item.get("matched_faces", [])]
+        matched_vids_param = ",".join(matched_vids)
         best_vid = item.get("best_vector_id")
-        if best_vid:
-            item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={best_vid}"
-            item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
+
+        if matched_vids_param:
+            item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={matched_vids_param}"
         else:
             item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
+
+        if best_vid:
+            item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
+        else:
             item["crop_url"] = f"/api/photos/{item['photo_id']}/crop"
 
     # Write audit summary into the customer result folder
@@ -597,11 +657,15 @@ async def search_guest_photos(
         "similarity_threshold": threshold,
         "query_time_ms": elapsed_ms,
         "total_matches": len(matched_photos),
+        "total_members": total_members,
+        "together_matches": together_count,
+        "single_matches": single_count,
         "files": [
             {
                 "file_name": p["file_name"],
                 "original_path": p["file_path"],
-                "max_similarity_score": p["max_score"]
+                "max_similarity_score": p["max_score"],
+                "matched_member_count": p.get("matched_member_count", 1)
             }
             for p in matched_photos
         ]
@@ -626,6 +690,9 @@ async def search_guest_photos(
         "match_count": len(matched_photos),
         "query_time_ms": elapsed_ms,
         "threshold": threshold,
+        "total_members": total_members,
+        "together_count": together_count,
+        "single_count": single_count,
         "matches": matched_photos
     }
 
@@ -634,7 +701,7 @@ async def search_guest_photos(
 async def preview_photo(
     photo_id: int,
     highlight: bool = Query(True, description="Draw bounding boxes on detected faces"),
-    matched_vid: Optional[int] = Query(None, description="Vector ID of the specifically matched customer face")
+    matched_vid: Optional[str] = Query(None, description="Vector ID(s) of the specifically matched customer face(s)")
 ):
     """
     Serve a lightweight thumbnail preview of the photo with high-visibility bounding box
@@ -664,6 +731,13 @@ async def preview_photo(
         scale_x = img.width / orig_img.width
         scale_y = img.height / orig_img.height
 
+        matched_vid_set = set()
+        if matched_vid is not None:
+            for part in str(matched_vid).split(","):
+                part = part.strip()
+                if part.isdigit():
+                    matched_vid_set.add(int(part))
+
         if highlight and faces_rows:
             draw = ImageDraw.Draw(img)
             for f in faces_rows:
@@ -673,7 +747,7 @@ async def preview_photo(
                 left = int(f["bbox_left"] * scale_x)
                 vid = f["vector_id"]
 
-                is_customer = (matched_vid is not None and vid == matched_vid)
+                is_customer = (vid in matched_vid_set) if matched_vid_set else (matched_vid is None)
 
                 if is_customer or matched_vid is None:
                     # BOLD VIBRANT GREEN BOX FOR MATCHED GUEST
