@@ -1226,7 +1226,7 @@ class DatabaseManager:
 
             matched_vector_ids = set()
             scores_by_vid = {}
-            k = min(top_k, self.index.ntotal)
+            k = self.index.ntotal if top_k <= 0 else min(top_k, self.index.ntotal)
             
             # Helper to safely compute color boost
             def get_color_boost(db_blob):
