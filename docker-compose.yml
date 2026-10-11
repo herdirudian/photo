@@ -25,6 +25,7 @@ services:
       - ./download_models.py:/app/download_models.py
       - ./templates:/app/templates
       - ./img:/app/img
+      - ./static:/app/static
     environment:
       - RAW_DIR=/app/data/raw
       - RESULTS_DIR=/app/data/results
