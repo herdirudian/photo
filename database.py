@@ -46,6 +46,40 @@ except ImportError:
     ONNXRUNTIME_AVAILABLE = False
 
 
+def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
+    """
+    Decodes an image file path or bytes into a BGR numpy array while honoring EXIF orientation.
+    DSLR cameras frequently record portrait photos with EXIF Orientation tags (6 or 8).
+    Standard cv2.imread / cv2.imdecode ignores this tag and loads the image rotated 90 degrees.
+    """
+    try:
+        if isinstance(img_source, (str, os.PathLike)):
+            with Image.open(img_source) as pil_img:
+                transposed = ImageOps.exif_transpose(pil_img)
+                if transposed.mode != "RGB":
+                    transposed = transposed.convert("RGB")
+                rgb_arr = np.array(transposed)
+                return cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+        elif isinstance(img_source, (bytes, bytearray)):
+            with Image.open(io.BytesIO(img_source)) as pil_img:
+                transposed = ImageOps.exif_transpose(pil_img)
+                if transposed.mode != "RGB":
+                    transposed = transposed.convert("RGB")
+                rgb_arr = np.array(transposed)
+                return cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+    except Exception:
+        pass
+
+    try:
+        if isinstance(img_source, (str, os.PathLike)):
+            return cv2.imread(str(img_source), cv2.IMREAD_COLOR)
+        elif isinstance(img_source, (bytes, bytearray)):
+            nparr = np.frombuffer(img_source, np.uint8)
+            return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except Exception:
+        return None
+
+
 class FaceEngine:
     """
     Unified Biometric Face Recognition Engine.
@@ -431,17 +465,9 @@ class FaceEngine:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Image not found at {file_path}")
 
-        try:
-            with open(file_path, "rb") as f:
-                img_bytes = f.read()
-            nparr = np.frombuffer(img_bytes, np.uint8)
-            image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        except Exception as e:
-            logger.error(f"Failed to read image file {file_path}: {e}")
-            return []
-
+        image_bgr = read_image_exif_aware(file_path)
         if image_bgr is None:
-            logger.error(f"Failed to decode image file {file_path}")
+            logger.error(f"Failed to read image file {file_path}")
             return []
 
         h, w = image_bgr.shape[:2]
@@ -454,6 +480,54 @@ class FaceEngine:
         except Exception as e:
             logger.error(f"InsightFace inference error on {file_path}: {e}")
             return []
+
+        # Multi-Orientation Fallback:
+        # If no high-confidence faces were found at 0°, many DSLR cameras capture portrait
+        # wahana photos without EXIF orientation tags, leaving the raw image 90° or 270° sideways.
+        has_high_conf_face = any(getattr(f, "det_score", 0.0) >= 0.65 for f in all_raw_faces)
+        if not has_high_conf_face:
+            for rot_code, rot_name in [
+                (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
+                (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW"),
+                (cv2.ROTATE_180, "180°")
+            ]:
+                try:
+                    rotated_bgr = cv2.rotate(image_bgr, rot_code)
+                    rot_faces = self.insight_app.get(rotated_bgr)
+                    valid_rot_faces = [f for f in rot_faces if getattr(f, "det_score", 0.0) >= 0.52]
+                    if valid_rot_faces:
+                        logger.info(
+                            f"Multi-Orientation Recovery: Found {len(valid_rot_faces)} face(s) in "
+                            f"{os.path.basename(file_path)} after rotating {rot_name}."
+                        )
+                        for rf in valid_rot_faces:
+                            bx1, by1, bx2, by2 = rf.bbox
+                            if rot_code == cv2.ROTATE_90_CLOCKWISE:
+                                orig_x1 = by1
+                                orig_x2 = by2
+                                orig_y1 = h - 1 - bx2
+                                orig_y2 = h - 1 - bx1
+                            elif rot_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+                                orig_x1 = w - 1 - by2
+                                orig_x2 = w - 1 - by1
+                                orig_y1 = bx1
+                                orig_y2 = bx2
+                            elif rot_code == cv2.ROTATE_180:
+                                orig_x1 = w - 1 - bx2
+                                orig_x2 = w - 1 - bx1
+                                orig_y1 = h - 1 - by2
+                                orig_y2 = h - 1 - by1
+
+                            rf.bbox = np.array([
+                                min(orig_x1, orig_x2),
+                                min(orig_y1, orig_y2),
+                                max(orig_x1, orig_x2),
+                                max(orig_y1, orig_y2)
+                            ])
+                            all_raw_faces.append(rf)
+                        break
+                except Exception as e_rot:
+                    logger.debug(f"Rotation check error ({rot_name}): {e_rot}")
 
         # 2. Targeted Ride Zone Crop for Balloon Basket / Distant Swing if high-resolution
         # In Hot Air Balloon photos, 6 guests stand packed in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
@@ -594,19 +668,29 @@ class FaceEngine:
         """
         Extract 512-d ArcFace embedding from in-memory selfie upload using InsightFace.
         """
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        image_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        image_bgr = read_image_exif_aware(image_bytes)
         if image_bgr is None:
-            pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            image_rgb = np.array(pil_img)
-            image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+            return []
 
         h, w = image_bgr.shape[:2]
         raw_faces = self.insight_app.get(image_bgr)
 
+        # Fallback multi-orientation check for selfies taken sideways on smartphones
+        if not raw_faces:
+            for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]:
+                try:
+                    rotated_bgr = cv2.rotate(image_bgr, rot_code)
+                    rot_faces = self.insight_app.get(rotated_bgr)
+                    if rot_faces:
+                        image_bgr = rotated_bgr
+                        h, w = image_bgr.shape[:2]
+                        raw_faces = rot_faces
+                        break
+                except Exception:
+                    pass
+
         # Fallback with relaxed det_thresh if tricky webcam lighting
         if not raw_faces and self.det_thresh > 0.35:
-            # Re-check detections
             raw_faces = [f for f in self.insight_app.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
 
         image_rgb = None
@@ -1317,7 +1401,7 @@ class DatabaseManager:
                 vid = r["vector_id"]
                 base_score = scores_by_vid.get(vid, 0.0)
                 boost = get_color_boost(r["color_hist_blob"])
-                final_score = base_score + boost
+                final_score = min(1.0, float(base_score + boost))
                 
                 photo_id = r["photo_id"]
 

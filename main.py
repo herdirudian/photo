@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 from database import DatabaseManager, FaceEngine
 from indexer import PhotoIndexer
@@ -719,15 +719,17 @@ async def preview_photo(
         ).fetchall()
 
     try:
-        img = Image.open(file_path)
+        raw_img = Image.open(file_path)
+        img = ImageOps.exif_transpose(raw_img)
         if img.mode != "RGB":
             img = img.convert("RGB")
 
         # Resize for fast thumbnail delivery (max dimension 800px)
         img.thumbnail((800, 800), Image.Resampling.LANCZOS)
 
-        # Scale factor if image was resized
-        orig_img = Image.open(file_path)
+        # Scale factor relative to transposed original image
+        raw_orig = Image.open(file_path)
+        orig_img = ImageOps.exif_transpose(raw_orig)
         scale_x = img.width / orig_img.width
         scale_y = img.height / orig_img.height
 
@@ -815,7 +817,8 @@ async def crop_matched_face(
         target_face = faces_rows[0]
 
     try:
-        img = Image.open(file_path)
+        raw_img = Image.open(file_path)
+        img = ImageOps.exif_transpose(raw_img)
         if img.mode != "RGB":
             img = img.convert("RGB")
 

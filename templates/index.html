@@ -1005,6 +1005,18 @@
               </svg>
               <span>Zoom Wajah</span>
             </button>
+            <button 
+              type="button" 
+              id="btn-lightbox-rotate" 
+              onclick="rotateLightboxImage()" 
+              title="Putar Foto 90° (jika foto diambil miring/vertikal)"
+              class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-xs font-medium flex items-center space-x-1.5 transition focus-ring"
+            >
+              <svg class="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Putar 90°</span>
+            </button>
           </div>
         </div>
 
@@ -1962,7 +1974,7 @@
       }
 
       matches.forEach((item, index) => {
-        const matchPercent = Math.round(item.max_score * 100);
+        const matchPercent = Math.min(100, Math.round(item.max_score * 100));
         const photoNum = index + 1;
         const photoTag = 'Foto #' + (photoNum < 10 ? '0' + photoNum : photoNum);
         const card = document.createElement('div');
@@ -2174,15 +2186,25 @@
     let currentLightboxPhotoTag = '';
     let isLightboxInCropMode = false;
     let currentLightboxIndex = 0;
+    let currentLightboxRotation = 0;
+
+    function rotateLightboxImage() {
+      currentLightboxRotation = (currentLightboxRotation + 90) % 360;
+      const img = document.getElementById('modal-image');
+      if (img) {
+        img.style.transform = `rotate(${currentLightboxRotation}deg)`;
+      }
+    }
 
     function openLightbox(target, startWithCrop = false, matchInfo = '', alternateUrl = '', photoTag = '') {
+      currentLightboxRotation = 0;
       if (typeof target === 'number' && currentDisplayedMatches && currentDisplayedMatches.length > 0) {
         currentLightboxIndex = target;
         const item = currentDisplayedMatches[target];
         const photoNum = target + 1;
         currentLightboxPhotoTag = 'Foto #' + (photoNum < 10 ? '0' + photoNum : photoNum);
         currentLightboxFilename = item.file_name;
-        currentLightboxMatchInfo = Math.round(item.max_score * 100) + '%';
+        currentLightboxMatchInfo = Math.min(100, Math.round(item.max_score * 100)) + '%';
         currentLightboxFullUrl = item.preview_url;
         currentLightboxCropUrl = item.crop_url || '';
         isLightboxInCropMode = startWithCrop && Boolean(item.crop_url);
@@ -2210,13 +2232,14 @@
 
     function navigateLightbox(delta) {
       if (!currentDisplayedMatches || currentDisplayedMatches.length === 0) return;
+      currentLightboxRotation = 0;
       const total = currentDisplayedMatches.length;
       currentLightboxIndex = (currentLightboxIndex + delta + total) % total;
       const item = currentDisplayedMatches[currentLightboxIndex];
       const photoNum = currentLightboxIndex + 1;
       currentLightboxPhotoTag = 'Foto #' + (photoNum < 10 ? '0' + photoNum : photoNum);
       currentLightboxFilename = item.file_name;
-      currentLightboxMatchInfo = Math.round(item.max_score * 100) + '%';
+      currentLightboxMatchInfo = Math.min(100, Math.round(item.max_score * 100)) + '%';
       currentLightboxFullUrl = item.preview_url;
       currentLightboxCropUrl = item.crop_url || '';
       if (isLightboxInCropMode && !currentLightboxCropUrl) {
@@ -2233,7 +2256,10 @@
     function updateLightboxView() {
       const activeUrl = (isLightboxInCropMode && currentLightboxCropUrl) ? currentLightboxCropUrl : currentLightboxFullUrl;
       const img = document.getElementById('modal-image');
-      if (img) img.src = activeUrl;
+      if (img) {
+        img.src = activeUrl;
+        img.style.transform = `rotate(${currentLightboxRotation}deg)`;
+      }
 
       const counterElem = document.getElementById('modal-photo-counter');
       if (counterElem) {
