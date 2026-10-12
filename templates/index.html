@@ -360,30 +360,40 @@
               </div>
 
               <!-- Live Webcam Scanning Panel with Multi-Camera / USB Support -->
-              <div id="camera-panel" class="hidden bg-slate-900 rounded-xl overflow-hidden border border-slate-300 relative shadow-xs">
+              <div id="camera-panel" class="hidden bg-slate-950 rounded-2xl overflow-hidden border border-slate-700/80 relative shadow-lg">
                 
                 <!-- Camera Header with Device Selector & Options -->
-                <div class="p-2.5 bg-slate-950 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
-                  <div class="flex items-center space-x-2 flex-1 min-w-[200px]">
-                    <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    <select 
-                      id="camera-select" 
-                      onchange="onCameraDeviceSelect(this.value)"
-                      class="flex-1 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-medium focus:ring-1 focus:ring-lodge-500 focus:outline-none truncate"
-                      title="Pilih Kamera Bawaan Laptop atau Kamera USB"
-                    >
-                      <option value="">Memuat daftar kamera...</option>
-                    </select>
+                <div class="px-3.5 py-2.5 bg-slate-900/90 backdrop-blur-xs flex items-center justify-between gap-2 sm:gap-3 border-b border-slate-800">
+                  <div class="flex items-center space-x-2 min-w-0 flex-1">
+                    <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 flex items-center justify-center shrink-0">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div class="relative min-w-0 flex-1">
+                      <select 
+                        id="camera-select" 
+                        onchange="onCameraDeviceSelect(this.value)"
+                        class="w-full bg-slate-800/90 hover:bg-slate-800 text-slate-100 border border-slate-700 rounded-lg pl-2.5 pr-7 py-1.5 text-xs font-medium focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 focus:outline-none truncate transition appearance-none cursor-pointer"
+                        title="Pilih Kamera Bawaan Laptop atau Kamera USB"
+                      >
+                        <option value="">Memuat daftar kamera...</option>
+                      </select>
+                      <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
 
-                  <div class="flex items-center space-x-1.5 shrink-0">
+                  <div class="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
                     <button 
                       type="button" 
                       onclick="refreshCameraDevicesList(true)" 
                       title="Deteksi Ulang Kamera USB"
-                      class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition"
+                      aria-label="Deteksi Ulang Kamera USB"
+                      class="h-8 w-8 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition border border-slate-700/80 flex items-center justify-center focus-ring"
                     >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -395,29 +405,33 @@
                       id="btn-toggle-mirror"
                       onclick="toggleCameraMirror()" 
                       title="Balik Cermin (Mirror)"
-                      class="px-2 py-1 bg-lodge-700 text-white rounded-lg text-xs font-medium transition flex items-center space-x-1"
+                      aria-label="Balik Cermin (Mirror)"
+                      class="h-8 px-2.5 bg-lodge-700 hover:bg-lodge-600 text-white rounded-lg text-xs font-semibold transition border border-lodge-500/40 flex items-center space-x-1.5 focus-ring"
                     >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                       </svg>
-                      <span>Mirror</span>
+                      <span class="hidden sm:inline">Mirror</span>
                     </button>
 
                     <button 
                       type="button" 
                       onclick="openCameraGuideModal()" 
                       title="Panduan Izin Akses Kamera"
-                      class="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg text-xs font-bold transition flex items-center justify-center"
+                      aria-label="Panduan Izin Akses Kamera"
+                      class="h-8 w-8 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded-lg text-xs font-bold transition border border-slate-700/80 flex items-center justify-center focus-ring"
                     >
-                      ?
+                      <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                     </button>
                   </div>
                 </div>
 
                 <!-- Camera Scan Mode Selector Bar (Hidden per user request) -->
-                <div id="cam-mode-selector-bar" class="hidden px-3 py-2 bg-slate-950/95 items-center justify-between gap-2 border-b border-slate-800">
+                <div id="cam-mode-selector-bar" class="hidden px-3.5 py-2 bg-slate-900/95 items-center justify-between gap-2 border-b border-slate-800">
                   <span class="text-xs font-semibold text-slate-300">Pilih Mode Scan:</span>
-                  <div class="flex items-center space-x-1 bg-slate-900 p-0.5 rounded-lg border border-slate-700 text-xs">
+                  <div class="flex items-center space-x-1 bg-slate-950 p-0.5 rounded-lg border border-slate-700 text-xs">
                     <button 
                       type="button" 
                       id="btn-cam-mode-single" 
@@ -440,47 +454,59 @@
                 </div>
 
                 <!-- Video Viewport -->
-                <div class="relative w-full aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+                <div class="relative w-full aspect-[4/3] bg-black flex items-center justify-center overflow-hidden select-none">
                   <video id="webcam-feed" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
                   
+                  <!-- Shutter Flash Effect Overlay -->
+                  <div id="camera-shutter-flash" class="absolute inset-0 bg-white pointer-events-none opacity-0 transition-opacity duration-150 z-20"></div>
+
+                  <!-- Toast Notification for USB Plug & Play & Status -->
+                  <div id="camera-toast" class="hidden absolute top-12 z-30 bg-slate-950/90 backdrop-blur-xs text-emerald-300 border border-emerald-500/40 text-xs font-medium px-3.5 py-1.5 rounded-full shadow-lg transition duration-300 pointer-events-none">
+                    Kamera baru terdeteksi
+                  </div>
+
                   <!-- Face Framing Guide: 1 Orang Mode -->
                   <div id="guide-frame-single" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                    <div class="w-36 h-48 border-2 border-white/85 rounded-full"></div>
-                    <span class="mt-2 text-xs text-white bg-slate-950/85 px-2.5 py-0.5 rounded font-medium shadow-xs">
-                      Posisikan wajah tamu di dalam oval
-                    </span>
+                    <!-- Floating Instruction Pill at the top (chin & neck kept clear) -->
+                    <div class="absolute top-3.5 px-3.5 py-1 bg-slate-950/80 backdrop-blur-xs rounded-full border border-white/15 text-white text-xs font-medium shadow-md flex items-center space-x-2">
+                      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>Posisikan wajah tamu di dalam area oval</span>
+                    </div>
+
+                    <!-- Biometric Face Oval Guide -->
+                    <div class="relative w-44 sm:w-52 h-60 sm:h-68 rounded-[50%] border-2 border-emerald-400/80 shadow-[0_0_24px_rgba(16,185,129,0.18)] flex items-center justify-center">
+                      <!-- Subtle Alignment Ticks -->
+                      <span class="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-emerald-400/80 rounded-full"></span>
+                      <span class="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-emerald-400/80 rounded-full"></span>
+                      <span class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-emerald-400/80 rounded-full"></span>
+                      <span class="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-emerald-400/80 rounded-full"></span>
+                    </div>
                   </div>
 
                   <!-- Face Framing Guide: Rombongan / Multi-Wajah Mode -->
                   <div id="guide-frame-group" class="hidden absolute inset-0 pointer-events-none flex flex-col items-center justify-center px-4">
-                    <div class="w-full max-w-sm h-48 sm:h-52 border-2 border-emerald-400/90 rounded-2xl flex flex-col items-center justify-between p-3.5 bg-emerald-950/20 backdrop-blur-[0.5px]">
-                      <div class="flex items-center space-x-1.5 text-emerald-300 text-xs font-bold bg-slate-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                        <span>👨‍👩‍👧</span>
-                        <span>Area Scan Rombongan / Keluarga</span>
-                      </div>
-                      <div class="flex items-center justify-around w-full opacity-65">
-                        <div class="w-14 sm:w-16 h-20 sm:h-22 border-2 border-dashed border-emerald-400/80 rounded-full"></div>
-                        <div class="w-16 sm:w-18 h-22 sm:h-24 border-2 border-dashed border-emerald-300 rounded-full"></div>
-                        <div class="w-14 sm:w-16 h-20 sm:h-22 border-2 border-dashed border-emerald-400/80 rounded-full"></div>
-                      </div>
-                      <span class="text-xs text-white bg-slate-950/90 px-3 py-0.5 rounded-full font-medium shadow-xs border border-emerald-500/40">
-                        Posisikan semua anggota dalam area hijau
-                      </span>
+                    <!-- Floating Instruction Pill at the top -->
+                    <div class="absolute top-3.5 px-3.5 py-1 bg-slate-950/80 backdrop-blur-xs rounded-full border border-emerald-500/40 text-emerald-300 text-xs font-medium shadow-md flex items-center space-x-2">
+                      <span>👨‍👩‍👧</span>
+                      <span>Area Scan Rombongan: Posisikan semua anggota dalam area hijau</span>
                     </div>
-                  </div>
 
-                  <!-- Toast Notification for USB Plug & Play -->
-                  <div id="camera-toast" class="hidden absolute top-3 bg-slate-900/95 text-emerald-300 border border-emerald-500/40 text-xs px-3 py-1.5 rounded-lg shadow-md transition duration-300">
-                    Kamera baru terdeteksi
+                    <div class="w-full max-w-sm h-52 sm:h-56 border-2 border-emerald-400/90 rounded-2xl flex flex-col items-center justify-center p-4 bg-emerald-950/15 backdrop-blur-[0.5px]">
+                      <div class="flex items-center justify-around w-full opacity-70">
+                        <div class="w-16 sm:w-20 h-24 sm:h-28 border-2 border-emerald-400/80 rounded-full"></div>
+                        <div class="w-20 sm:w-24 h-28 sm:h-32 border-2 border-emerald-300 rounded-full"></div>
+                        <div class="w-16 sm:w-20 h-24 sm:h-28 border-2 border-emerald-400/80 rounded-full"></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Camera Controls -->
-                <div class="p-3 bg-slate-950 flex items-center justify-between gap-2 border-t border-slate-800">
+                <!-- Camera Controls Footer -->
+                <div class="p-3.5 bg-slate-950/95 flex items-center justify-between gap-3 border-t border-slate-800">
                   <button 
                     type="button" 
                     onclick="switchInputMode('upload')" 
-                    class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"
+                    class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700/80 transition focus-ring"
                   >
                     Batal
                   </button>
@@ -489,13 +515,15 @@
                     type="button" 
                     id="btn-capture-snapshot"
                     onclick="captureSnapshot()" 
-                    class="flex-1 py-2 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1.5 shadow-xs"
+                    class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] focus-ring"
                   >
-                    <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span id="btn-capture-text">Ambil Foto Tamu</span>
+                    <span class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                      <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </span>
+                    <span id="btn-capture-text" class="tracking-wide">Ambil Foto Tamu</span>
                   </button>
                 </div>
               </div>
@@ -1422,7 +1450,7 @@
         if (guideGroup) guideGroup.classList.remove('hidden');
         
         if (btnCapture) {
-          btnCapture.className = "flex-1 py-2 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer";
+          btnCapture.className = "flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] focus-ring cursor-pointer";
         }
         if (btnCaptureText) btnCaptureText.textContent = "Ambil Foto Rombongan";
         showCameraToast("Mode Rombongan: Posisikan semua anggota dalam area hijau");
@@ -1434,7 +1462,7 @@
         if (guideGroup) guideGroup.classList.add('hidden');
         
         if (btnCapture) {
-          btnCapture.className = "flex-1 py-2 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer";
+          btnCapture.className = "flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] focus-ring cursor-pointer";
         }
         if (btnCaptureText) btnCaptureText.textContent = "Ambil Foto Tamu";
         showCameraToast("Posisikan wajah tamu di dalam oval");
@@ -1572,12 +1600,16 @@
       
       if (isCameraMirrored) {
         video.classList.add('-scale-x-100');
-        btn.classList.add('bg-lodge-700', 'text-white');
-        btn.classList.remove('bg-slate-800', 'text-slate-300');
+        if (btn) {
+          btn.classList.add('bg-lodge-700', 'text-white');
+          btn.classList.remove('bg-slate-800', 'text-slate-300');
+        }
       } else {
         video.classList.remove('-scale-x-100');
-        btn.classList.remove('bg-lodge-700', 'text-white');
-        btn.classList.add('bg-slate-800', 'text-slate-300');
+        if (btn) {
+          btn.classList.remove('bg-lodge-700', 'text-white');
+          btn.classList.add('bg-slate-800', 'text-slate-300');
+        }
       }
     }
 
@@ -1595,6 +1627,17 @@
       if (!video || !video.videoWidth) {
         alert("Kamera belum siap. Mohon tunggu sesaat.");
         return;
+      }
+
+      // Visual shutter flash effect
+      const flashEl = document.getElementById('camera-shutter-flash');
+      if (flashEl) {
+        flashEl.classList.remove('opacity-0');
+        flashEl.classList.add('opacity-85');
+        setTimeout(() => {
+          flashEl.classList.remove('opacity-85');
+          flashEl.classList.add('opacity-0');
+        }, 120);
       }
 
       currentSelectedFiles = []; // Reset array
