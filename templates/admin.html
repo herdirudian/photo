@@ -611,30 +611,62 @@
               </span>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
               <div>
                 <label for="operator_pin" class="block font-semibold text-slate-700 mb-1">
                   PIN Petugas (Kiosk)
                 </label>
-                <input 
-                  type="password" 
-                  id="operator_pin" 
-                  maxlength="6" 
-                  value="1234" 
-                  class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-mono text-center tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition" 
-                />
+                <div class="relative">
+                  <input 
+                    type="password" 
+                    id="operator_pin" 
+                    maxlength="32" 
+                    value="1234" 
+                    placeholder="Contoh: 1234"
+                    onkeydown="if(event.key==='Enter') handleSaveSecurityPin()"
+                    class="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-mono text-center tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition" 
+                  />
+                  <button 
+                    type="button" 
+                    onclick="togglePinVisibility('operator_pin', this)"
+                    title="Lihat / Sembunyikan PIN"
+                    class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 transition"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="text-[11px] text-slate-500 mt-1 block">Akses membuka layar pencarian foto</span>
               </div>
               <div>
                 <label for="admin_pin" class="block font-semibold text-slate-700 mb-1">
                   PIN Administrator
                 </label>
-                <input 
-                  type="password" 
-                  id="admin_pin" 
-                  maxlength="6" 
-                  value="1234" 
-                  class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-mono text-center tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition" 
-                />
+                <div class="relative">
+                  <input 
+                    type="password" 
+                    id="admin_pin" 
+                    maxlength="32" 
+                    value="1234" 
+                    placeholder="Contoh: 1234"
+                    onkeydown="if(event.key==='Enter') handleSaveSecurityPin()"
+                    class="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-mono text-center tracking-widest focus:bg-white focus:border-lodge-600 focus:outline-none transition" 
+                  />
+                  <button 
+                    type="button" 
+                    onclick="togglePinVisibility('admin_pin', this)"
+                    title="Lihat / Sembunyikan PIN"
+                    class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 transition"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="text-[11px] text-slate-500 mt-1 block">Akses menu Admin & reset data</span>
               </div>
             </div>
 
@@ -649,8 +681,25 @@
                 <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-lodge-600"></div>
               </label>
             </div>
-          </div>
-        </div>
+
+            <!-- Tombol Simpan PIN & Keamanan Langsung -->
+            <div class="pt-3 border-t border-slate-100">
+              <button 
+                type="button" 
+                id="btn-save-security-pin"
+                onclick="handleSaveSecurityPin()"
+                class="w-full py-2.5 bg-lodge-600 hover:bg-lodge-700 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center space-x-2 shadow-xs focus-ring"
+              >
+                <svg id="save-pin-icon" class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg id="save-pin-spinner" class="hidden w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="save-pin-btn-text">Simpan PIN & Keamanan</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1036,6 +1085,67 @@
         alert('Gagal menyimpan pengaturan. Periksa koneksi ke server.');
       } finally {
         saveBtn.disabled = false;
+      }
+    }
+
+    function togglePinVisibility(inputId, btnEl) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      if (btnEl) {
+        btnEl.classList.toggle('text-lodge-600', isPassword);
+        btnEl.classList.toggle('text-slate-400', !isPassword);
+      }
+    }
+
+    async function handleSaveSecurityPin() {
+      const saveBtn = document.getElementById('btn-save-security-pin');
+      const icon = document.getElementById('save-pin-icon');
+      const spinner = document.getElementById('save-pin-spinner');
+      const btnText = document.getElementById('save-pin-btn-text');
+
+      const opInput = document.getElementById('operator_pin');
+      const adInput = document.getElementById('admin_pin');
+      const operatorPin = (opInput ? opInput.value : '').trim();
+      const adminPin = (adInput ? adInput.value : '').trim();
+      const requirePin = document.getElementById('require_pin_to_access') ? document.getElementById('require_pin_to_access').checked : true;
+      const pollingInterval = parseInt(document.getElementById('polling_interval').value) || 15;
+
+      if (!operatorPin || !adminPin) {
+        alert('PIN Petugas dan PIN Administrator tidak boleh kosong!');
+        return;
+      }
+
+      if (saveBtn) saveBtn.disabled = true;
+      if (icon) icon.classList.add('hidden');
+      if (spinner) spinner.classList.remove('hidden');
+      if (btnText) btnText.textContent = "Menyimpan PIN...";
+
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operator_pin: operatorPin,
+            admin_pin: adminPin,
+            require_pin_to_access: requirePin,
+            polling_interval: pollingInterval
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ PIN Petugas & PIN Administrator berhasil diperbarui dan disimpan!');
+        } else {
+          alert('Gagal menyimpan PIN: ' + (data.error || 'Terjadi kesalahan'));
+        }
+      } catch (e) {
+        alert('Gagal menghubungi server untuk menyimpan PIN. Periksa koneksi jaringan.');
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+        if (icon) icon.classList.remove('hidden');
+        if (spinner) spinner.classList.add('hidden');
+        if (btnText) btnText.textContent = "Simpan PIN & Keamanan";
       }
     }
 
