@@ -29,7 +29,27 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
     """
     Ensure the file is completely written to disk before attempting computer vision extraction.
     Crucial for theme park network shares (Samba) or camera offloads where files arrive in chunks.
+    Fast path: If the file is already complete (> 1KB with valid image headers & EOF), returns True immediately!
     """
+    if not os.path.exists(file_path):
+        return False
+
+    try:
+        sz = os.path.getsize(file_path)
+        if sz > 1024:
+            with open(file_path, "rb") as f:
+                head = f.read(4)
+                f.seek(max(0, sz - 4))
+                tail = f.read(4)
+                # Valid JPEG: starts with \xff\xd8 and ends with \xff\xd9
+                if head.startswith(b"\xff\xd8") and tail.endswith(b"\xff\xd9"):
+                    return True
+                # Valid PNG: starts with \x89PNG and ends with IEND...
+                if head.startswith(b"\x89PNG") and b"IEND" in tail:
+                    return True
+    except (OSError, IOError):
+        pass
+
     start_time = time.time()
     last_size = -1
 
@@ -48,7 +68,6 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
             # Size has stabilized over the interval, quick check if readable
             try:
                 with open(file_path, "rb") as f:
-                    # Read the first and last few bytes to confirm non-empty write
                     f.seek(0)
                     head = f.read(10)
                     f.seek(max(0, current_size - 10))
