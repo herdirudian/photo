@@ -197,26 +197,41 @@
         <!-- Metrics Pill (Accessible Contrast, Calm Status Dot & Real-time Progress) -->
         <div 
           id="header-operator-controls" 
-          class="hidden lg:flex items-center space-x-2.5 bg-lodge-950/90 px-3 py-1.5 rounded-lg border border-lodge-700/80 transition-all duration-300 shadow-2xs"
+          class="flex items-center space-x-2 sm:space-x-2.5 bg-lodge-950/90 px-2.5 sm:px-3 py-1.5 rounded-lg border border-lodge-700/80 transition-all duration-300 shadow-2xs"
           title="Status pangkalan data foto dan pengenalan wajah"
         >
           <div class="flex items-center space-x-1.5">
-            <span id="stat-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20 shrink-0 transition-colors duration-300" aria-hidden="true"></span>
-            <span id="stat-label-photo" class="text-lodge-200 font-medium">Foto:</span>
-            <span class="text-white font-semibold tabular-nums" id="stat-photos">{{ stats.total_photos }} foto</span>
+            <span id="stat-status-dot" class="w-2 h-2 rounded-full {% if stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos) %}bg-amber-400 ring-2 ring-amber-400/40 animate-pulse{% else %}bg-emerald-400 ring-2 ring-emerald-400/20{% endif %} shrink-0 transition-colors duration-300" aria-hidden="true"></span>
+            <span id="stat-label-photo" class="text-lodge-200 font-medium hidden xs:inline">{% if stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos) %}Memproses:{% else %}Foto:{% endif %}</span>
+            <span class="text-white font-semibold tabular-nums" id="stat-photos">
+              {%- if stats.total_disk_photos and stats.total_disk_photos > stats.total_photos -%}
+                {{ stats.total_photos }} / {{ stats.total_disk_photos }} foto
+              {%- else -%}
+                {{ stats.total_photos }} foto
+              {%- endif -%}
+            </span>
           </div>
 
-          <!-- Badge Indikator Foto Sedang Diproses (Otomatis muncul saat ada foto baru yang masuk) -->
-          <div id="stat-indexing-badge" class="hidden items-center space-x-1 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-400/20 text-amber-200 border border-amber-400/30">
-            <svg class="w-3 h-3 animate-spin text-amber-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <!-- Status Badge (Selalu terlihat: Terupdate jika lengkap, X proses jika sedang masuk) -->
+          <div id="stat-indexing-badge" class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide {% if stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos) %}bg-amber-400/20 text-amber-200 border border-amber-400/30{% else %}bg-emerald-500/20 text-emerald-200 border border-emerald-500/30{% endif %}">
+            <svg id="stat-badge-spinner" class="w-3 h-3 text-amber-300 shrink-0 {% if not (stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos)) %}hidden{% else %}animate-spin{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span id="stat-pending-count" class="tabular-nums">0 proses</span>
+            <svg id="stat-badge-check" class="w-3 h-3 text-emerald-400 shrink-0 {% if stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos) %}hidden{% endif %}" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            <span id="stat-pending-count" class="tabular-nums">
+              {%- if stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos) -%}
+                {{ stats.pending_photos or (stats.total_disk_photos - stats.total_photos) }} proses
+              {%- else -%}
+                Terupdate
+              {%- endif -%}
+            </span>
           </div>
 
-          <span class="text-lodge-500 font-bold" aria-hidden="true">|</span>
+          <span class="text-lodge-500 font-bold hidden sm:inline" aria-hidden="true">|</span>
 
-          <div class="flex items-center space-x-1.5">
+          <div class="hidden sm:flex items-center space-x-1.5">
             <span class="text-lodge-200 font-medium">Wajah:</span>
             <span class="text-white font-semibold tabular-nums" id="stat-faces">{{ stats.total_faces }}</span>
           </div>
@@ -280,6 +295,34 @@
 
     </div>
   </header>
+
+  <!-- Real-time Ingestion Progress Strip (Muncul otomatis saat ada foto baru disalin ke server) -->
+  <div id="indexing-progress-strip" class="{% if not (stats.is_indexing or (stats.total_disk_photos and stats.total_disk_photos > stats.total_photos)) %}hidden{% endif %} bg-amber-500/15 border-b border-amber-400/40 px-4 sm:px-6 lg:px-8 py-2.5 text-xs text-amber-950 transition-all duration-300 sticky top-16 z-30 shadow-xs backdrop-blur-xs">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+      <div class="flex items-center space-x-2.5">
+        <svg class="w-4 h-4 text-amber-600 animate-spin shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <div class="flex items-center space-x-2 flex-wrap">
+          <span class="font-bold text-amber-900">Memproses Foto Masuk:</span>
+          <span id="strip-progress-text" class="font-bold text-amber-800">
+            {%- if stats.total_disk_photos and stats.total_disk_photos > stats.total_photos -%}
+              {{ stats.total_photos }} / {{ stats.total_disk_photos }} foto ({{ stats.indexing_progress.percent if stats.indexing_progress else 0 }}%)
+            {%- else -%}
+              0 / 0 foto (0%)
+            {%- endif -%}
+          </span>
+          <span class="text-amber-800/80 hidden md:inline">&bull; Sisa <span id="strip-pending-count" class="font-bold">{{ stats.pending_photos or 0 }}</span> foto sedang diekstrak AI</span>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3 w-full sm:w-auto">
+        <div class="w-full sm:w-48 bg-amber-200/90 rounded-full h-2.5 overflow-hidden border border-amber-300">
+          <div id="strip-progress-bar" class="bg-amber-600 h-2.5 rounded-full transition-all duration-500 ease-out" style="width: {{ stats.indexing_progress.percent if stats.indexing_progress else 0 }}%;"></div>
+        </div>
+        <span id="strip-percent-badge" class="text-[11px] font-bold text-amber-900 tabular-nums shrink-0">{{ stats.indexing_progress.percent if stats.indexing_progress else 0 }}%</span>
+      </div>
+    </div>
+  </div>
 
   <!-- Operator Active Alert Banner (Hanya terlihat jika Petugas login) -->
   <div id="operator-status-banner" class="hidden bg-amber-100 text-amber-950 px-4 sm:px-6 lg:px-8 py-2.5 text-xs font-semibold flex items-center justify-between border-b border-amber-300 shadow-xs sticky top-16 z-30">
@@ -2639,10 +2682,7 @@
         if (sambaBox) sambaBox.classList.remove('hidden');
         if (archCard) archCard.classList.remove('hidden');
         if (guestCard) guestCard.classList.add('hidden');
-        if (headerControls) {
-          headerControls.classList.remove('hidden', 'lg:flex');
-          headerControls.classList.add('flex');
-        }
+        if (headerControls) headerControls.classList.remove('hidden');
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-semibold transition focus-ring min-h-[36px] shadow-xs";
         }
@@ -2656,10 +2696,7 @@
         if (sambaBox) sambaBox.classList.add('hidden');
         if (archCard) archCard.classList.add('hidden');
         if (guestCard) guestCard.classList.add('hidden');
-        if (headerControls) {
-          headerControls.classList.remove('flex');
-          headerControls.classList.add('hidden', 'lg:flex');
-        }
+        if (headerControls) headerControls.classList.remove('hidden');
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs";
         }
@@ -2752,6 +2789,33 @@
       if (btn) btn.disabled = true;
       if (icon) icon.classList.add('animate-spin');
 
+      // Visual feedback seketika
+      const elDot = document.getElementById('stat-status-dot');
+      const elLabel = document.getElementById('stat-label-photo');
+      const elBadge = document.getElementById('stat-indexing-badge');
+      const elPending = document.getElementById('stat-pending-count');
+      const spinner = document.getElementById('stat-badge-spinner');
+      const check = document.getElementById('stat-badge-check');
+
+      const strip = document.getElementById('indexing-progress-strip');
+      const stripText = document.getElementById('strip-progress-text');
+      const stripPending = document.getElementById('strip-pending-count');
+      const stripBar = document.getElementById('strip-progress-bar');
+      const stripPct = document.getElementById('strip-percent-badge');
+
+      if (elDot) elDot.className = "w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/40 animate-pulse shrink-0 transition-colors";
+      if (elLabel) elLabel.textContent = "Memindai:";
+      if (elBadge) elBadge.className = "inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide bg-amber-400/20 text-amber-200 border border-amber-400/30";
+      if (spinner) spinner.classList.remove('hidden');
+      if (check) check.classList.add('hidden');
+      if (elPending) elPending.textContent = "Memindai...";
+
+      if (strip) strip.classList.remove('hidden');
+      if (stripText) stripText.textContent = "Memindai seluruh folder foto...";
+      if (stripPending) stripPending.textContent = "...";
+      if (stripBar) stripBar.style.width = "100%";
+      if (stripPct) stripPct.textContent = "Pindai";
+
       try {
         wasIndexingPhotos = true;
         const res = await fetch('/api/reindex', { method: 'POST' });
@@ -2760,9 +2824,9 @@
           await refreshStats();
           const s = data.summary;
           if (s) {
-            showExplorerToast(`Pemindaian selesai: ${s.scanned || 0} foto dipindai, ${s.newly_indexed || 0} baru terindeks.`);
+            showExplorerToast(`🎉 Pemindaian selesai: ${s.scanned || 0} foto dipindai, ${s.newly_indexed || 0} baru terindeks.`);
           } else {
-            showExplorerToast(data.message || 'Pemindaian foto selesai.');
+            showExplorerToast(data.message || '🎉 Semua foto sudah terupdate & siap dicari!');
           }
         } else {
           showExplorerToast('Gagal memindai: ' + (data.detail || 'Terjadi kendala pada server.'));
@@ -2789,47 +2853,71 @@
         const elLabel = document.getElementById('stat-label-photo');
         const elBadge = document.getElementById('stat-indexing-badge');
         const elPending = document.getElementById('stat-pending-count');
+        const spinner = document.getElementById('stat-badge-spinner');
+        const check = document.getElementById('stat-badge-check');
+
+        const strip = document.getElementById('indexing-progress-strip');
+        const stripText = document.getElementById('strip-progress-text');
+        const stripPending = document.getElementById('strip-pending-count');
+        const stripBar = document.getElementById('strip-progress-bar');
+        const stripPct = document.getElementById('strip-percent-badge');
 
         const totalIndexed = data.total_photos || 0;
         const totalDisk = data.total_disk_photos !== undefined ? data.total_disk_photos : totalIndexed;
-        const pending = data.pending_photos || 0;
+        const pending = data.pending_photos !== undefined ? data.pending_photos : Math.max(0, totalDisk - totalIndexed);
         const isIndexing = Boolean(data.is_indexing || pending > 0);
 
         if (elFaces) elFaces.textContent = data.total_faces || 0;
 
-        if (isIndexing && totalDisk > totalIndexed) {
+        if (isIndexing && (totalDisk > totalIndexed || pending > 0)) {
           // Sedang ada foto yang dalam proses masuk / ekstraksi AI
           wasIndexingPhotos = true;
 
+          const pct = data.indexing_progress ? data.indexing_progress.percent : (totalDisk > 0 ? Math.round((totalIndexed / totalDisk) * 100) : 0);
+
           if (elLabel) elLabel.textContent = "Memproses:";
           if (elPhotos) {
-            const pct = data.indexing_progress ? data.indexing_progress.percent : Math.round((totalIndexed / totalDisk) * 100);
             elPhotos.textContent = `${totalIndexed} / ${totalDisk} foto (${pct}%)`;
           }
           if (elDot) {
             elDot.className = "w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/40 animate-pulse shrink-0 transition-colors";
           }
           if (elBadge) {
-            elBadge.classList.remove('hidden');
-            elBadge.classList.add('inline-flex');
+            elBadge.className = "inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide bg-amber-400/20 text-amber-200 border border-amber-400/30";
           }
+          if (spinner) spinner.classList.remove('hidden');
+          if (check) check.classList.add('hidden');
           if (elPending) {
-            elPending.textContent = `${pending} sisa`;
+            elPending.textContent = `${pending} proses`;
           }
+
+          // Update Progress Strip
+          if (strip) strip.classList.remove('hidden');
+          if (stripText) stripText.textContent = `${totalIndexed} / ${totalDisk} foto (${pct}%)`;
+          if (stripPending) stripPending.textContent = pending;
+          if (stripBar) stripBar.style.width = `${pct}%`;
+          if (stripPct) stripPct.textContent = `${pct}%`;
 
           // Polling cepat tiap 3 detik agar angka progres real-time bergerak di layar
           scheduleNextStatsRefresh(3000);
         } else {
-          // Seluruh foto sudah selesai terindeks
+          // Seluruh foto sudah selesai terindeks (Terupdate)
           if (elLabel) elLabel.textContent = "Foto:";
           if (elPhotos) elPhotos.textContent = `${totalIndexed} foto`;
           if (elDot) {
             elDot.className = "w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20 shrink-0 transition-colors";
           }
           if (elBadge) {
-            elBadge.classList.add('hidden');
-            elBadge.classList.remove('inline-flex');
+            elBadge.className = "inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide bg-emerald-500/20 text-emerald-200 border border-emerald-500/30";
           }
+          if (spinner) spinner.classList.add('hidden');
+          if (check) check.classList.remove('hidden');
+          if (elPending) {
+            elPending.textContent = "Terupdate";
+          }
+
+          // Sembunyikan Progress Strip saat sudah terupdate lengkap
+          if (strip) strip.classList.add('hidden');
 
           // Jika sebelumnya dalam kondisi memproses, sekarang SEMUANYA SUDAH SELESAI:
           if (wasIndexingPhotos) {
@@ -2837,8 +2925,8 @@
             showExplorerToast(`🎉 Semua foto sudah terupdate! (${totalIndexed} foto siap dicari)`);
           }
 
-          // Polling santai tiap 12 detik
-          scheduleNextStatsRefresh(12000);
+          // Polling santai tiap 10 detik
+          scheduleNextStatsRefresh(10000);
         }
 
         await loadRideSubfolders();

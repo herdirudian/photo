@@ -166,7 +166,7 @@
             Total Foto di Folder
           </span>
           <span id="stat-disk-photos" class="text-sm font-bold text-slate-900 mt-0.5 block truncate">
-            {{ stats.total_photos }} foto
+            {{ stats.total_disk_photos if (stats.total_disk_photos is defined and stats.total_disk_photos > 0) else stats.total_photos }} foto
           </span>
         </div>
       </div>
