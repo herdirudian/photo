@@ -82,6 +82,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    err_tb = traceback.format_exc()
+    logger.error(f"Global exception on {request.url.path}: {exc}\n{err_tb}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "Kesalahan Pemrosesan Server",
+            "detail": f"{type(exc).__name__}: {str(exc)}",
+            "suggestion": "Silakan coba kembali atau periksa log container server."
+        }
+    )
+
 # Static and Templates
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
