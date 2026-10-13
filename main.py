@@ -205,19 +205,24 @@ def get_comprehensive_stats() -> dict:
     total_disk_photos = storage_info.get("total_images", 0)
 
     prog = indexer.get_progress()
-    is_indexing = prog.get("is_indexing", False)
+    prog_is_indexing = bool(prog.get("is_indexing", False))
+    queue_pending = prog.get("pending_in_queue", 0)
 
     total_indexed = stats.get("total_photos", 0)
-    pending_photos = max(0, total_disk_photos - total_indexed)
-    pct = round((total_indexed / total_disk_photos * 100), 1) if total_disk_photos > 0 else 100.0
+    disk_pending = max(0, total_disk_photos - total_indexed)
+    pending_photos = max(disk_pending, queue_pending)
 
-    stats["total_disk_photos"] = total_disk_photos
+    effective_total_disk = max(total_disk_photos, total_indexed + queue_pending)
+    is_indexing = prog_is_indexing or (pending_photos > 0)
+    pct = round((total_indexed / effective_total_disk * 100), 1) if effective_total_disk > 0 else 100.0
+
+    stats["total_disk_photos"] = effective_total_disk
     stats["pending_photos"] = pending_photos
-    stats["is_indexing"] = is_indexing or (pending_photos > 0)
+    stats["is_indexing"] = is_indexing
     stats["indexing_progress"] = {
-        "is_active": is_indexing or (pending_photos > 0),
+        "is_active": is_indexing,
         "indexed": total_indexed,
-        "total_disk": total_disk_photos,
+        "total_disk": effective_total_disk,
         "pending": pending_photos,
         "percent": min(100.0, pct),
         "current_file": prog.get("current_file", ""),

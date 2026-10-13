@@ -7,6 +7,7 @@ import os
 import time
 import logging
 import threading
+import queue
 from typing import Set, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent, FileDeletedEvent
@@ -87,10 +88,11 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
 class RawPhotoEventHandler(FileSystemEventHandler):
     """Watchdog event handler that indexes new photo files as they arrive."""
 
-    def __init__(self, db_manager: DatabaseManager, face_engine: FaceEngine):
+    def __init__(self, db_manager: DatabaseManager, face_engine: FaceEngine, indexer: Optional['PhotoIndexer'] = None):
         super().__init__()
         self.db_manager = db_manager
         self.face_engine = face_engine
+        self.indexer = indexer
         self._processing_lock = threading.Lock()
 
     def process_file(self, file_path: str, force: bool = False):
@@ -143,13 +145,11 @@ class RawPhotoEventHandler(FileSystemEventHandler):
 
     def process_directory(self, dir_path: str, force: bool = False):
         """
-        Recursively scan and index all valid photos in a newly created or moved directory,
-        supporting arbitrary nested subfolder depths.
+        Recursively scan and index all valid photos in a newly created or moved directory.
         """
         if not os.path.isdir(dir_path):
             return
         logger.info(f"Scanning directory recursively for photos: {dir_path}")
-        # Give remote write operations a moment to settle
         time.sleep(0.5)
         for root, _, files in os.walk(dir_path, followlinks=True):
             for filename in sorted(files):
@@ -158,28 +158,37 @@ class RawPhotoEventHandler(FileSystemEventHandler):
                     self.process_file(full_path, force=force)
 
     def on_created(self, event):
-        if event.is_directory:
-            threading.Thread(
-                target=self.process_directory,
-                args=(event.src_path,),
-                daemon=True,
-                name=f"DirIndex-{os.path.basename(event.src_path)}"
-            ).start()
+        if self.indexer:
+            self.indexer.enqueue_path(event.src_path)
         else:
-            self.process_file(event.src_path)
+            if event.is_directory:
+                threading.Thread(
+                    target=self.process_directory,
+                    args=(event.src_path,),
+                    daemon=True,
+                    name=f"DirIndex-{os.path.basename(event.src_path)}"
+                ).start()
+            else:
+                self.process_file(event.src_path)
 
     def on_moved(self, event):
         if event.is_directory:
             self.db_manager.delete_folder(event.src_path)
-            threading.Thread(
-                target=self.process_directory,
-                args=(event.dest_path,),
-                daemon=True,
-                name=f"DirMove-{os.path.basename(event.dest_path)}"
-            ).start()
+            if self.indexer:
+                self.indexer.enqueue_path(event.dest_path)
+            else:
+                threading.Thread(
+                    target=self.process_directory,
+                    args=(event.dest_path,),
+                    daemon=True,
+                    name=f"DirMove-{os.path.basename(event.dest_path)}"
+                ).start()
         else:
             self.db_manager.delete_photo_by_path(event.src_path)
-            self.process_file(event.dest_path)
+            if self.indexer:
+                self.indexer.enqueue_file(event.dest_path)
+            else:
+                self.process_file(event.dest_path)
 
     def on_deleted(self, event):
         if event.is_directory:
@@ -192,21 +201,27 @@ class RawPhotoEventHandler(FileSystemEventHandler):
 
 class PhotoIndexer:
     """
-    Manages directory scanning, Watchdog observer lifecycle, and periodic polling.
-    Periodic polling is essential for CIFS/Samba/NFS network mounts where Linux kernel inotify
-    events are not triggered by remote file additions or deletions.
+    Manages directory scanning, Watchdog observer lifecycle, real-time ingestion queue,
+    and periodic network share polling.
     """
 
-    def __init__(self, raw_dir: str, db_manager: DatabaseManager, face_engine: FaceEngine, polling_interval: float = 15.0):
+    def __init__(self, raw_dir: str, db_manager: DatabaseManager, face_engine: FaceEngine, polling_interval: float = 3.0):
         self.raw_dir = raw_dir
         self.db_manager = db_manager
         self.face_engine = face_engine
         self.polling_interval = polling_interval
         self.observer: Optional[Observer] = None
         self._polling_thread: Optional[threading.Thread] = None
+        self._worker_thread: Optional[threading.Thread] = None
         self._running = False
         self._scan_lock = threading.Lock()
         
+        # Real-time ingestion queue
+        self._queue = queue.Queue()
+        self._enqueued_paths: Set[str] = set()
+        self._queue_lock = threading.Lock()
+        self._is_worker_busy = False
+
         # Real-time progress metrics
         self.is_indexing = False
         self.current_processed = 0
@@ -215,12 +230,118 @@ class PhotoIndexer:
         self.current_file = ""
         self.last_completed_at = None
 
+        self._handler = RawPhotoEventHandler(self.db_manager, self.face_engine, indexer=self)
+
         os.makedirs(self.raw_dir, exist_ok=True)
 
+    def enqueue_path(self, path: str, force: bool = False):
+        """Enqueue either a single file or a folder of files."""
+        if os.path.isdir(path):
+            self.enqueue_directory(path, force=force)
+        else:
+            self.enqueue_file(path, force=force)
+
+    def enqueue_file(self, file_path: str, force: bool = False):
+        """Enqueue an image file into the background processing queue."""
+        if not is_valid_image(file_path):
+            return
+
+        abs_path = os.path.abspath(file_path)
+        with self._queue_lock:
+            if abs_path in self._enqueued_paths:
+                return
+            self._enqueued_paths.add(abs_path)
+            self._queue.put((abs_path, force))
+            self.is_indexing = True
+            self.total_to_process = max(self.total_to_process, self._queue.qsize() + (1 if self._is_worker_busy else 0))
+
+        logger.info(f"Enqueued photo: {os.path.basename(abs_path)} (Queue length: {self._queue.qsize()})")
+
+    def enqueue_directory(self, dir_path: str, force: bool = False):
+        """Recursively discover and enqueue photos from a directory."""
+        if not os.path.isdir(dir_path):
+            return
+        logger.info(f"Scanning directory to enqueue photos: {dir_path}")
+        time.sleep(0.3)
+        for root, _, files in os.walk(dir_path, followlinks=True):
+            for filename in sorted(files):
+                full_path = os.path.join(root, filename)
+                if is_valid_image(full_path):
+                    self.enqueue_file(full_path, force=force)
+
+    def enqueue_unindexed_files(self):
+        """
+        Fast scan that discovers any photos on disk that haven't been indexed in DB
+        and enqueues them. Guarantees that files copied over Samba / CIFS are picked up
+        even if kernel inotify events were missed.
+        """
+        if not os.path.exists(self.raw_dir):
+            return
+
+        for root, _, files in os.walk(self.raw_dir, followlinks=True):
+            for filename in files:
+                full_path = os.path.abspath(os.path.join(root, filename))
+                if is_valid_image(full_path):
+                    with self._queue_lock:
+                        if full_path in self._enqueued_paths:
+                            continue
+                    try:
+                        stat = os.stat(full_path)
+                        if not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
+                            self.enqueue_file(full_path)
+                    except OSError:
+                        pass
+
+    def _queue_worker(self):
+        """Dedicated background thread that drains the photo ingestion queue."""
+        logger.info("Photo ingestion queue worker started.")
+        while self._running:
+            try:
+                item = self._queue.get(timeout=0.5)
+            except queue.Empty:
+                with self._queue_lock:
+                    if self._queue.empty() and not self._is_worker_busy:
+                        if self.is_indexing and not self._scan_lock.locked():
+                            self.is_indexing = False
+                            self.current_file = ""
+                            self.total_to_process = 0
+                            self.current_processed = 0
+                            self.last_completed_at = time.time()
+                continue
+
+            file_path, force = item
+            self._is_worker_busy = True
+            self.is_indexing = True
+            self.current_file = os.path.basename(file_path)
+
+            try:
+                self._handler.process_file(file_path, force=force)
+                self.current_processed += 1
+                self.newly_indexed_count += 1
+            except Exception as e:
+                logger.error(f"Error processing {file_path} from queue: {e}")
+            finally:
+                with self._queue_lock:
+                    self._enqueued_paths.discard(file_path)
+                    self._is_worker_busy = False
+                    if self._queue.empty() and not self._scan_lock.locked():
+                        self.is_indexing = False
+                        self.current_file = ""
+                        self.total_to_process = 0
+                        self.current_processed = 0
+                        self.last_completed_at = time.time()
+                self._queue.task_done()
+
     def get_progress(self) -> dict:
-        """Return real-time progress of ongoing directory indexing."""
+        """Return real-time progress of ongoing directory indexing and queue metrics."""
+        with self._queue_lock:
+            q_size = self._queue.qsize()
+            is_busy = bool(self._is_worker_busy or self.is_indexing or (q_size > 0) or self._scan_lock.locked())
+            pending = q_size + (1 if self._is_worker_busy else 0)
         return {
-            "is_indexing": self.is_indexing,
+            "is_indexing": is_busy,
+            "queue_size": q_size,
+            "pending_in_queue": pending,
             "current_processed": self.current_processed,
             "total_to_process": self.total_to_process,
             "newly_indexed": self.newly_indexed_count,
@@ -264,7 +385,7 @@ class PhotoIndexer:
                 logger.info(f"Self-healed paths for {purge_stats['updated_paths']} relocated photos.")
 
             # Step 2: Index new or updated files
-            handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
+            handler = self._handler
             scanned_count = 0
             new_indexed_count = 0
 
@@ -330,22 +451,25 @@ class PhotoIndexer:
                 time.sleep(1)
 
             try:
-                self.scan_existing_files()
+                self.enqueue_unindexed_files()
             except Exception as e:
                 logger.error(f"Error in background polling scanner: {e}")
 
     def start(self):
-        """Start the watchdog observer and the periodic network share polling worker."""
+        """Start the watchdog observer, queue worker, and periodic network share polling worker."""
         if self._running:
             return
 
         self._running = True
 
+        # Start ingestion queue worker
+        self._worker_thread = threading.Thread(target=self._queue_worker, daemon=True, name="IndexerQueueWorker")
+        self._worker_thread.start()
+
         # Start Watchdog observer (works on local file systems)
         try:
-            event_handler = RawPhotoEventHandler(self.db_manager, self.face_engine)
             self.observer = Observer()
-            self.observer.schedule(event_handler, self.raw_dir, recursive=True)
+            self.observer.schedule(self._handler, self.raw_dir, recursive=True)
             self.observer.daemon = True
             self.observer.start()
             logger.info(f"Watchdog folder monitor active on: {self.raw_dir}")
@@ -357,7 +481,7 @@ class PhotoIndexer:
         self._polling_thread.start()
 
     def stop(self):
-        """Stop both the watchdog observer and polling worker."""
+        """Stop observer, queue worker, and polling worker cleanly."""
         if not self._running:
             return
 
@@ -366,14 +490,17 @@ class PhotoIndexer:
         if self.observer:
             try:
                 self.observer.stop()
-                self.observer.join(timeout=3.0)
+                self.observer.join(timeout=2.0)
             except Exception:
                 pass
 
-        if self._polling_thread and self._polling_thread.is_alive():
-            self._polling_thread.join(timeout=3.0)
+        if self._worker_thread and self._worker_thread.is_alive():
+            self._worker_thread.join(timeout=2.0)
 
-        logger.info("Watchdog and polling monitors stopped cleanly.")
+        if self._polling_thread and self._polling_thread.is_alive():
+            self._polling_thread.join(timeout=2.0)
+
+        logger.info("Watchdog, queue worker, and polling monitors stopped cleanly.")
 
 
 if __name__ == "__main__":

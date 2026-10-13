@@ -2865,12 +2865,12 @@
         const totalIndexed = data.total_photos || 0;
         const totalDisk = data.total_disk_photos !== undefined ? data.total_disk_photos : totalIndexed;
         const pending = data.pending_photos !== undefined ? data.pending_photos : Math.max(0, totalDisk - totalIndexed);
-        const isIndexing = Boolean(data.is_indexing || pending > 0);
+        const isIndexing = Boolean(data.is_indexing || pending > 0 || totalDisk > totalIndexed);
 
         if (elFaces) elFaces.textContent = data.total_faces || 0;
 
-        if (isIndexing && (totalDisk > totalIndexed || pending > 0)) {
-          // Sedang ada foto yang dalam proses masuk / ekstraksi AI
+        if (isIndexing && (pending > 0 || totalDisk > totalIndexed)) {
+          // Sedang ada foto yang dalam antrian / proses masuk
           wasIndexingPhotos = true;
 
           const pct = data.indexing_progress ? data.indexing_progress.percent : (totalDisk > 0 ? Math.round((totalIndexed / totalDisk) * 100) : 0);
@@ -2898,8 +2898,28 @@
           if (stripBar) stripBar.style.width = `${pct}%`;
           if (stripPct) stripPct.textContent = `${pct}%`;
 
-          // Polling cepat tiap 3 detik agar angka progres real-time bergerak di layar
-          scheduleNextStatsRefresh(3000);
+          // Polling cepat tiap 1.5 detik saat memproses
+          scheduleNextStatsRefresh(1500);
+        } else if (isIndexing) {
+          // Sedang memindai / memverifikasi
+          wasIndexingPhotos = true;
+
+          if (elLabel) elLabel.textContent = "Memindai:";
+          if (elPhotos) elPhotos.textContent = `${totalIndexed} foto`;
+          if (elDot) {
+            elDot.className = "w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/40 animate-pulse shrink-0 transition-colors";
+          }
+          if (elBadge) {
+            elBadge.className = "inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide bg-amber-400/20 text-amber-200 border border-amber-400/30";
+          }
+          if (spinner) spinner.classList.remove('hidden');
+          if (check) check.classList.add('hidden');
+          if (elPending) {
+            elPending.textContent = "Memindai...";
+          }
+          if (strip) strip.classList.remove('hidden');
+
+          scheduleNextStatsRefresh(1500);
         } else {
           // Seluruh foto sudah selesai terindeks (Terupdate)
           if (elLabel) elLabel.textContent = "Foto:";
@@ -2925,14 +2945,14 @@
             showExplorerToast(`🎉 Semua foto sudah terupdate! (${totalIndexed} foto siap dicari)`);
           }
 
-          // Polling santai tiap 10 detik
-          scheduleNextStatsRefresh(10000);
+          // Polling responsif tiap 3 detik saat idle (agar seketika terdeteksi saat foto baru disalin)
+          scheduleNextStatsRefresh(3000);
         }
 
         await loadRideSubfolders();
       } catch (e) {
         console.error("Stats refresh error:", e);
-        scheduleNextStatsRefresh(15000);
+        scheduleNextStatsRefresh(8000);
       }
     }
 
@@ -2940,6 +2960,11 @@
       if (dynamicStatsTimer) clearTimeout(dynamicStatsTimer);
       dynamicStatsTimer = setTimeout(refreshStats, delayMs);
     }
+
+    // Refresh seketika saat window/tab kembali aktif (misal setelah copy-paste di Windows Explorer)
+    window.addEventListener('focus', () => {
+      refreshStats();
+    });
   </script>
 
   <!-- PWA Service Worker & Install Script -->
