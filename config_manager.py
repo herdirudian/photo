@@ -170,14 +170,31 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
     subfolders_map: Dict[str, Dict[str, Any]] = {}
     total_images = 0
     root_images = 0
+    empty_stubs_count = 0
+
+    def is_valid_disk_image(fname: str, fpath: str) -> bool:
+        base = os.path.basename(fname)
+        if base.startswith(".") or base.startswith("~") or base.startswith("Thumbs"):
+            return False
+        _, ext = os.path.splitext(base)
+        if ext.lower() not in valid_exts:
+            return False
+        try:
+            sz = os.path.getsize(fpath)
+            return sz > 0
+        except OSError:
+            return False
 
     try:
         # 1. Count root images directly in raw_dir
         for item in os.listdir(raw_dir):
             full_p = os.path.join(raw_dir, item)
-            if os.path.isfile(full_p) and os.path.splitext(item)[1].lower() in valid_exts:
-                root_images += 1
-                total_images += 1
+            if os.path.isfile(full_p):
+                if is_valid_disk_image(item, full_p):
+                    root_images += 1
+                    total_images += 1
+                elif os.path.splitext(item)[1].lower() in valid_exts and not item.startswith("."):
+                    empty_stubs_count += 1
 
         # 2. Recursively discover all subdirectories and count images in each
         for root, dirs, files in os.walk(raw_dir, followlinks=True):
@@ -185,7 +202,8 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
                 continue
 
             rel_path = os.path.relpath(root, raw_dir).replace("\\", "/")
-            direct_imgs = sum(1 for f in files if os.path.splitext(f)[1].lower() in valid_exts)
+            valid_imgs = [f for f in files if is_valid_disk_image(f, os.path.join(root, f))]
+            direct_imgs = len(valid_imgs)
             total_images += direct_imgs
 
             subfolders_map[rel_path] = {
@@ -230,6 +248,7 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
             "readable": is_readable,
             "total_images": total_images,
             "root_images": root_images,
+            "empty_stubs_count": empty_stubs_count,
             "subfolder_count": len(subfolders),
             "subfolders": subfolders,
             "is_mounted": is_mounted,

@@ -489,12 +489,24 @@ class FaceEngine:
             logger.error(f"Failed to read image file {file_path}")
             return []
 
-        h, w = image_bgr.shape[:2]
+        orig_h, orig_w = image_bgr.shape[:2]
+        max_dim = max(orig_h, orig_w)
+        if max_dim > 2560:
+            scale_factor = 2560.0 / float(max_dim)
+            proc_w = int(round(orig_w * scale_factor))
+            proc_h = int(round(orig_h * scale_factor))
+            proc_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_AREA)
+        else:
+            scale_factor = 1.0
+            proc_bgr = image_bgr
+            proc_h, proc_w = orig_h, orig_w
+
+        h, w = proc_h, proc_w
         all_raw_faces = []
 
         # 1. Main Global Detection Pass
         try:
-            global_faces = self.insight_app.get(image_bgr)
+            global_faces = self.insight_app.get(proc_bgr)
             all_raw_faces.extend(global_faces)
         except Exception as e:
             logger.error(f"InsightFace inference error on {file_path}: {e}")
@@ -511,7 +523,7 @@ class FaceEngine:
                 (cv2.ROTATE_180, "180°")
             ]:
                 try:
-                    rotated_bgr = cv2.rotate(image_bgr, rot_code)
+                    rotated_bgr = cv2.rotate(proc_bgr, rot_code)
                     rot_faces = self.insight_app.get(rotated_bgr)
                     valid_rot_faces = [f for f in rot_faces if getattr(f, "det_score", 0.0) >= 0.52]
                     if valid_rot_faces:
@@ -550,9 +562,9 @@ class FaceEngine:
 
         # 2. Targeted Ride Zone Crop for Balloon Basket / Distant Swing if high-resolution
         # In Hot Air Balloon photos, 6 guests stand packed in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
-        if max(h, w) > 1800:
+        if max(orig_h, orig_w) > 1800:
             by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
-            basket_crop = image_bgr[by1:by2, bx1:bx2]
+            basket_crop = proc_bgr[by1:by2, bx1:bx2]
             if basket_crop.size > 0:
                 try:
                     basket_faces = self.insight_app.get(basket_crop)
@@ -570,7 +582,7 @@ class FaceEngine:
                     pass
 
         # 3. Filter, validate, normalize, and extract upper-body color histograms
-        image_rgb = None
+        proc_rgb = None
         results = []
         for face in all_raw_faces:
             det_score = float(getattr(face, "det_score", 1.0))
@@ -578,11 +590,17 @@ class FaceEngine:
                 continue
 
             bbox = face.bbox
-            x1, y1, x2, y2 = int(round(bbox[0])), int(round(bbox[1])), int(round(bbox[2])), int(round(bbox[3]))
-            left = max(0, min(w - 1, x1))
-            top = max(0, min(h - 1, y1))
-            right = max(left + 1, min(w, x2))
-            bottom = max(top + 1, min(h, y2))
+            if scale_factor != 1.0:
+                # Scale bbox coordinates back to full original image coordinate space
+                orig_bbox = bbox / scale_factor
+            else:
+                orig_bbox = bbox
+
+            x1, y1, x2, y2 = int(round(orig_bbox[0])), int(round(orig_bbox[1])), int(round(orig_bbox[2])), int(round(orig_bbox[3]))
+            left = max(0, min(orig_w - 1, x1))
+            top = max(0, min(orig_h - 1, y1))
+            right = max(left + 1, min(orig_w, x2))
+            bottom = max(top + 1, min(orig_h, y2))
 
             box_w = right - left
             box_h = bottom - top
@@ -948,8 +966,10 @@ class DatabaseManager:
             )
             row = cursor.fetchone()
             if row:
-                # If previous indexing failed with error status, force retry
-                if row["status"] == "error":
+                # If file previously had error or was 0 KB, only retry if file on disk changed (e.g. replaced/overwritten)
+                if row["status"] in ("error", "empty_file"):
+                    if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
+                        return True
                     return False
 
                 # If modified or size changed, need re-indexing
@@ -1487,8 +1507,14 @@ class DatabaseManager:
     def get_stats(self) -> Dict[str, Any]:
         """Return system statistics on photos, faces, and index size."""
         with self.lock, self._get_connection() as conn:
-            p_cur = conn.execute("SELECT COUNT(*) FROM photos")
+            p_cur = conn.execute("SELECT COUNT(*) FROM photos WHERE status != 'empty_file'")
             total_photos = p_cur.fetchone()[0]
+
+            all_cur = conn.execute("SELECT COUNT(*) FROM photos")
+            all_recorded = all_cur.fetchone()[0]
+
+            empty_cur = conn.execute("SELECT COUNT(*) FROM photos WHERE status = 'empty_file'")
+            empty_photos = empty_cur.fetchone()[0]
 
             f_cur = conn.execute("SELECT COUNT(*) FROM faces")
             total_faces = f_cur.fetchone()[0]
@@ -1503,6 +1529,8 @@ class DatabaseManager:
 
         return {
             "total_photos": total_photos,
+            "all_recorded_photos": all_recorded,
+            "empty_photos": empty_photos,
             "total_faces": total_faces,
             "photos_without_faces": no_faces,
             "indexing_errors": errors,

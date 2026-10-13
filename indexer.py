@@ -21,8 +21,11 @@ SUPPORTED_EXTENSIONS: Set[str] = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ti
 
 
 def is_valid_image(file_path: str) -> bool:
-    """Check if the file has a supported image extension."""
-    _, ext = os.path.splitext(file_path)
+    """Check if the file has a supported image extension and is not a hidden or system metadata file."""
+    base = os.path.basename(file_path)
+    if base.startswith(".") or base.startswith("~") or base.startswith("Thumbs"):
+        return False
+    _, ext = os.path.splitext(base)
     return ext.lower() in SUPPORTED_EXTENSIONS
 
 
@@ -36,7 +39,13 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
         return False
 
     try:
-        sz = os.path.getsize(file_path)
+        stat = os.stat(file_path)
+        sz = stat.st_size
+
+        # If file is 0 bytes and was created/modified > 3 seconds ago, it is an abandoned 0-byte stub
+        if sz == 0 and (time.time() - stat.st_mtime > 3.0):
+            return False
+
         if sz > 1024:
             with open(file_path, "rb") as f:
                 head = f.read(4)
@@ -59,11 +68,15 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
             return False
 
         try:
-            current_size = os.path.getsize(file_path)
+            stat = os.stat(file_path)
+            current_size = stat.st_size
         except OSError:
             # File may be exclusively locked by transfer process
             time.sleep(poll_interval)
             continue
+
+        if current_size == 0 and (time.time() - stat.st_mtime > 3.0):
+            return False
 
         if current_size > 0 and current_size == last_size:
             # Size has stabilized over the interval, quick check if readable
@@ -82,7 +95,10 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
         time.sleep(poll_interval)
 
     # Final check
-    return os.path.exists(file_path) and os.path.getsize(file_path) > 0
+    try:
+        return os.path.exists(file_path) and os.path.getsize(file_path) > 0
+    except OSError:
+        return False
 
 
 class RawPhotoEventHandler(FileSystemEventHandler):
@@ -102,8 +118,27 @@ class RawPhotoEventHandler(FileSystemEventHandler):
 
         # Normalized path
         file_path = os.path.abspath(file_path)
-        if not wait_for_file_transfer_complete(file_path):
-            logger.warning(f"File transfer timeout or incomplete write for {file_path}")
+        is_ready = wait_for_file_transfer_complete(file_path)
+
+        if not is_ready:
+            # If the file exists on disk but is 0 KB or unreadable, register as empty_file
+            # so the database accounts for it and does not enter an infinite indexing retry loop.
+            try:
+                if os.path.exists(file_path):
+                    stat = os.stat(file_path)
+                    if stat.st_size == 0:
+                        logger.warning(f"File {os.path.basename(file_path)} is 0 KB on disk. Registered as empty_file.")
+                        self.db_manager.register_photo(
+                            file_path=file_path,
+                            file_mtime=stat.st_mtime,
+                            file_size=0,
+                            faces=[],
+                            status="empty_file"
+                        )
+                    else:
+                        logger.warning(f"File transfer timeout or incomplete write for {os.path.basename(file_path)}")
+            except Exception as e:
+                logger.debug(f"Could not register incomplete file status: {e}")
             return
 
         try:

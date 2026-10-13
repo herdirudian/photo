@@ -2861,12 +2861,12 @@
 
         const totalIndexed = data.total_photos || 0;
         const totalDisk = data.total_disk_photos !== undefined ? data.total_disk_photos : totalIndexed;
-        const pending = data.pending_photos !== undefined ? data.pending_photos : Math.max(0, totalDisk - totalIndexed);
-        const isIndexing = Boolean(data.is_indexing || pending > 0 || totalDisk > totalIndexed);
+        const pending = data.pending_photos !== undefined ? data.pending_photos : 0;
+        const isIndexing = Boolean(data.is_indexing && pending > 0);
 
         if (elFaces) elFaces.textContent = data.total_faces || 0;
 
-        if (isIndexing && (pending > 0 || totalDisk > totalIndexed)) {
+        if (isIndexing && pending > 0) {
           // Sedang ada foto yang dalam antrian / proses masuk
           wasIndexingPhotos = true;
 

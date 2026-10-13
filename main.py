@@ -209,12 +209,29 @@ def get_comprehensive_stats() -> dict:
     queue_pending = prog.get("pending_in_queue", 0)
 
     total_indexed = stats.get("total_photos", 0)
+    
+    # Calculate genuinely pending unindexed photos
     disk_pending = max(0, total_disk_photos - total_indexed)
-    pending_photos = max(disk_pending, queue_pending)
 
-    effective_total_disk = max(total_disk_photos, total_indexed + queue_pending)
-    is_indexing = prog_is_indexing or (pending_photos > 0)
-    pct = round((total_indexed / effective_total_disk * 100), 1) if effective_total_disk > 0 else 100.0
+    if prog_is_indexing or queue_pending > 0:
+        is_indexing = True
+        pending_photos = max(disk_pending, queue_pending)
+    elif disk_pending > 0:
+        # Disk has photos not yet in DB; trigger background scan and report active
+        threading.Thread(target=indexer.enqueue_unindexed_files, daemon=True, name="AutoEnqueueWorker").start()
+        is_indexing = True
+        pending_photos = disk_pending
+    else:
+        is_indexing = False
+        pending_photos = 0
+
+    effective_total_disk = max(total_disk_photos, total_indexed + pending_photos)
+
+    if not is_indexing or pending_photos == 0:
+        pct = 100.0
+    else:
+        pct = round((total_indexed / effective_total_disk * 100), 1) if effective_total_disk > 0 else 100.0
+        pct = min(99.9, pct)
 
     stats["total_disk_photos"] = effective_total_disk
     stats["pending_photos"] = pending_photos
@@ -224,7 +241,7 @@ def get_comprehensive_stats() -> dict:
         "indexed": total_indexed,
         "total_disk": effective_total_disk,
         "pending": pending_photos,
-        "percent": min(100.0, pct),
+        "percent": pct,
         "current_file": prog.get("current_file", ""),
         "last_completed_at": prog.get("last_completed_at")
     }
@@ -505,16 +522,20 @@ async def get_system_stats():
 
 @app.post("/api/reindex")
 async def trigger_reindex(force: bool = Query(True)):
-    """Trigger manual re-scan of raw photos directory with full face re-validation."""
+    """Trigger manual re-scan of raw photos directory in background thread."""
     try:
-        summary = indexer.scan_existing_files(force=force)
+        threading.Thread(
+            target=indexer.scan_existing_files,
+            kwargs={"force": force},
+            daemon=True,
+            name="ManualScanWorker"
+        ).start()
         return {
             "success": True,
-            "message": "Raw photo scan completed successfully.",
-            "summary": summary
+            "message": "Pemindaian foto wahana dimulai di latar belakang."
         }
     except Exception as e:
-        logger.error(f"Error during re-index: {e}")
+        logger.error(f"Error starting re-index: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
