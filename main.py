@@ -85,6 +85,11 @@ app = FastAPI(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
     err_tb = traceback.format_exc()
     logger.error(f"Global exception on {request.url.path}: {exc}\n{err_tb}")
     return JSONResponse(
