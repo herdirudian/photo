@@ -442,7 +442,7 @@
           </p>
 
           <div class="bg-slate-900 rounded-xl p-3.5 border border-slate-800 overflow-x-auto">
-            <code id="mount-command-display" class="font-mono text-xs text-emerald-400 select-all whitespace-pre block">sudo mount -t cifs //192.168.100.93/photo /opt/SistemPhoto/data/raw -o username=USER_SHARE,file_mode=0777,dir_mode=0777,iocharset=utf8</code>
+            <code id="mount-command-display" class="font-mono text-xs text-emerald-400 select-all whitespace-pre block">sudo mount -t cifs //192.168.100.93/photo /opt/SistemPhoto/data/raw -o username=USER_SHARE,rw,noperm,file_mode=0777,dir_mode=0777,iocharset=utf8</code>
           </div>
         </div>
 
@@ -955,7 +955,7 @@
         unc += `/${sub}`;
       }
 
-      const cmd = `sudo mount -t cifs ${unc} /opt/SistemPhoto/data/raw -o ${auth},file_mode=0777,dir_mode=0777,iocharset=utf8`;
+      const cmd = `sudo mount -t cifs ${unc} /opt/SistemPhoto/data/raw -o ${auth},rw,noperm,file_mode=0777,dir_mode=0777,iocharset=utf8`;
       document.getElementById('mount-command-display').textContent = cmd;
     }
 
