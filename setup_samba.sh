@@ -22,13 +22,21 @@ sudo apt-get install -y samba
 
 # 2. Buat direktori data fisik dan pastikan izin 777
 DATA_DIR="/opt/SistemPhoto/data"
-echo -e "\n${YELLOW}[2/4] Menyiapkan direktori fisik $DATA_DIR...${NC}"
-sudo mkdir -p "$DATA_DIR/raw" "$DATA_DIR/results" "$DATA_DIR/db"
-sudo chmod -R 777 "$DATA_DIR"
 CURRENT_USER="${SUDO_USER:-$USER}"
 
+echo -e "\n${YELLOW}[2/4] Menyiapkan direktori fisik $DATA_DIR...${NC}"
+# Lepas mount CIFS lama jika masih terpasang agar tidak me-lock folder raw
+if mount | grep -q "$DATA_DIR/raw"; then
+    echo -e "${YELLOW}Terdeteksi mount CIFS lama pada data/raw, melepas mount secara bersih...${NC}"
+    sudo umount -f -l "$DATA_DIR/raw" 2>/dev/null || true
+fi
+
+sudo mkdir -p "$DATA_DIR/raw" "$DATA_DIR/results" "$DATA_DIR/db"
+sudo chown -R "$CURRENT_USER":"$CURRENT_USER" "$DATA_DIR"
+sudo chmod -R 777 "$DATA_DIR"
+
 # 3. Konfigurasi /etc/samba/smb.conf
-echo -e "\n${YELLOW}[3/4] Mengonfigurasi /etc/samba/smb.conf...${NC}"
+echo -e "\n${YELLOW}[3/4] Mengonfigurasi /etc/samba/smb.conf untuk file besar original...${NC}"
 if [ ! -f /etc/samba/smb.conf.backup ]; then
     sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.backup
 fi
@@ -38,27 +46,38 @@ if ! grep -q "map to guest" /etc/samba/smb.conf; then
     sudo sed -i '/\[global\]/a \   map to guest = Bad User\n   usershare allow guests = yes' /etc/samba/smb.conf
 fi
 
-# Tambahkan atau perbarui konfigurasi [park-photos]
-if ! grep -q "\[park-photos\]" /etc/samba/smb.conf; then
-    sudo bash -c "cat >> /etc/samba/smb.conf" << EOL
+# Bersihkan blok [park-photos] lama jika ada agar tidak duplikat/konflik
+if grep -q "\[park-photos\]" /etc/samba/smb.conf; then
+    sudo sed -i '/\[park-photos\]/,$d' /etc/samba/smb.conf
+fi
+
+# Tulis konfigurasi baru yang mendukung transfer file DSLR besar tanpa batas ukuran
+sudo bash -c "cat >> /etc/samba/smb.conf" << EOL
 
 # =========================================================
-# The Lodge Maribaya - Sistem Photo Share
+# The Lodge Maribaya - Sistem Photo Share (Original Large Files)
 # =========================================================
 [park-photos]
    comment = The Lodge Maribaya Photos & Results
    path = $DATA_DIR
    browseable = yes
    read only = no
+   writable = yes
+   writeable = yes
    guest ok = yes
    force user = $CURRENT_USER
    create mask = 0777
    directory mask = 0777
+   force create mode = 0777
+   force directory mode = 0777
    follow symlinks = yes
    wide links = yes
    unix extensions = no
+   strict allocate = no
+   allocation roundup size = 0
+   aio read size = 1
+   aio write size = 1
 EOL
-fi
 
 # Izinkan firewall Ubuntu jika UFW aktif
 sudo ufw allow samba 2>/dev/null || true
