@@ -12,8 +12,10 @@ import zipfile
 import shutil
 import base64
 import logging
+import traceback
 from contextlib import asynccontextmanager
 from typing import Optional, List
+import numpy as np
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
@@ -475,226 +477,241 @@ async def search_guest_photos(
     """
     Search endpoint:
     1. Reads reference photos of guest (Multi-pose).
-    2. Extracts 128-d face vector and HSV color histogram from each pose.
+    2. Extracts 128-d or 512-d face vector and HSV color histogram from each pose.
     3. Searches FAISS for matching faces above similarity threshold.
     4. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks.
     5. Returns matches and network folder path.
     """
-    start_time = time.time()
-
-    raw_query_faces = []
-    
-    for file_idx, file in enumerate(files):
-        if not file.content_type.startswith("image/"):
-            continue
-            
-        try:
-            image_bytes = await file.read()
-            extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
-            
-            if extracted_faces:
-                # If multiple faces detected in one photo, filter out tiny background passerby faces
-                # Keep faces that are at least 12% the size of the largest face in that image
-                max_face_area = max(
-                    (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][1] - f["bbox"][3])
-                    for f in extracted_faces
-                )
-                min_valid_area = max(400, int(max_face_area * 0.12))
-
-                for face in extracted_faces:
-                    area = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][1] - face["bbox"][3])
-                    if area >= min_valid_area:
-                        face["source_file_idx"] = file_idx
-                        raw_query_faces.append(face)
+    try:
+        start_time = time.time()
+        raw_query_faces = []
+        
+        for file_idx, file in enumerate(files):
+            content_type = getattr(file, "content_type", "") or ""
+            filename = getattr(file, "filename", "") or ""
+            if not content_type.startswith("image/") and not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp')):
+                continue
                 
-        except Exception as e:
-            logger.error(f"Failed to process reference image: {e}")
-            continue
+            try:
+                image_bytes = await file.read()
+                extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
+                
+                if extracted_faces:
+                    # If multiple faces detected in one photo, filter out tiny background passerby faces
+                    # Keep faces that are at least 12% the size of the largest face in that image
+                    max_face_area = max(
+                        (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][1] - f["bbox"][3])
+                        for f in extracted_faces
+                    )
+                    min_valid_area = max(400, int(max_face_area * 0.12))
 
-    if not raw_query_faces:
-        return JSONResponse(
-            status_code=422,
-            content={
-                "success": False,
-                "error": "No face detected in reference photos.",
-                "suggestion": "Please capture clear, well-lit photos of the guest's face without heavy obstruction."
-            }
+                    for face in extracted_faces:
+                        area = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][1] - face["bbox"][3])
+                        if area >= min_valid_area:
+                            face["source_file_idx"] = file_idx
+                            raw_query_faces.append(face)
+                    
+            except Exception as e:
+                logger.error(f"Failed to process reference image: {e}")
+                continue
+
+        if not raw_query_faces:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "success": False,
+                    "error": "No face detected in reference photos.",
+                    "suggestion": "Please capture clear, well-lit photos of the guest's face without heavy obstruction."
+                }
+            )
+
+        # Cluster extracted faces into distinct family / group members
+        # Cosine similarity >= 0.62 indicates different poses/photos of the SAME individual
+        # Similarity < 0.62 indicates a DIFFERENT family member
+        members = []
+        for face in raw_query_faces:
+            face_enc = face["encoding"]
+            src_idx = face.get("source_file_idx", 0)
+            
+            best_sim = -1.0
+            best_member = None
+            
+            for m in members:
+                # Faces from the same photo cannot belong to the same person
+                if any(mf.get("source_file_idx") == src_idx for mf in m["faces"]):
+                    continue
+                
+                for mf in m["faces"]:
+                    sim = float(np.dot(face_enc, mf["encoding"]))
+                    if sim > best_sim:
+                        best_sim = sim
+                        if sim >= 0.62:
+                            best_member = m
+            
+            if best_member is not None and best_sim >= 0.62:
+                face["member_id"] = best_member["member_id"]
+                best_member["faces"].append(face)
+            else:
+                new_id = len(members) + 1
+                face["member_id"] = new_id
+                members.append({
+                    "member_id": new_id,
+                    "name": f"Anggota {new_id}",
+                    "faces": [face]
+                })
+
+        total_members = len(members)
+        logger.info(
+            f"Reference processing complete: {len(raw_query_faces)} face(s) clustered into "
+            f"{total_members} distinct member(s) across {len(files)} uploaded file(s)."
         )
 
-    # Cluster extracted faces into distinct family / group members
-    # Cosine similarity >= 0.62 indicates different poses/photos of the SAME individual
-    # Similarity < 0.62 indicates a DIFFERENT family member
-    members = []
-    for face in raw_query_faces:
-        face_enc = face["encoding"]
-        src_idx = face.get("source_file_idx", 0)
-        
-        best_sim = -1.0
-        best_member = None
-        
-        for m in members:
-            # Faces from the same photo cannot belong to the same person
-            if any(mf.get("source_file_idx") == src_idx for mf in m["faces"]):
+        # FAISS Similarity Search with optional ride filter
+        raw_matches = db_manager.search_similar_faces(
+            query_faces=raw_query_faces,
+            threshold=threshold,
+            top_k=top_k,
+            ride_filter=ride_filter
+        )
+
+        # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails
+        matched_photos = []
+        for item in raw_matches:
+            p_res = db_manager.resolve_photo(item["photo_id"], RAW_DIR)
+            if not p_res:
+                logger.warning(f"Omitting stale match #{item['photo_id']} ({item.get('file_name')} not found on disk)")
                 continue
-            
-            for mf in m["faces"]:
-                sim = float(np.dot(face_enc, mf["encoding"]))
-                if sim > best_sim:
-                    best_sim = sim
-                    if sim >= 0.62:
-                        best_member = m
-        
-        if best_member is not None and best_sim >= 0.62:
-            face["member_id"] = best_member["member_id"]
-            best_member["faces"].append(face)
-        else:
-            new_id = len(members) + 1
-            face["member_id"] = new_id
-            members.append({
-                "member_id": new_id,
-                "name": f"Anggota {new_id}",
-                "faces": [face]
-            })
+            _, actual_path = p_res
+            item["file_path"] = actual_path
+            matched_photos.append(item)
 
-    total_members = len(members)
-    logger.info(
-        f"Reference processing complete: {len(raw_query_faces)} face(s) clustered into "
-        f"{total_members} distinct member(s) across {len(files)} uploaded file(s)."
-    )
+        elapsed_ms = round((time.time() - start_time) * 1000, 2)
+        customer_uuid = uuid.uuid4().hex[:10].upper()
+        customer_folder_name = f"Customer_{customer_uuid}"
+        customer_dir = os.path.join(RESULTS_DIR, customer_folder_name)
 
-    # FAISS Similarity Search with optional ride filter
-    raw_matches = db_manager.search_similar_faces(
-        query_faces=raw_query_faces,
-        threshold=threshold,
-        top_k=top_k,
-        ride_filter=ride_filter
-    )
+        # Create destination virtual folder for customer
+        os.makedirs(customer_dir, exist_ok=True)
 
-    # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails
-    matched_photos = []
-    for item in raw_matches:
-        p_res = db_manager.resolve_photo(item["photo_id"], RAW_DIR)
-        if not p_res:
-            logger.warning(f"Omitting stale match #{item['photo_id']} ({item.get('file_name')} not found on disk)")
-            continue
-        _, actual_path = p_res
-        item["file_path"] = actual_path
-        matched_photos.append(item)
+        created_symlinks = []
+        used_filenames = set()
+        together_count = 0
+        single_count = 0
 
-    elapsed_ms = round((time.time() - start_time) * 1000, 2)
-    customer_uuid = uuid.uuid4().hex[:10].upper()
-    customer_folder_name = f"Customer_{customer_uuid}"
-    customer_dir = os.path.join(RESULTS_DIR, customer_folder_name)
+        for item in matched_photos:
+            if item.get("matched_member_count", 1) >= 2:
+                together_count += 1
+            else:
+                single_count += 1
 
-    # Create destination virtual folder for customer
-    os.makedirs(customer_dir, exist_ok=True)
+            src_path = item["file_path"]
+            if not os.path.exists(src_path):
+                continue
 
-    created_symlinks = []
-    used_filenames = set()
-    together_count = 0
-    single_count = 0
+            base_name = os.path.basename(src_path)
+            # Prevent collisions if identical filenames exist across different ride subfolders
+            target_name = base_name
+            counter = 1
+            name_root, ext = os.path.splitext(base_name)
+            while target_name in used_filenames:
+                target_name = f"{name_root}_{counter}{ext}"
+                counter += 1
+            used_filenames.add(target_name)
 
-    for item in matched_photos:
-        if item.get("matched_member_count", 1) >= 2:
-            together_count += 1
-        else:
-            single_count += 1
+            link_dest = os.path.join(customer_dir, target_name)
 
-        src_path = item["file_path"]
-        if not os.path.exists(src_path):
-            continue
-
-        base_name = os.path.basename(src_path)
-        # Prevent collisions if identical filenames exist across different ride subfolders
-        target_name = base_name
-        counter = 1
-        name_root, ext = os.path.splitext(base_name)
-        while target_name in used_filenames:
-            target_name = f"{name_root}_{counter}{ext}"
-            counter += 1
-        used_filenames.add(target_name)
-
-        link_dest = os.path.join(customer_dir, target_name)
-
-        # Generate native file entry (prefer hardlink: 0 bytes disk overhead, native file for Windows Samba Explorer)
-        try:
-            if os.path.exists(link_dest) or os.path.islink(link_dest):
-                os.remove(link_dest)
-            os.link(src_path, link_dest)
-            created_symlinks.append(link_dest)
-        except OSError:
-            # Fallback to direct file copy so Windows Explorer can always copy and preview
+            # Generate native file entry (prefer symlink: 0 bytes disk overhead, instantaneous)
             try:
-                shutil.copy2(src_path, link_dest)
+                if os.path.exists(link_dest) or os.path.islink(link_dest):
+                    os.remove(link_dest)
+                os.symlink(src_path, link_dest)
                 created_symlinks.append(link_dest)
             except OSError:
                 try:
-                    rel_src = os.path.relpath(src_path, customer_dir)
-                    os.symlink(rel_src, link_dest)
+                    os.link(src_path, link_dest)
                     created_symlinks.append(link_dest)
                 except OSError:
-                    pass
+                    try:
+                        shutil.copy2(src_path, link_dest)
+                        created_symlinks.append(link_dest)
+                    except OSError:
+                        pass
 
-        # Attach preview URL pointing specifically to the matched customer faces
-        matched_vids = [str(f["vector_id"]) for f in item.get("matched_faces", [])]
-        matched_vids_param = ",".join(matched_vids)
-        best_vid = item.get("best_vector_id")
+            # Attach preview URL pointing specifically to the matched customer faces
+            matched_vids = [str(f["vector_id"]) for f in item.get("matched_faces", [])]
+            matched_vids_param = ",".join(matched_vids)
+            best_vid = item.get("best_vector_id")
 
-        if matched_vids_param:
-            item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={matched_vids_param}"
-        else:
-            item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
+            if matched_vids_param:
+                item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={matched_vids_param}"
+            else:
+                item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
 
-        if best_vid:
-            item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
-        else:
-            item["crop_url"] = f"/api/photos/{item['photo_id']}/crop"
+            if best_vid:
+                item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
+            else:
+                item["crop_url"] = f"/api/photos/{item['photo_id']}/crop"
 
-    # Write audit summary into the customer result folder
-    summary_data = {
-        "customer_id": customer_folder_name,
-        "search_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "similarity_threshold": threshold,
-        "query_time_ms": elapsed_ms,
-        "total_matches": len(matched_photos),
-        "total_members": total_members,
-        "together_matches": together_count,
-        "single_matches": single_count,
-        "files": [
-            {
-                "file_name": p["file_name"],
-                "original_path": p["file_path"],
-                "max_similarity_score": p["max_score"],
-                "matched_member_count": p.get("matched_member_count", 1)
+        # Write audit summary into the customer result folder
+        summary_data = {
+            "customer_id": customer_folder_name,
+            "search_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "similarity_threshold": float(threshold),
+            "query_time_ms": float(elapsed_ms),
+            "total_matches": len(matched_photos),
+            "total_members": total_members,
+            "together_matches": together_count,
+            "single_matches": single_count,
+            "files": [
+                {
+                    "file_name": p["file_name"],
+                    "original_path": p["file_path"],
+                    "max_similarity_score": float(p["max_score"]),
+                    "matched_member_count": int(p.get("matched_member_count", 1))
+                }
+                for p in matched_photos
+            ]
+        }
+        try:
+            with open(os.path.join(customer_dir, "search_summary.json"), "w", encoding="utf-8") as f:
+                json.dump(summary_data, f, indent=2)
+        except Exception as e_sum:
+            logger.warning(f"Could not write search_summary.json: {e_sum}")
+
+        # Format Samba path dynamically using the accessed server IP / hostname
+        host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
+        samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
+
+        for item in matched_photos:
+            item["samba_file_path"] = format_samba_unc(
+                SAMBA_PREFIX, f"{customer_folder_name}\\{item['file_name']}", fallback_host=host
+            )
+
+        return {
+            "success": True,
+            "customer_id": customer_folder_name,
+            "result_dir": customer_dir,
+            "samba_path": samba_path,
+            "match_count": len(matched_photos),
+            "query_time_ms": elapsed_ms,
+            "threshold": threshold,
+            "total_members": total_members,
+            "together_count": together_count,
+            "single_count": single_count,
+            "matches": matched_photos
+        }
+
+    except Exception as e:
+        logger.error(f"Search request failed: {e}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Pemrosesan Pencarian Gagal",
+                "detail": str(e),
+                "suggestion": "Silakan coba kembali atau periksa koneksi data kamera."
             }
-            for p in matched_photos
-        ]
-    }
-    with open(os.path.join(customer_dir, "search_summary.json"), "w", encoding="utf-8") as f:
-        json.dump(summary_data, f, indent=2)
-
-    # Format Samba path dynamically using the accessed server IP / hostname
-    host = request.headers.get("host", "").split(":")[0] or "192.168.100.90"
-    samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
-
-    for item in matched_photos:
-        item["samba_file_path"] = format_samba_unc(
-            SAMBA_PREFIX, f"{customer_folder_name}\\{item['file_name']}", fallback_host=host
         )
-
-    return {
-        "success": True,
-        "customer_id": customer_folder_name,
-        "result_dir": customer_dir,
-        "samba_path": samba_path,
-        "match_count": len(matched_photos),
-        "query_time_ms": elapsed_ms,
-        "threshold": threshold,
-        "total_members": total_members,
-        "together_count": together_count,
-        "single_count": single_count,
-        "matches": matched_photos
-    }
 
 
 @app.get("/api/photos/{photo_id}/preview")

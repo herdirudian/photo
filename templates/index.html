@@ -1830,12 +1830,18 @@
           body: formData
         });
 
-        const data = await response.json();
+        let data = null;
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (_) {}
 
-        if (!response.ok || !data.success) {
+        if (!response.ok || !data || !data.success) {
           showState('error');
-          document.getElementById('error-title').textContent = data.error || 'Face Detection Alert';
-          document.getElementById('error-message').textContent = data.suggestion || data.detail || 'Could not find a valid face in the provided reference photo.';
+          const title = data?.error || (response.status ? `Kesalahan Server (${response.status})` : 'Peringatan Pemrosesan Wajah');
+          const message = data?.suggestion || data?.detail || (text && text.length < 300 ? text : 'Server tidak dapat menyelesaikan pencarian foto.');
+          document.getElementById('error-title').textContent = title;
+          document.getElementById('error-message').textContent = message;
           submitBtn.disabled = false;
           return;
         }
@@ -1844,8 +1850,8 @@
       } catch (err) {
         console.error(err);
         showState('error');
-        document.getElementById('error-title').textContent = 'Network or Processing Error';
-        document.getElementById('error-message').textContent = 'Server could not complete request. Please verify server status.';
+        document.getElementById('error-title').textContent = 'Gangguan Jaringan';
+        document.getElementById('error-message').textContent = 'Tidak dapat menghubungi server. Periksa koneksi jaringan atau status server.';
       } finally {
         submitBtn.disabled = false;
       }
