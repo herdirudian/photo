@@ -206,7 +206,27 @@ class PhotoIndexer:
         self._polling_thread: Optional[threading.Thread] = None
         self._running = False
         self._scan_lock = threading.Lock()
+        
+        # Real-time progress metrics
+        self.is_indexing = False
+        self.current_processed = 0
+        self.total_to_process = 0
+        self.newly_indexed_count = 0
+        self.current_file = ""
+        self.last_completed_at = None
+
         os.makedirs(self.raw_dir, exist_ok=True)
+
+    def get_progress(self) -> dict:
+        """Return real-time progress of ongoing directory indexing."""
+        return {
+            "is_indexing": self.is_indexing,
+            "current_processed": self.current_processed,
+            "total_to_process": self.total_to_process,
+            "newly_indexed": self.newly_indexed_count,
+            "current_file": self.current_file,
+            "last_completed_at": self.last_completed_at
+        }
 
     def scan_existing_files(self, force: bool = False, target_subpath: Optional[str] = None) -> dict:
         """
@@ -218,6 +238,11 @@ class PhotoIndexer:
         if not self._scan_lock.acquire(blocking=False):
             logger.info("Scan already in progress. Skipping concurrent request.")
             return {"status": "busy"}
+
+        self.is_indexing = True
+        self.current_processed = 0
+        self.total_to_process = 0
+        self.newly_indexed_count = 0
 
         try:
             if target_subpath and target_subpath.strip():
@@ -244,18 +269,27 @@ class PhotoIndexer:
             new_indexed_count = 0
 
             if os.path.exists(scan_dir):
+                files_to_check = []
                 for root, _, files in os.walk(scan_dir, followlinks=True):
                     for filename in files:
                         full_path = os.path.join(root, filename)
                         if is_valid_image(full_path):
-                            scanned_count += 1
-                            try:
-                                stat = os.stat(full_path)
-                                if force or not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
-                                    handler.process_file(full_path, force=force)
-                                    new_indexed_count += 1
-                            except Exception as e:
-                                logger.error(f"Error checking {full_path}: {e}")
+                            files_to_check.append(full_path)
+
+                self.total_to_process = len(files_to_check)
+
+                for full_path in files_to_check:
+                    scanned_count += 1
+                    self.current_file = os.path.basename(full_path)
+                    try:
+                        stat = os.stat(full_path)
+                        if force or not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
+                            handler.process_file(full_path, force=force)
+                            new_indexed_count += 1
+                            self.newly_indexed_count = new_indexed_count
+                    except Exception as e:
+                        logger.error(f"Error checking {full_path}: {e}")
+                    self.current_processed += 1
 
             summary = {
                 "scanned": scanned_count,
@@ -270,6 +304,9 @@ class PhotoIndexer:
             return summary
 
         finally:
+            self.is_indexing = False
+            self.current_file = ""
+            self.last_completed_at = time.time()
             self._scan_lock.release()
 
     def _polling_worker(self):

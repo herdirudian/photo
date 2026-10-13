@@ -460,8 +460,30 @@ async def health_check():
 
 @app.get("/api/stats")
 async def get_system_stats():
-    """Return real-time database and indexing metrics."""
+    """Return real-time database, disk storage, and indexing progress metrics."""
     stats = db_manager.get_stats()
+    storage_info = config_manager.inspect_storage_status(RAW_DIR)
+    total_disk_photos = storage_info.get("total_images", 0)
+    
+    prog = indexer.get_progress()
+    is_indexing = prog.get("is_indexing", False)
+    
+    total_indexed = stats.get("total_photos", 0)
+    pending_photos = max(0, total_disk_photos - total_indexed)
+    pct = round((total_indexed / total_disk_photos * 100), 1) if total_disk_photos > 0 else 100.0
+
+    stats["total_disk_photos"] = total_disk_photos
+    stats["pending_photos"] = pending_photos
+    stats["is_indexing"] = is_indexing or (pending_photos > 0)
+    stats["indexing_progress"] = {
+        "is_active": is_indexing or (pending_photos > 0),
+        "indexed": total_indexed,
+        "total_disk": total_disk_photos,
+        "pending": pending_photos,
+        "percent": min(100.0, pct),
+        "current_file": prog.get("current_file", ""),
+        "last_completed_at": prog.get("last_completed_at")
+    }
     stats["raw_dir"] = RAW_DIR
     stats["results_dir"] = RESULTS_DIR
     stats["samba_prefix"] = SAMBA_PREFIX

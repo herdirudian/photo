@@ -194,18 +194,28 @@
       <!-- Real-time Metrics & Operator Controls -->
       <div class="flex items-center space-x-2 sm:space-x-2.5 text-xs">
         
-        <!-- Metrics Pill (Accessible Contrast, Calm Status Dot) -->
+        <!-- Metrics Pill (Accessible Contrast, Calm Status Dot & Real-time Progress) -->
         <div 
           id="header-operator-controls" 
-          class="hidden lg:flex items-center space-x-3 bg-lodge-950/90 px-3 py-1.5 rounded-lg border border-lodge-700/80"
+          class="hidden lg:flex items-center space-x-2.5 bg-lodge-950/90 px-3 py-1.5 rounded-lg border border-lodge-700/80 transition-all duration-300 shadow-2xs"
           title="Status pangkalan data foto dan pengenalan wajah"
         >
           <div class="flex items-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20" aria-hidden="true"></span>
-            <span class="text-lodge-200 font-medium">Foto:</span>
+            <span id="stat-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20 shrink-0 transition-colors duration-300" aria-hidden="true"></span>
+            <span id="stat-label-photo" class="text-lodge-200 font-medium">Foto:</span>
             <span class="text-white font-semibold tabular-nums" id="stat-photos">{{ stats.total_photos }} foto</span>
           </div>
+
+          <!-- Badge Indikator Foto Sedang Diproses (Otomatis muncul saat ada foto baru yang masuk) -->
+          <div id="stat-indexing-badge" class="hidden items-center space-x-1 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-400/20 text-amber-200 border border-amber-400/30">
+            <svg class="w-3 h-3 animate-spin text-amber-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span id="stat-pending-count" class="tabular-nums">0 proses</span>
+          </div>
+
           <span class="text-lodge-500 font-bold" aria-hidden="true">|</span>
+
           <div class="flex items-center space-x-1.5">
             <span class="text-lodge-200 font-medium">Wajah:</span>
             <span class="text-white font-semibold tabular-nums" id="stat-faces">{{ stats.total_faces }}</span>
@@ -2693,6 +2703,7 @@
       lockToGuestMode();
       loadRideSubfolders();
       updateSambaPathDisplay();
+      refreshStats();
 
       if (REQUIRE_PIN_GATE) {
         const isUnlocked = sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';
@@ -2732,6 +2743,9 @@
       }
     }
 
+    let wasIndexingPhotos = false;
+    let dynamicStatsTimer = null;
+
     async function triggerReindex() {
       const btn = document.getElementById('btn-reindex');
       const icon = document.getElementById('reindex-icon');
@@ -2739,11 +2753,11 @@
       if (icon) icon.classList.add('animate-spin');
 
       try {
+        wasIndexingPhotos = true;
         const res = await fetch('/api/reindex', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           await refreshStats();
-          await loadRideSubfolders();
           const s = data.summary;
           if (s) {
             showExplorerToast(`Pemindaian selesai: ${s.scanned || 0} foto dipindai, ${s.newly_indexed || 0} baru terindeks.`);
@@ -2768,18 +2782,76 @@
       try {
         const res = await fetch('/api/stats');
         const data = await res.json();
+        
         const elPhotos = document.getElementById('stat-photos');
         const elFaces = document.getElementById('stat-faces');
-        if (elPhotos) elPhotos.textContent = `${data.total_photos || 0} foto`;
+        const elDot = document.getElementById('stat-status-dot');
+        const elLabel = document.getElementById('stat-label-photo');
+        const elBadge = document.getElementById('stat-indexing-badge');
+        const elPending = document.getElementById('stat-pending-count');
+
+        const totalIndexed = data.total_photos || 0;
+        const totalDisk = data.total_disk_photos !== undefined ? data.total_disk_photos : totalIndexed;
+        const pending = data.pending_photos || 0;
+        const isIndexing = Boolean(data.is_indexing || pending > 0);
+
         if (elFaces) elFaces.textContent = data.total_faces || 0;
+
+        if (isIndexing && totalDisk > totalIndexed) {
+          // Sedang ada foto yang dalam proses masuk / ekstraksi AI
+          wasIndexingPhotos = true;
+
+          if (elLabel) elLabel.textContent = "Memproses:";
+          if (elPhotos) {
+            const pct = data.indexing_progress ? data.indexing_progress.percent : Math.round((totalIndexed / totalDisk) * 100);
+            elPhotos.textContent = `${totalIndexed} / ${totalDisk} foto (${pct}%)`;
+          }
+          if (elDot) {
+            elDot.className = "w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/40 animate-pulse shrink-0 transition-colors";
+          }
+          if (elBadge) {
+            elBadge.classList.remove('hidden');
+            elBadge.classList.add('inline-flex');
+          }
+          if (elPending) {
+            elPending.textContent = `${pending} sisa`;
+          }
+
+          // Polling cepat tiap 3 detik agar angka progres real-time bergerak di layar
+          scheduleNextStatsRefresh(3000);
+        } else {
+          // Seluruh foto sudah selesai terindeks
+          if (elLabel) elLabel.textContent = "Foto:";
+          if (elPhotos) elPhotos.textContent = `${totalIndexed} foto`;
+          if (elDot) {
+            elDot.className = "w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20 shrink-0 transition-colors";
+          }
+          if (elBadge) {
+            elBadge.classList.add('hidden');
+            elBadge.classList.remove('inline-flex');
+          }
+
+          // Jika sebelumnya dalam kondisi memproses, sekarang SEMUANYA SUDAH SELESAI:
+          if (wasIndexingPhotos) {
+            wasIndexingPhotos = false;
+            showExplorerToast(`🎉 Semua foto sudah terupdate! (${totalIndexed} foto siap dicari)`);
+          }
+
+          // Polling santai tiap 12 detik
+          scheduleNextStatsRefresh(12000);
+        }
+
         await loadRideSubfolders();
       } catch (e) {
         console.error("Stats refresh error:", e);
+        scheduleNextStatsRefresh(15000);
       }
     }
 
-    // Auto-refresh stats every 15 seconds
-    setInterval(refreshStats, 15000);
+    function scheduleNextStatsRefresh(delayMs) {
+      if (dynamicStatsTimer) clearTimeout(dynamicStatsTimer);
+      dynamicStatsTimer = setTimeout(refreshStats, delayMs);
+    }
   </script>
 
   <!-- PWA Service Worker & Install Script -->
