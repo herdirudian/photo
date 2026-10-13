@@ -833,8 +833,26 @@
               </div>
 
               <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div class="flex-1 bg-slate-100 font-mono text-xs text-slate-900 px-3 py-2.5 rounded-lg border border-slate-300 truncate select-all" id="res-samba-path">
-                  \\192.168.100.90\park-photos\results\Customer_XXXX
+                <div class="flex-1 flex items-center justify-between bg-slate-100 px-3 py-1.5 sm:py-2 rounded-lg border border-slate-300 min-w-0">
+                  <div class="flex-1 font-mono text-xs text-slate-500 truncate tracking-widest font-semibold select-none mr-2" id="res-samba-path" title="Jalur jaringan folder foto">
+                    ••••••••••••••••••••••••••••••••
+                  </div>
+                  <button 
+                    type="button" 
+                    onclick="toggleSambaPathVisibility()" 
+                    id="btn-toggle-samba-path"
+                    class="shrink-0 inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-white hover:bg-slate-50 active:bg-slate-200 border border-slate-300 text-slate-700 hover:text-slate-900 text-xs font-medium transition cursor-pointer focus-ring shadow-2xs"
+                    title="Klik untuk melihat atau menyembunyikan alamat link folder"
+                  >
+                    <svg id="eye-icon-show" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <svg id="eye-icon-hide" class="w-3.5 h-3.5 text-slate-600 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                    </svg>
+                    <span id="toggle-path-label">Lihat Link</span>
+                  </button>
                 </div>
 
                 <div class="flex items-center space-x-2 shrink-0">
@@ -1368,6 +1386,37 @@
     let currentSelectedDeviceId = null;
     let isCameraMirrored = true;
     let toastTimeout = null;
+    let currentSambaPath = (window.location && window.location.hostname)
+      ? `\\\\${window.location.hostname}\\park-photos\\results\\Customer_XXXX`
+      : '\\\\192.168.100.90\\park-photos\\results\\Customer_XXXX';
+    let isSambaPathVisible = false;
+
+    function updateSambaPathDisplay() {
+      const el = document.getElementById('res-samba-path');
+      const iconShow = document.getElementById('eye-icon-show');
+      const iconHide = document.getElementById('eye-icon-hide');
+      const label = document.getElementById('toggle-path-label');
+      if (!el) return;
+
+      if (isSambaPathVisible) {
+        el.textContent = currentSambaPath || '';
+        el.className = 'flex-1 font-mono text-xs text-slate-900 truncate tracking-normal select-all mr-2';
+        if (iconShow) iconShow.classList.add('hidden');
+        if (iconHide) iconHide.classList.remove('hidden');
+        if (label) label.textContent = 'Sembunyikan';
+      } else {
+        el.textContent = '••••••••••••••••••••••••••••••••';
+        el.className = 'flex-1 font-mono text-xs text-slate-500 truncate tracking-widest font-semibold select-none mr-2';
+        if (iconShow) iconShow.classList.remove('hidden');
+        if (iconHide) iconHide.classList.add('hidden');
+        if (label) label.textContent = 'Lihat Link';
+      }
+    }
+
+    function toggleSambaPathVisibility() {
+      isSambaPathVisible = !isSambaPathVisible;
+      updateSambaPathDisplay();
+    }
 
     function openCameraGuideModal() {
       const serverInput = document.getElementById('server-url-input');
@@ -1872,7 +1921,9 @@
         const host = window.location.hostname || '192.168.100.90';
         sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
       }
-      document.getElementById('res-samba-path').textContent = sambaPath;
+      currentSambaPath = sambaPath;
+      isSambaPathVisible = false;
+      updateSambaPathDisplay();
       document.getElementById('btn-download-zip').href = `/api/results/${data.customer_id}/download-zip`;
 
       const groupModePill = document.getElementById('group-mode-pill');
@@ -2075,7 +2126,7 @@
     }
 
     function openExplorerGuideModal() {
-      const sambaPath = document.getElementById('res-samba-path').textContent.trim();
+      const sambaPath = currentSambaPath || document.getElementById('res-samba-path').textContent.trim();
       const modalInput = document.getElementById('modal-guide-path');
       if (modalInput) modalInput.value = sambaPath;
       const modal = document.getElementById('modal-explorer-guide');
@@ -2109,7 +2160,7 @@
     }
 
     function openFolderInExplorer() {
-      const sambaPath = document.getElementById('res-samba-path').textContent.trim();
+      const sambaPath = currentSambaPath || document.getElementById('res-samba-path').textContent.trim();
       
       // 1. Salin otomatis ke clipboard komputer
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2126,7 +2177,7 @@
     function openPhotoInExplorer(fileName, sambaFilePath) {
       let targetPath = sambaFilePath;
       if (!targetPath) {
-        const folderPath = document.getElementById('res-samba-path').textContent.trim();
+        const folderPath = currentSambaPath || document.getElementById('res-samba-path').textContent.trim();
         targetPath = folderPath + '\\' + fileName;
       }
 
@@ -2139,7 +2190,7 @@
     }
 
     function copySambaPath() {
-      const pathText = document.getElementById('res-samba-path').textContent.trim();
+      const pathText = currentSambaPath || document.getElementById('res-samba-path').textContent.trim();
       navigator.clipboard.writeText(pathText).then(() => {
         const btnText = document.getElementById('copy-btn-text');
         if (btnText) {
@@ -2641,6 +2692,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       lockToGuestMode();
       loadRideSubfolders();
+      updateSambaPathDisplay();
 
       if (REQUIRE_PIN_GATE) {
         const isUnlocked = sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';

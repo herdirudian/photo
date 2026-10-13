@@ -68,3 +68,4 @@ echo -e "Folder ${GREEN}$DATA_DIR/raw${NC} sekarang:"
 echo -e "  ✅ Izin 777 aktif (Bebas Copy, Paste, Rename, Delete)."
 echo -e "  ✅ Otomatis tetap 777 setiap kali server Ubuntu di-restart."
 echo -e "  ✅ Service systemd: sistemphoto-permissions.service (Active & Enabled)\n"
+
