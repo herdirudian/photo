@@ -927,6 +927,10 @@ class DatabaseManager:
             )
             row = cursor.fetchone()
             if row:
+                # If previous indexing failed with error status, force retry
+                if row["status"] == "error":
+                    return False
+
                 # If modified or size changed, need re-indexing
                 if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
                     # If photo has registered faces, ensure stored vector dimension matches current engine dimension

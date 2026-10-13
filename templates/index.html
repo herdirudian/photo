@@ -2735,27 +2735,31 @@
     async function triggerReindex() {
       const btn = document.getElementById('btn-reindex');
       const icon = document.getElementById('reindex-icon');
-      btn.disabled = true;
-      icon.classList.add('animate-spin');
+      if (btn) btn.disabled = true;
+      if (icon) icon.classList.add('animate-spin');
 
       try {
         const res = await fetch('/api/reindex', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           await refreshStats();
-          if (data.message) {
-            alert(data.message);
+          await loadRideSubfolders();
+          const s = data.summary;
+          if (s) {
+            showExplorerToast(`Pemindaian selesai: ${s.scanned || 0} foto dipindai, ${s.newly_indexed || 0} baru terindeks.`);
+          } else {
+            showExplorerToast(data.message || 'Pemindaian foto selesai.');
           }
         } else {
-          alert('Gagal memindai: ' + (data.detail || 'Terjadi kendala pada server.'));
+          showExplorerToast('Gagal memindai: ' + (data.detail || 'Terjadi kendala pada server.'));
         }
       } catch (e) {
         console.error("Reindex error:", e);
-        alert('Gagal memindai ulang folder foto. Pastikan server aktif.');
+        showExplorerToast('Gagal memindai ulang folder foto. Pastikan server aktif.');
       } finally {
         setTimeout(() => {
-          icon.classList.remove('animate-spin');
-          btn.disabled = false;
+          if (icon) icon.classList.remove('animate-spin');
+          if (btn) btn.disabled = false;
         }, 800);
       }
     }
@@ -2764,8 +2768,11 @@
       try {
         const res = await fetch('/api/stats');
         const data = await res.json();
-        document.getElementById('stat-photos').textContent = `${data.total_photos} foto`;
-        document.getElementById('stat-faces').textContent = data.total_faces;
+        const elPhotos = document.getElementById('stat-photos');
+        const elFaces = document.getElementById('stat-faces');
+        if (elPhotos) elPhotos.textContent = `${data.total_photos || 0} foto`;
+        if (elFaces) elFaces.textContent = data.total_faces || 0;
+        await loadRideSubfolders();
       } catch (e) {
         console.error("Stats refresh error:", e);
       }
