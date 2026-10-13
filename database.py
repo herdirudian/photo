@@ -137,6 +137,7 @@ class FaceEngine:
         self.dimension = 512
         self.insight_app = None
         self.model = "hog"
+        self.inference_lock = threading.RLock()
 
         if self.requested_engine == "insightface":
             if INSIGHTFACE_AVAILABLE and FaceAnalysis is not None:
@@ -467,10 +468,12 @@ class FaceEngine:
         """
         Extract bounding boxes and facial embeddings from an image file on disk.
         Routes to InsightFace (512-D ArcFace) or dlib (128-D ResNet) based on active engine.
+        Guarantees thread-safe inference when background indexing and search execute concurrently.
         """
-        if self.engine_name == "insightface" and self.insight_app is not None:
-            return self._extract_insightface_file(file_path)
-        return self._extract_dlib_file(file_path)
+        with self.inference_lock:
+            if self.engine_name == "insightface" and self.insight_app is not None:
+                return self._extract_insightface_file(file_path)
+            return self._extract_dlib_file(file_path)
 
     def _extract_insightface_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
@@ -675,10 +678,12 @@ class FaceEngine:
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
         Extract face locations and encodings from in-memory bytes for guest reference selfies.
+        Guarantees thread-safe inference when background indexing and search execute concurrently.
         """
-        if self.engine_name == "insightface" and self.insight_app is not None:
-            return self._extract_insightface_bytes(image_bytes)
-        return self._extract_dlib_bytes(image_bytes)
+        with self.inference_lock:
+            if self.engine_name == "insightface" and self.insight_app is not None:
+                return self._extract_insightface_bytes(image_bytes)
+            return self._extract_dlib_bytes(image_bytes)
 
     def _extract_insightface_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
