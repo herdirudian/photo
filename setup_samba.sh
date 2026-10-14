@@ -35,15 +35,20 @@ sudo mkdir -p "$DATA_DIR/raw" "$DATA_DIR/results" "$DATA_DIR/db"
 sudo chown -R "$CURRENT_USER":"$CURRENT_USER" "$DATA_DIR"
 sudo chmod -R 777 "$DATA_DIR"
 
+# Buat symlink kompatibilitas /app di host sebagai backup kompatibilitas untuk path absolut container
+if [ ! -d "/app" ] && [ ! -L "/app" ]; then
+    sudo ln -s /opt/SistemPhoto /app 2>/dev/null || true
+fi
+
 # 3. Konfigurasi /etc/samba/smb.conf
 echo -e "\n${YELLOW}[3/4] Mengonfigurasi /etc/samba/smb.conf untuk file besar original...${NC}"
 if [ ! -f /etc/samba/smb.conf.backup ]; then
     sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.backup
 fi
 
-# Pastikan map to guest = Bad User ada di [global] agar guest login diizinkan
+# Pastikan map to guest = Bad User dan unix extensions = no ada di [global] agar guest login & symlinks diizinkan
 if ! grep -q "map to guest" /etc/samba/smb.conf; then
-    sudo sed -i '/\[global\]/a \   map to guest = Bad User\n   usershare allow guests = yes' /etc/samba/smb.conf
+    sudo sed -i '/\[global\]/a \   map to guest = Bad User\n   usershare allow guests = yes\n   unix extensions = no' /etc/samba/smb.conf
 fi
 
 # Bersihkan blok [park-photos] lama jika ada agar tidak duplikat/konflik

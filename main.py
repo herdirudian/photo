@@ -65,10 +65,52 @@ indexer = PhotoIndexer(
 )
 
 
+def heal_customer_symlinks():
+    """
+    Self-heal customer result directories:
+    Convert absolute container symlinks (/app/data/raw/...) into portable relative symlinks
+    (../../raw/...) so they resolve identically on host Samba shares and Windows File Explorer.
+    """
+    if not os.path.exists(RESULTS_DIR):
+        return
+
+    healed_count = 0
+    try:
+        for entry in os.listdir(RESULTS_DIR):
+            customer_path = os.path.join(RESULTS_DIR, entry)
+            if not os.path.isdir(customer_path):
+                continue
+
+            for f in os.listdir(customer_path):
+                f_path = os.path.join(customer_path, f)
+                if os.path.islink(f_path):
+                    try:
+                        target = os.readlink(f_path)
+                        # If symlink is absolute, heal to relative
+                        if os.path.isabs(target):
+                            candidate = target
+                            if not os.path.exists(candidate) and "/app/data/raw" in target:
+                                raw_sub = target.split("/app/data/raw")[-1].lstrip("/\\")
+                                candidate = os.path.join(RAW_DIR, raw_sub)
+
+                            if os.path.exists(candidate):
+                                rel_target = os.path.relpath(candidate, start=customer_path)
+                                os.remove(f_path)
+                                os.symlink(rel_target, f_path)
+                                healed_count += 1
+                    except Exception as e:
+                        logger.debug(f"Could not heal symlink {f_path}: {e}")
+        if healed_count > 0:
+            logger.info(f"Self-healed {healed_count} customer result symlinks to portable relative format.")
+    except Exception as e:
+        logger.warning(f"Error checking customer symlinks: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start watchdog folder monitoring on application launch, and stop on shutdown."""
     logger.info("Initializing Theme Park Photo Retrieval Engine...")
+    heal_customer_symlinks()
     indexer.start()
     yield
     logger.info("Shutting down Photo Retrieval Engine...")
@@ -693,22 +735,35 @@ async def search_guest_photos(
 
             link_dest = os.path.join(customer_dir, target_name)
 
-            # Generate native file entry (prefer symlink: 0 bytes disk overhead, instantaneous)
+            # Calculate relative path from customer_dir to src_path
+            # so symlinks resolve identically inside Docker (/app/data/...)
+            # and on the host Samba network share (/opt/SistemPhoto/data/...)!
             try:
-                if os.path.exists(link_dest) or os.path.islink(link_dest):
+                rel_src = os.path.relpath(src_path, start=customer_dir)
+            except Exception:
+                rel_src = src_path
+
+            symlink_ok = False
+            try:
+                if os.path.lexists(link_dest):
                     os.remove(link_dest)
-                os.symlink(src_path, link_dest)
-                created_symlinks.append(link_dest)
-            except OSError:
-                try:
-                    os.link(src_path, link_dest)
+                os.symlink(rel_src, link_dest)
+                if os.path.exists(link_dest):
                     created_symlinks.append(link_dest)
-                except OSError:
-                    try:
-                        shutil.copy2(src_path, link_dest)
-                        created_symlinks.append(link_dest)
-                    except OSError:
-                        pass
+                    symlink_ok = True
+                else:
+                    if os.path.lexists(link_dest):
+                        os.remove(link_dest)
+            except OSError as e_sym:
+                logger.warning(f"Could not create symlink {link_dest} -> {rel_src}: {e_sym}")
+
+            # Fallback to physical copy if symlink failed
+            if not symlink_ok:
+                try:
+                    shutil.copy2(src_path, link_dest)
+                    created_symlinks.append(link_dest)
+                except OSError as e_cp:
+                    logger.error(f"Could not copy photo {src_path} -> {link_dest}: {e_cp}")
 
             # Attach preview URL pointing specifically to the matched customer faces
             matched_vids = [str(f["vector_id"]) for f in item.get("matched_faces", [])]
