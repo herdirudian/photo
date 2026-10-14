@@ -68,14 +68,13 @@
       
       <!-- Brand & Title -->
       <a href="/admin" class="flex items-center gap-3 group focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-lg py-1 px-1 -ml-1 transition">
-        <div class="h-10 px-2.5 bg-white rounded-lg flex items-center justify-center shadow-xs shrink-0 ring-1 ring-white/10 group-hover:ring-white/20 transition">
-          <img 
-            src="{% if logo_base64 %}data:image/png;base64,{{ logo_base64 }}{% else %}/static/logo.png{% endif %}" 
-            alt="The Lodge Maribaya" 
-            class="h-7 w-auto object-contain" 
-            onerror="this.onerror=null; this.src='/img/logotlm.png';" 
-          />
-        </div>
+        <img 
+          src="{% if logo_base64 %}data:image/png;base64,{{ logo_base64 }}{% else %}/static/logo.png{% endif %}" 
+          alt="The Lodge Maribaya" 
+          class="h-8 sm:h-9 w-auto object-contain brightness-0 invert opacity-90 group-hover:opacity-100 transition-opacity shrink-0" 
+          onerror="this.onerror=null; this.src='/static/logo.png';" 
+        />
+        <div class="h-6 w-px bg-lodge-700/80 hidden sm:block"></div>
         <div class="flex flex-col justify-center min-w-0">
           <div class="flex items-center gap-2">
             <span class="text-sm font-semibold tracking-tight text-white leading-tight">
