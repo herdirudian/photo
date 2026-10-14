@@ -183,9 +183,13 @@ def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "192.1
 
 def get_logo_file_path() -> Optional[str]:
     candidates = [
+        os.path.join(STATIC_DIR, "logo.png"),
         os.path.join(IMG_DIR, "logotlm.png"),
+        os.path.join(BASE_DIR, "static", "logo.png"),
         os.path.join(BASE_DIR, "img", "logotlm.png"),
+        "/app/static/logo.png",
         "/app/img/logotlm.png",
+        "static/logo.png",
         "img/logotlm.png",
     ]
     for p in candidates:

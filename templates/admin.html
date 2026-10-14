@@ -63,48 +63,41 @@
 <body class="bg-[#F8FAF9] text-slate-800 min-h-screen flex flex-col font-sans antialiased selection:bg-lodge-600 selection:text-white">
 
   <!-- Top Navigation Bar -->
-  <header class="bg-lodge-900 text-white border-b border-lodge-800 sticky top-0 z-40 shadow-xs">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+  <header class="bg-lodge-900 border-b border-lodge-800/80 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
       
       <!-- Brand & Title -->
-      <a href="/admin" class="flex items-center gap-3 group focus-ring rounded-lg py-1 px-1.5 transition">
-        {% if logo_base64 %}
+      <a href="/admin" class="flex items-center gap-3 group focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-lg py-1 px-1 -ml-1 transition">
+        <div class="h-10 px-2.5 bg-white rounded-lg flex items-center justify-center shadow-xs shrink-0 ring-1 ring-white/10 group-hover:ring-white/20 transition">
           <img 
-            src="data:image/png;base64,{{ logo_base64 }}" 
+            src="{% if logo_base64 %}data:image/png;base64,{{ logo_base64 }}{% else %}/static/logo.png{% endif %}" 
             alt="The Lodge Maribaya" 
-            class="h-8 sm:h-9 w-auto object-contain brightness-0 invert opacity-95 group-hover:opacity-100 transition-opacity" 
+            class="h-7 w-auto object-contain" 
+            onerror="this.onerror=null; this.src='/img/logotlm.png';" 
           />
-        {% else %}
-          <img 
-            src="/img/logotlm.png" 
-            alt="The Lodge Maribaya" 
-            class="h-8 sm:h-9 w-auto object-contain brightness-0 invert opacity-95 group-hover:opacity-100 transition-opacity" 
-            onerror="this.onerror=null; this.src='/logo.png';" 
-          />
-        {% endif %}
-        <div class="h-6 w-px bg-lodge-700/80 hidden sm:block"></div>
-        <div class="flex flex-col justify-center">
-          <div class="flex items-center space-x-2">
-            <span class="text-xs sm:text-sm font-bold tracking-tight text-white leading-tight">
+        </div>
+        <div class="flex flex-col justify-center min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold tracking-tight text-white leading-tight">
               Admin Console
             </span>
-            <span class="px-1.5 py-0.5 rounded text-xs font-semibold tracking-wider bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 uppercase">
+            <span class="hidden md:inline-flex items-center px-1.5 py-0.25 rounded text-[10px] font-medium uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
               Sistem
             </span>
           </div>
-          <p class="text-xs text-emerald-200 font-medium leading-none mt-0.5">
+          <span class="text-xs text-lodge-300 font-normal leading-tight mt-0.5 truncate">
             The Lodge Maribaya &bull; Manajemen Foto & Jaringan
-          </p>
+          </span>
         </div>
       </a>
 
       <!-- Action Nav -->
-      <div class="flex items-center space-x-2.5 text-xs">
+      <div class="flex items-center gap-2 text-xs">
         <button 
           id="btn-pwa-install" 
           type="button"
           onclick="triggerPWAInstall()" 
-          class="hidden items-center space-x-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg border border-emerald-500/80 transition focus-ring min-h-[36px] text-xs font-semibold shadow-2xs cursor-pointer"
+          class="hidden items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg border border-emerald-500/80 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-300 min-h-[36px] text-xs font-semibold shadow-xs cursor-pointer"
           title="Pasang aplikasi Galeri Foto The Lodge di perangkat ini"
         >
           <svg class="w-3.5 h-3.5 text-emerald-100 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,13 +109,13 @@
 
         <a 
           href="/" 
-          class="flex items-center space-x-1.5 px-3 py-1.5 bg-lodge-800 hover:bg-lodge-700 active:bg-lodge-750 text-lodge-100 hover:text-white rounded-lg border border-lodge-700 transition focus-ring min-h-[36px] text-xs font-medium shadow-2xs"
-          title="Kembali ke layar pencarian foto tamu"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-lodge-800/80 hover:bg-lodge-700/80 active:bg-lodge-800 text-lodge-100 hover:text-white rounded-lg border border-lodge-700/70 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400/50 min-h-[36px] text-xs font-medium cursor-pointer"
+          title="Kembali ke layar operator foto"
         >
-          <svg class="w-3.5 h-3.5 text-lodge-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3.5 h-3.5 text-lodge-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span class="hidden sm:inline">Kembali ke Galeri Tamu</span>
+          <span class="hidden sm:inline">Kembali ke Operator</span>
           <span class="sm:hidden">Kembali</span>
         </a>
       </div>
