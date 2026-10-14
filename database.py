@@ -1331,7 +1331,7 @@ class DatabaseManager:
         self,
         query_faces: Optional[List[Dict[str, Any]]] = None,
         threshold: float = 0.50,
-        top_k: int = 50,
+        top_k: int = 0,
         ride_filter: Optional[str] = None,
         query_encoding: Optional[np.ndarray] = None
     ) -> List[Dict[str, Any]]:

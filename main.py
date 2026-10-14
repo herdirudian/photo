@@ -590,7 +590,7 @@ async def search_guest_photos(
     request: Request,
     files: List[UploadFile] = File(...),
     threshold: float = Form(DEFAULT_THRESHOLD),
-    top_k: int = Form(50),
+    top_k: int = Form(0),
     ride_filter: Optional[str] = Form(None)
 ):
     """
