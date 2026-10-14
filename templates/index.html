@@ -822,8 +822,8 @@
               </div>
             </div>
 
-            <!-- Guest Friendly Selection Banner -->
-            <div id="guest-order-guide" class="bg-lodge-50/70 border border-lodge-200/90 rounded-xl p-4 flex items-center justify-between gap-4">
+            <!-- Guest Selection Banner (Hidden per operator preference) -->
+            <div id="guest-order-guide" class="hidden bg-lodge-50/70 border border-lodge-200/90 rounded-xl p-4 items-center justify-between gap-4">
               <div class="flex items-center space-x-3">
                 <div class="w-10 h-10 rounded-xl bg-lodge-700 text-white flex items-center justify-center shrink-0 shadow-xs">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -841,8 +841,8 @@
               </div>
             </div>
 
-            <!-- Operator Samba Network Path & Explorer Box (Hanya terlihat di Mode Petugas) -->
-            <div id="operator-samba-box" class="hidden space-y-2 pt-3 border-t border-slate-200">
+            <!-- Operator Samba Network Path & Explorer Box (Mode Petugas Langsung Aktif) -->
+            <div id="operator-samba-box" class="space-y-3 pt-1">
               <div class="flex items-center justify-between">
                 <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
                   <svg class="w-4 h-4 text-lodge-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1418,7 +1418,7 @@
     let currentSambaPath = (window.location && window.location.hostname)
       ? `\\\\${window.location.hostname}\\park-photos\\results\\Customer_XXXX`
       : '\\\\192.168.100.90\\park-photos\\results\\Customer_XXXX';
-    let isSambaPathVisible = false;
+    let isSambaPathVisible = true;
 
     function updateSambaPathDisplay() {
       const el = document.getElementById('res-samba-path');
@@ -1951,7 +1951,7 @@
         sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
       }
       currentSambaPath = sambaPath;
-      isSambaPathVisible = false;
+      isSambaPathVisible = true;
       updateSambaPathDisplay();
       document.getElementById('btn-download-zip').href = `/api/results/${data.customer_id}/download-zip`;
 
@@ -2554,10 +2554,10 @@
     // ==========================================
     // OPERATOR SECURITY & KIOSK MODE MANAGEMENT
     // ==========================================
-    let isOperatorMode = false;
+    let isOperatorMode = true;
     let operatorAutoLockTimer = null;
     const OPERATOR_PIN_DEFAULT = '1234';
-    const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 menit auto-lock jika operator tidak aktif
+    const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 
     function handleOperatorToggleClick() {
       if (isOperatorMode) {
@@ -2613,7 +2613,6 @@
       isOperatorMode = true;
       updateUIModeState();
       resetOperatorAutoLockTimer();
-      showExplorerToast("Mode Petugas aktif. Tombol File Explorer dan folder Samba dapat diakses.");
     }
 
     function lockToGuestMode() {
@@ -2628,15 +2627,13 @@
     }
 
     function resetOperatorAutoLockTimer() {
-      if (operatorAutoLockTimer) clearTimeout(operatorAutoLockTimer);
-      if (isOperatorMode) {
-        operatorAutoLockTimer = setTimeout(() => {
-          lockToGuestMode();
-        }, AUTO_LOCK_TIMEOUT_MS);
+      if (operatorAutoLockTimer) {
+        clearTimeout(operatorAutoLockTimer);
+        operatorAutoLockTimer = null;
       }
     }
 
-    // Reset auto-lock timer on user activities when in operator mode
+    // Keep active session without disruptive auto-lockouts
     ['mousedown', 'mousemove', 'keydown', 'touchstart'].forEach(eventName => {
       window.addEventListener(eventName, () => {
         if (isOperatorMode) resetOperatorAutoLockTimer();
@@ -2648,30 +2645,30 @@
       const sambaBox = document.getElementById('operator-samba-box');
       const archCard = document.getElementById('operator-architecture-card');
       const guestCard = document.getElementById('guest-welcome-card');
+      const guestGuide = document.getElementById('guest-order-guide');
       const toggleBtn = document.getElementById('btn-toggle-operator-mode');
       const toggleIcon = document.getElementById('operator-toggle-icon');
       const toggleText = document.getElementById('operator-toggle-text');
       const headerControls = document.getElementById('header-operator-controls');
 
+      if (guestGuide) guestGuide.classList.add('hidden');
+      if (guestCard) guestCard.classList.add('hidden');
+      if (archCard) archCard.classList.add('hidden');
+      if (banner) banner.classList.add('hidden');
+
       if (isOperatorMode) {
-        if (banner) banner.classList.remove('hidden');
         if (sambaBox) sambaBox.classList.remove('hidden');
-        if (archCard) archCard.classList.remove('hidden');
-        if (guestCard) guestCard.classList.add('hidden');
         if (headerControls) headerControls.classList.remove('hidden');
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-semibold transition focus-ring min-h-[36px] shadow-xs";
         }
         if (toggleIcon) toggleIcon.textContent = "";
-        if (toggleText) toggleText.textContent = "Keluar Petugas";
+        if (toggleText) toggleText.textContent = "Mode Petugas";
 
         document.querySelectorAll('.operator-only-action').forEach(el => el.classList.remove('hidden'));
         document.querySelectorAll('.operator-only-inline').forEach(el => el.classList.remove('hidden'));
       } else {
-        if (banner) banner.classList.add('hidden');
         if (sambaBox) sambaBox.classList.add('hidden');
-        if (archCard) archCard.classList.add('hidden');
-        if (guestCard) guestCard.classList.add('hidden');
         if (headerControls) headerControls.classList.remove('hidden');
         if (toggleBtn) {
           toggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-white/20 hover:border-white/40 text-xs font-semibold transition focus-ring min-h-[36px] bg-white/10 hover:bg-white/15 text-emerald-100 shadow-2xs";
@@ -2711,9 +2708,9 @@
       }
     });
 
-    // Inisialisasi Mode Tamu & Layar Kunci Kiosk saat dokumen selesai dimuat
+    // Inisialisasi Mode Petugas saat dokumen selesai dimuat
     document.addEventListener('DOMContentLoaded', () => {
-      lockToGuestMode();
+      unlockOperatorMode();
       loadRideSubfolders();
       updateSambaPathDisplay();
       refreshStats();
