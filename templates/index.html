@@ -848,7 +848,7 @@
                   <svg class="w-4 h-4 text-lodge-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                   </svg>
-                  <span>Lokasi Folder Foto Jaringan</span>
+                  <span>Lokasi Folder Foto</span>
                 </label>
                 <button 
                   type="button" 
@@ -864,54 +864,54 @@
 
               <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div class="flex-1 flex items-center justify-between bg-slate-100 px-3 py-1.5 sm:py-2 rounded-lg border border-slate-300 min-w-0">
-                  <div class="flex-1 font-mono text-xs text-slate-500 truncate tracking-widest font-semibold select-none mr-2" id="res-samba-path" title="Jalur jaringan folder foto">
+                  <div class="flex-1 font-mono text-xs text-slate-500 truncate tracking-widest font-semibold select-none mr-2" id="res-samba-path" title="Jalur folder foto">
                     ••••••••••••••••••••••••••••••••
                   </div>
-                  <button 
-                    type="button" 
-                    onclick="toggleSambaPathVisibility()" 
-                    id="btn-toggle-samba-path"
-                    class="shrink-0 inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-white hover:bg-slate-50 active:bg-slate-200 border border-slate-300 text-slate-700 hover:text-slate-900 text-xs font-medium transition cursor-pointer focus-ring shadow-2xs"
-                    title="Klik untuk melihat atau menyembunyikan alamat link folder"
-                  >
-                    <svg id="eye-icon-show" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    <svg id="eye-icon-hide" class="w-3.5 h-3.5 text-slate-600 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                    </svg>
-                    <span id="toggle-path-label">Lihat Link</span>
-                  </button>
+                  <div class="flex items-center space-x-1.5 shrink-0">
+                    <button 
+                      type="button" 
+                      onclick="toggleSambaPathVisibility()" 
+                      id="btn-toggle-samba-path"
+                      class="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-white hover:bg-slate-50 active:bg-slate-200 border border-slate-300 text-slate-700 hover:text-slate-900 text-xs font-medium transition cursor-pointer focus-ring shadow-2xs"
+                      title="Klik untuk melihat atau menyembunyikan alamat link folder"
+                    >
+                      <svg id="eye-icon-show" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      <svg id="eye-icon-hide" class="w-3.5 h-3.5 text-slate-600 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                      <span id="toggle-path-label">Lihat Link</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onclick="copySambaPath()" 
+                      id="btn-copy-samba"
+                      class="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-white hover:bg-slate-50 active:bg-slate-200 border border-slate-300 text-slate-700 hover:text-slate-900 text-xs font-medium transition cursor-pointer focus-ring shadow-2xs"
+                      title="Salin jalur folder ke Clipboard"
+                    >
+                      <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      <span id="copy-btn-text">Salin Path</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div class="flex items-center space-x-2 shrink-0">
-                  <button 
-                    type="button" 
-                    onclick="openFolderInExplorer()" 
-                    id="btn-open-explorer"
-                    class="flex-1 sm:flex-none px-4 py-2.5 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold text-xs rounded-lg transition focus-ring shadow-2xs flex items-center justify-center space-x-1.5"
-                    title="Buka folder foto customer langsung di Windows File Explorer"
-                  >
-                    <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Buka di File Explorer</span>
-                  </button>
-
-                  <button 
-                    type="button" 
-                    onclick="copySambaPath()" 
-                    id="btn-copy-samba"
-                    class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-semibold text-xs rounded-lg transition border border-slate-300 focus-ring flex items-center justify-center space-x-1"
-                    title="Salin jalur folder ke Clipboard"
-                  >
-                    <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                    </svg>
-                    <span id="copy-btn-text">Salin Path</span>
-                  </button>
-                </div>
+                <button 
+                  type="button" 
+                  onclick="openFolderInExplorer()" 
+                  id="btn-open-explorer"
+                  class="px-4 py-2 sm:py-2.5 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold text-xs rounded-lg transition focus-ring shadow-2xs flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
+                  title="Buka folder foto customer langsung di Windows File Explorer"
+                >
+                  <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Buka di File Explorer</span>
+                </button>
               </div>
 
               <div class="flex justify-end text-xs text-slate-600 pt-1">
@@ -1209,115 +1209,118 @@
     aria-labelledby="explorer-guide-title"
     class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs hidden items-center justify-center p-3 sm:p-4 select-none"
   >
-    <div class="relative max-w-xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+    <div class="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
       
       <!-- Header -->
-      <div class="bg-lodge-900 p-5 text-white flex justify-between items-start border-b border-lodge-800">
-        <div class="space-y-1">
-          <div class="inline-flex items-center space-x-1.5 bg-white/10 px-2.5 py-0.5 rounded text-xs font-semibold text-emerald-200">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+      <div class="px-6 py-5 bg-lodge-900 text-white flex items-center justify-between border-b border-lodge-800">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-lodge-800 border border-lodge-700/80 flex items-center justify-center text-emerald-300 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
-            <span>Windows File Explorer</span>
           </div>
-          <h3 id="explorer-guide-title" class="text-base font-bold">Akses Folder Foto Tamu di Windows</h3>
+          <div>
+            <h3 id="explorer-guide-title" class="text-base font-bold text-white tracking-tight">Panduan Akses Folder Windows</h3>
+            <p class="text-xs text-lodge-300">Buka langsung berkas foto pengunjung di komputer counter</p>
+          </div>
         </div>
         <button 
           type="button"
           onclick="closeExplorerGuideModal()" 
           aria-label="Tutup panduan explorer (Escape)" 
-          class="w-8 h-8 flex items-center justify-center text-lodge-200 hover:text-white hover:bg-lodge-800 text-xl font-bold rounded-lg focus-ring transition cursor-pointer"
+          class="w-8 h-8 flex items-center justify-center text-lodge-300 hover:text-white hover:bg-lodge-800 text-xl font-medium rounded-lg focus-ring transition cursor-pointer"
         >
           &times;
         </button>
       </div>
 
       <!-- Body -->
-      <div class="p-6 space-y-4 text-xs text-slate-700 leading-relaxed max-h-[75vh] overflow-y-auto">
+      <div class="p-6 space-y-5 text-xs text-slate-700 leading-relaxed max-h-[75vh] overflow-y-auto">
         
-        <!-- Clipboard Status Banner -->
-        <div class="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl flex items-start space-x-3">
-          <div class="w-6 h-6 rounded-md bg-emerald-700 text-white flex items-center justify-center shrink-0">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-            </svg>
+        <!-- Jalur Folder (Tersalin) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-slate-800 flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Jalur Folder (Tersalin Otomatis)</span>
+            </span>
+            <span class="text-slate-500 text-[11px]">Tersimpan di Clipboard</span>
           </div>
-          <div class="flex-1 space-y-1.5">
-            <p class="font-bold text-emerald-950 text-xs">Jalur Folder Otomatis Tersalin ke Clipboard</p>
-            <div class="flex items-center space-x-2">
-              <input 
-                type="text" 
-                id="modal-guide-path" 
-                readonly 
-                class="flex-1 bg-white border border-emerald-300 font-mono text-xs text-slate-900 px-2.5 py-1.5 rounded-lg select-all"
-                value="\\192.168.100.90\park-photos\results\Customer_XXXX"
-              />
-              <button 
-                type="button" 
-                onclick="copyTextFromElement('modal-guide-path', this)" 
-                class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition shrink-0 focus-ring"
-              >
-                Salin Ulang
-              </button>
-            </div>
+          <div class="flex items-center space-x-2">
+            <input 
+              type="text" 
+              id="modal-guide-path" 
+              readonly 
+              class="flex-1 bg-slate-50 border border-slate-300 font-mono text-xs text-slate-900 px-3 py-2 rounded-lg select-all focus-ring outline-none"
+              value="\\192.168.100.90\park-photos\results\Customer_XXXX"
+            />
+            <button 
+              type="button" 
+              onclick="copyTextFromElement('modal-guide-path', this)" 
+              class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-300 font-semibold rounded-lg text-xs transition shrink-0 focus-ring cursor-pointer"
+            >
+              Salin Ulang
+            </button>
           </div>
         </div>
 
-        <!-- Cara 1: Shortcut Cepat (Keyboard Windows) -->
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
-          <div class="flex items-center space-x-2">
-            <span class="px-2 py-0.5 bg-lodge-100 text-lodge-800 font-bold rounded text-xs border border-lodge-200">Metode Cepat</span>
-            <span class="font-bold text-slate-900 text-xs">Buka Langsung dengan Keyboard Windows</span>
+        <!-- Metode Cepat Keyboard -->
+        <div class="pt-4 border-t border-slate-100 space-y-2.5">
+          <div>
+            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Metode Cepat Keyboard Windows</h4>
+            <p class="text-slate-600 text-xs mt-0.5">Jalur folder sudah tersalin di clipboard komputer. Tekan kombinasi tombol berikut:</p>
           </div>
-          <p class="text-slate-600 text-xs">Karena jalur folder sudah tersalin di clipboard komputer Anda, cukup tekan 3 langkah ini:</p>
           
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-center font-mono">
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
-              <div class="text-xs text-slate-600 uppercase font-sans font-bold">Langkah 1</div>
-              <div class="font-bold text-slate-900 text-sm mt-0.5">Win + R</div>
-              <div class="text-xs text-slate-600 font-sans mt-0.5">Buka dialog Run</div>
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
+            <div class="flex items-center space-x-2 flex-wrap">
+              <span class="text-slate-500 font-medium text-[11px]">1. Tekan</span>
+              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">Win</kbd>
+              <span class="text-slate-400 font-bold">+</span>
+              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">R</kbd>
             </div>
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
-              <div class="text-xs text-slate-600 uppercase font-sans font-bold">Langkah 2</div>
-              <div class="font-bold text-slate-900 text-sm mt-0.5">Ctrl + V</div>
-              <div class="text-xs text-slate-600 font-sans mt-0.5">Tempel jalur folder</div>
+            <span class="hidden sm:inline text-slate-300 font-bold">&rarr;</span>
+            <div class="flex items-center space-x-2 flex-wrap">
+              <span class="text-slate-500 font-medium text-[11px]">2. Tempel</span>
+              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">Ctrl</kbd>
+              <span class="text-slate-400 font-bold">+</span>
+              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">V</kbd>
             </div>
-            <div class="bg-white border border-slate-300 rounded-lg p-2.5 shadow-2xs">
-              <div class="text-xs text-slate-600 uppercase font-sans font-bold">Langkah 3</div>
-              <div class="font-bold text-slate-900 text-sm mt-0.5">Enter</div>
-              <div class="text-xs text-slate-600 font-sans mt-0.5">Folder terbuka</div>
+            <span class="hidden sm:inline text-slate-300 font-bold">&rarr;</span>
+            <div class="flex items-center space-x-2 flex-wrap">
+              <span class="text-slate-500 font-medium text-[11px]">3. Buka</span>
+              <kbd class="px-2.5 py-1 bg-lodge-700 border border-lodge-800 text-white rounded shadow-xs font-mono font-bold text-xs">Enter</kbd>
             </div>
           </div>
         </div>
 
-        <!-- Cara 2: Aktifkan 1-Klik Otomatis (Opsional) -->
-        <div class="bg-lodge-50/60 border border-lodge-200 rounded-xl p-4 space-y-2.5">
-          <div class="flex items-center space-x-2">
-            <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-xs border border-emerald-200">Protokol 1-Klik</span>
-            <span class="font-bold text-slate-900 text-xs">Aktifkan Buka Otomatis Tanpa Dialog Run</span>
+        <!-- Setup 1-Klik Otomatis -->
+        <div class="pt-4 border-t border-slate-100 space-y-2.5">
+          <div>
+            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Opsi: Buka Otomatis 1-Klik</h4>
+            <p class="text-slate-600 text-xs mt-0.5 leading-relaxed">
+              Agar tombol <strong>"Buka di File Explorer"</strong> langsung membuka folder tanpa dialog Run, pasang konfigurasi berikut satu kali di komputer counter:
+            </p>
           </div>
-          <p class="text-slate-600 text-xs">
-            Ingin agar tombol <strong>"Buka di File Explorer"</strong> langsung membuka folder secara otomatis dalam 1 klik? Pasang konfigurasi registri aman berikut satu kali pada PC operator:
-          </p>
-          <div class="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-0.5">
             <a 
               href="/api/setup-explorer-protocol" 
-              class="inline-flex items-center justify-center space-x-2 px-4 py-2 bg-lodge-700 hover:bg-lodge-800 text-white font-semibold rounded-lg text-xs transition shadow-2xs focus-ring"
+              class="inline-flex items-center justify-center space-x-2 px-4 py-2 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition shadow-2xs focus-ring shrink-0"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              <span>Unduh Aktifkan_Buka_File_Explorer.reg</span>
+              <span>Pasang Konfigurasi 1-Klik (.reg)</span>
             </a>
-            <span class="text-xs text-slate-600 italic">Double-click berkas yang diunduh lalu pilih Yes. (Tidak memerlukan izin Administrator)</span>
+            <span class="text-slate-500 text-[11px] leading-snug">Unduh & jalankan berkas registri ini satu kali (pilih <em>Yes</em> saat konfirmasi Windows).</span>
           </div>
         </div>
 
       </div>
 
       <!-- Footer -->
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-        <button type="button" onclick="closeExplorerGuideModal()" class="px-5 py-2 bg-lodge-800 hover:bg-lodge-900 text-white font-semibold rounded-lg text-xs transition focus-ring">
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="closeExplorerGuideModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 font-semibold rounded-lg text-xs transition focus-ring cursor-pointer">
           Tutup
         </button>
       </div>
@@ -1415,7 +1418,7 @@
     let currentSambaPath = (window.location && window.location.hostname)
       ? `\\\\${window.location.hostname}\\park-photos\\results\\Customer_XXXX`
       : '\\\\192.168.100.90\\park-photos\\results\\Customer_XXXX';
-    let isSambaPathVisible = true;
+    let isSambaPathVisible = false;
 
     function updateSambaPathDisplay() {
       const el = document.getElementById('res-samba-path');
@@ -1948,7 +1951,7 @@
         sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
       }
       currentSambaPath = sambaPath;
-      isSambaPathVisible = true;
+      isSambaPathVisible = false;
       updateSambaPathDisplay();
       document.getElementById('btn-download-zip').href = `/api/results/${data.customer_id}/download-zip`;
 
