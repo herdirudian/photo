@@ -1246,49 +1246,90 @@
             </span>
             <span class="text-slate-500 text-[11px]">Tersimpan di Clipboard</span>
           </div>
-          <div class="flex items-center space-x-2">
-            <input 
-              type="text" 
-              id="modal-guide-path" 
-              readonly 
-              class="flex-1 bg-slate-50 border border-slate-300 font-mono text-xs text-slate-900 px-3 py-2 rounded-lg select-all focus-ring outline-none"
-              value="\\192.168.100.90\park-photos\results\Customer_XXXX"
-            />
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div class="flex-1 flex items-center justify-between bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 min-w-0">
+              <div 
+                id="modal-guide-path" 
+                class="flex-1 font-mono text-xs text-slate-500 truncate tracking-widest font-semibold select-none mr-2"
+                title="Jalur folder foto"
+              >
+                ••••••••••••••••••••••••••••••••
+              </div>
+              <button 
+                type="button" 
+                onclick="toggleModalGuidePathVisibility()" 
+                id="btn-modal-toggle-guide-path"
+                class="shrink-0 inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-white hover:bg-slate-100 active:bg-slate-200 border border-slate-300 text-slate-700 hover:text-slate-900 text-xs font-medium transition cursor-pointer focus-ring shadow-2xs"
+                title="Klik untuk melihat atau menyembunyikan alamat link folder"
+              >
+                <svg id="modal-guide-eye-show" class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg id="modal-guide-eye-hide" class="w-3.5 h-3.5 text-slate-600 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+                <span id="modal-guide-toggle-label">Lihat Link</span>
+              </button>
+            </div>
             <button 
               type="button" 
-              onclick="copyTextFromElement('modal-guide-path', this)" 
-              class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-300 font-semibold rounded-lg text-xs transition shrink-0 focus-ring cursor-pointer"
+              onclick="copyModalGuidePath(this)" 
+              id="btn-modal-copy-path"
+              class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-300 font-semibold rounded-lg text-xs transition shrink-0 focus-ring cursor-pointer flex items-center justify-center space-x-1"
+              title="Salin ulang ke Clipboard"
             >
-              Salin Ulang
+              <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              <span id="modal-copy-btn-text">Salin Ulang</span>
             </button>
           </div>
         </div>
 
         <!-- Metode Cepat Keyboard -->
-        <div class="pt-4 border-t border-slate-100 space-y-2.5">
+        <div class="pt-4 border-t border-slate-100 space-y-3">
           <div>
             <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Metode Cepat Keyboard Windows</h4>
-            <p class="text-slate-600 text-xs mt-0.5">Jalur folder sudah tersalin di clipboard komputer. Tekan kombinasi tombol berikut:</p>
+            <p class="text-slate-600 text-xs mt-0.5">Jalur folder sudah tersalin di clipboard komputer. Cukup ikuti 3 langkah praktis ini:</p>
           </div>
           
-          <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
-            <div class="flex items-center space-x-2 flex-wrap">
-              <span class="text-slate-500 font-medium text-[11px]">1. Tekan</span>
-              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">Win</kbd>
-              <span class="text-slate-400 font-bold">+</span>
-              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">R</kbd>
+          <div class="space-y-2">
+            <!-- Langkah 1 -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div class="flex items-center space-x-2.5">
+                <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center text-xs shrink-0">1</span>
+                <span class="text-slate-700 text-xs font-medium">Buka jendela dialog Run</span>
+              </div>
+              <div class="flex items-center space-x-1 shrink-0">
+                <kbd class="px-2.5 py-1 bg-white border border-slate-300 rounded-md shadow-2xs font-mono font-bold text-slate-900 text-xs">Win</kbd>
+                <span class="text-slate-400 font-bold px-0.5">+</span>
+                <kbd class="px-2.5 py-1 bg-white border border-slate-300 rounded-md shadow-2xs font-mono font-bold text-slate-900 text-xs">R</kbd>
+              </div>
             </div>
-            <span class="hidden sm:inline text-slate-300 font-bold">&rarr;</span>
-            <div class="flex items-center space-x-2 flex-wrap">
-              <span class="text-slate-500 font-medium text-[11px]">2. Tempel</span>
-              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">Ctrl</kbd>
-              <span class="text-slate-400 font-bold">+</span>
-              <kbd class="px-2 py-1 bg-white border border-slate-300 rounded shadow-xs font-mono font-bold text-slate-800 text-xs">V</kbd>
+
+            <!-- Langkah 2 -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div class="flex items-center space-x-2.5">
+                <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center text-xs shrink-0">2</span>
+                <span class="text-slate-700 text-xs font-medium">Tempel jalur folder yang tersalin</span>
+              </div>
+              <div class="flex items-center space-x-1 shrink-0">
+                <kbd class="px-2.5 py-1 bg-white border border-slate-300 rounded-md shadow-2xs font-mono font-bold text-slate-900 text-xs">Ctrl</kbd>
+                <span class="text-slate-400 font-bold px-0.5">+</span>
+                <kbd class="px-2.5 py-1 bg-white border border-slate-300 rounded-md shadow-2xs font-mono font-bold text-slate-900 text-xs">V</kbd>
+              </div>
             </div>
-            <span class="hidden sm:inline text-slate-300 font-bold">&rarr;</span>
-            <div class="flex items-center space-x-2 flex-wrap">
-              <span class="text-slate-500 font-medium text-[11px]">3. Buka</span>
-              <kbd class="px-2.5 py-1 bg-lodge-700 border border-lodge-800 text-white rounded shadow-xs font-mono font-bold text-xs">Enter</kbd>
+
+            <!-- Langkah 3 -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div class="flex items-center space-x-2.5">
+                <span class="w-5 h-5 rounded-md bg-lodge-100 text-lodge-800 font-bold flex items-center justify-center text-xs shrink-0">3</span>
+                <span class="text-slate-700 text-xs font-medium">Buka folder langsung di File Explorer</span>
+              </div>
+              <div class="flex items-center shrink-0">
+                <kbd class="px-3.5 py-1 bg-lodge-700 border border-lodge-800 text-white rounded-md shadow-2xs font-mono font-bold text-xs">Enter</kbd>
+              </div>
             </div>
           </div>
         </div>
@@ -2154,15 +2195,61 @@
       });
     }
 
+    let isModalGuidePathVisible = false;
+
     function openExplorerGuideModal() {
-      const sambaPath = currentSambaPath || document.getElementById('res-samba-path').textContent.trim();
-      const modalInput = document.getElementById('modal-guide-path');
-      if (modalInput) modalInput.value = sambaPath;
+      isModalGuidePathVisible = false;
+      updateModalGuidePathDisplay();
       const modal = document.getElementById('modal-explorer-guide');
       if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
       }
+    }
+
+    function toggleModalGuidePathVisibility() {
+      isModalGuidePathVisible = !isModalGuidePathVisible;
+      updateModalGuidePathDisplay();
+    }
+
+    function updateModalGuidePathDisplay() {
+      const el = document.getElementById('modal-guide-path');
+      const iconShow = document.getElementById('modal-guide-eye-show');
+      const iconHide = document.getElementById('modal-guide-eye-hide');
+      const label = document.getElementById('modal-guide-toggle-label');
+      const sambaPath = currentSambaPath || '';
+      if (!el) return;
+
+      if (isModalGuidePathVisible) {
+        el.textContent = sambaPath;
+        el.className = 'flex-1 font-mono text-xs text-slate-900 truncate tracking-normal select-all mr-2';
+        if (iconShow) iconShow.classList.add('hidden');
+        if (iconHide) iconHide.classList.remove('hidden');
+        if (label) label.textContent = 'Sembunyikan';
+      } else {
+        el.textContent = '••••••••••••••••••••••••••••••••';
+        el.className = 'flex-1 font-mono text-xs text-slate-500 truncate tracking-widest font-semibold select-none mr-2';
+        if (iconShow) iconShow.classList.remove('hidden');
+        if (iconHide) iconHide.classList.add('hidden');
+        if (label) label.textContent = 'Lihat Link';
+      }
+    }
+
+    function copyModalGuidePath(btn) {
+      const sambaPath = currentSambaPath || '';
+      if (!sambaPath) return;
+      navigator.clipboard.writeText(sambaPath).then(() => {
+        const copyText = document.getElementById('modal-copy-btn-text');
+        if (copyText) {
+          copyText.textContent = "Tersalin!";
+          setTimeout(() => {
+            copyText.textContent = "Salin Ulang";
+          }, 2000);
+        }
+        showExplorerToast("Jalur folder berhasil disalin ke Clipboard!");
+      }).catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
     }
 
     function closeExplorerGuideModal() {
