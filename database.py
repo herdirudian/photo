@@ -582,7 +582,7 @@ class FaceEngine:
                     pass
 
         # 3. Filter, validate, normalize, and extract upper-body color histograms
-        proc_rgb = None
+        image_rgb = None
         results = []
         for face in all_raw_faces:
             det_score = float(getattr(face, "det_score", 1.0))
