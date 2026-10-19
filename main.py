@@ -174,7 +174,8 @@ def format_samba_unc(prefix: str, subpath: str = "", fallback_host: str = "10.12
         parts = [p for p in re.split(r"[\\/]+", prefix.strip()) if p]
         if parts:
             parts[0] = fallback_host
-            prefix = rf"\\{'\\'.join(parts)}"
+            joined_parts = "\\".join(parts)
+            prefix = rf"\\{joined_parts}"
 
     clean_p = re.sub(r"^[\\/]+", "", prefix.strip())
     clean_p = re.sub(r"[\\/]+", r"\\", clean_p)
