@@ -35,7 +35,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "admin_pin": "BI5mill4h@@@",
     "operator_pin": "BI5mill4h@@@",
     "require_pin_to_access": True,
-    "samba_network_prefix": r"\\192.168.100.90\park-photos\results"
+    "samba_network_prefix": r"\\10.12.2.150\park-photos\results"
 }
 
 

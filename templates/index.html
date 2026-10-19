@@ -1449,7 +1449,7 @@
     let toastTimeout = null;
     let currentSambaPath = (window.location && window.location.hostname)
       ? `\\\\${window.location.hostname}\\park-photos\\results\\Customer_XXXX`
-      : '\\\\192.168.100.90\\park-photos\\results\\Customer_XXXX';
+      : '\\\\10.12.2.150\\park-photos\\results\\Customer_XXXX';
     let isSambaPathVisible = false;
 
     function updateSambaPathDisplay() {
@@ -1978,9 +1978,11 @@
       document.getElementById('res-match-count').textContent = `${data.match_count} foto cocok ditemukan`;
       document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
       let sambaPath = data.samba_path || '';
+      const clientHost = (window.location && window.location.hostname) ? window.location.hostname : '10.12.2.150';
       if (!sambaPath.startsWith('\\\\')) {
-        const host = window.location.hostname || '192.168.100.90';
-        sambaPath = `\\\\${host}\\park-photos\\results\\${data.customer_id}`;
+        sambaPath = `\\\\${clientHost}\\park-photos\\results\\${data.customer_id}`;
+      } else if (clientHost && clientHost !== 'localhost' && clientHost !== '127.0.0.1') {
+        sambaPath = sambaPath.replace(/^\\\\(192\.168\.100\.\d+|samba-server)/, `\\\\${clientHost}`);
       }
       currentSambaPath = sambaPath;
       isSambaPathVisible = false;
