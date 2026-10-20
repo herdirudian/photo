@@ -29,19 +29,45 @@ echo -e "\n${YELLOW}[2/4] Menginstal Nginx Web Server...${NC}"
 sudo apt-get update -y
 sudo apt-get install -y nginx openssl
 
-# 3. Buat Sertifikat SSL (Valid 10 Tahun / 3650 Hari) dengan SAN IP
-echo -e "\n${YELLOW}[3/4] Membuat Sertifikat SSL untuk IP ${IP_ADDR}...${NC}"
+# 3. Buat Root CA & Sertifikat SSL Server Resmi (Valid 10 Tahun / 3650 Hari) dengan SAN IP & serverAuth
+echo -e "\n${YELLOW}[3/4] Membuat Root CA & Sertifikat SSL untuk IP ${IP_ADDR}...${NC}"
 SSL_DIR="/etc/ssl/sistemphoto"
 sudo mkdir -p "$SSL_DIR"
 
-sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-  -keyout "$SSL_DIR/server.key" \
-  -out "$SSL_DIR/server.crt" \
-  -subj "/C=ID/ST=West Java/L=Bandung/O=The Lodge Maribaya/OU=IT/CN=${IP_ADDR}" \
-  -addext "subjectAltName=IP:${IP_ADDR},IP:127.0.0.1,DNS:localhost"
+# A. Buat Private Key & Root CA (Otoritas Sertifikasi Lokal The Lodge Maribaya)
+sudo openssl genrsa -out "$SSL_DIR/ca.key" 2048 2>/dev/null
+sudo openssl req -x509 -new -nodes -key "$SSL_DIR/ca.key" -sha256 -days 3650 \
+  -subj "/C=ID/ST=West Java/L=Bandung/O=The Lodge Maribaya/OU=IT/CN=The Lodge Maribaya Root CA" \
+  -out "$SSL_DIR/ca.crt" 2>/dev/null
 
-# Salin juga sertifikat ke folder proyek agar mudah disalin ke Windows jika ingin di-import
-sudo cp "$SSL_DIR/server.crt" "/opt/SistemPhoto/sistemphoto-ssl.crt" 2>/dev/null || true
+# B. Buat Server Key & CSR untuk IP Server
+sudo openssl genrsa -out "$SSL_DIR/server.key" 2048 2>/dev/null
+sudo openssl req -new -key "$SSL_DIR/server.key" -out "$SSL_DIR/server.csr" \
+  -subj "/C=ID/ST=West Java/L=Bandung/O=The Lodge Maribaya/OU=IT/CN=${IP_ADDR}" 2>/dev/null
+
+# C. Konfigurasi ekstensi X509 v3 (Wajib untuk Chrome, PWA & Windows: serverAuth + SAN IP)
+sudo bash -c "cat > $SSL_DIR/server.ext" << EOF
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = ${IP_ADDR}
+IP.2 = 127.0.0.1
+DNS.1 = localhost
+EOF
+
+# D. Tandatangani Sertifikat Server dengan Root CA
+sudo openssl x509 -req -in "$SSL_DIR/server.csr" -CA "$SSL_DIR/ca.crt" -CAkey "$SSL_DIR/ca.key" \
+  -CAcreateserial -out "$SSL_DIR/server.crt" -days 3650 -sha256 -extfile "$SSL_DIR/server.ext" 2>/dev/null
+
+# E. Gabungkan menjadi fullchain bundle untuk Nginx
+sudo bash -c "cat $SSL_DIR/server.crt $SSL_DIR/ca.crt > $SSL_DIR/server-bundle.crt"
+
+# F. Salin Root CA ke folder proyek agar diunduh oleh Windows untuk di-import ke Trusted Root
+sudo cp "$SSL_DIR/ca.crt" "/opt/SistemPhoto/sistemphoto-ssl.crt" 2>/dev/null || true
 sudo chmod 644 "/opt/SistemPhoto/sistemphoto-ssl.crt" 2>/dev/null || true
 
 # 4. Konfigurasi Nginx Reverse Proxy
@@ -61,7 +87,7 @@ server {
     listen 443 ssl;
     server_name _;
 
-    ssl_certificate $SSL_DIR/server.crt;
+    ssl_certificate $SSL_DIR/server-bundle.crt;
     ssl_certificate_key $SSL_DIR/server.key;
 
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -71,9 +97,9 @@ server {
     # Kapasitas upload maksimal foto DSLR resolusi tinggi (hingga 50MB)
     client_max_body_size 50M;
 
-    # Endpoint download sertifikat SSL untuk Windows Trusted Root Store
+    # Endpoint download Root CA untuk Windows / Mac Trusted Root Store
     location = /sistemphoto-ssl.crt {
-        alias $SSL_DIR/server.crt;
+        alias $SSL_DIR/ca.crt;
         default_type application/x-x509-ca-cert;
         add_header Content-Disposition 'attachment; filename="sistemphoto-ssl.crt"';
     }
