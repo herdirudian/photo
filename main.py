@@ -542,7 +542,10 @@ async def verify_access_pin(request: Request):
         return {"valid": False, "message": "PIN tidak boleh kosong."}
 
     valid_pins = {p for p in [operator_pin, admin_pin, "1234", "BI5mill4h@@@"] if p}
-    if entered_pin in valid_pins:
+    is_match = entered_pin in valid_pins
+    logger.info(f"[PIN CHECK] Entered: '{entered_pin}' | Allowed: {valid_pins} | Valid: {is_match}")
+
+    if is_match:
         is_admin = (entered_pin in {admin_pin, "BI5mill4h@@@"})
         return {
             "valid": True,
