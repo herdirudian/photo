@@ -32,8 +32,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "default_threshold": 0.50,  # 0.50 for InsightFace 512-D; 0.82 for dlib 128-D
     "default_threshold_insightface": 0.50,
     "default_threshold_dlib": 0.82,
-    "admin_pin": "BI5mill4h@@@",
-    "operator_pin": "BI5mill4h@@@",
+    "admin_pin": "1234",
+    "operator_pin": "1234",
     "require_pin_to_access": True,
     "samba_network_prefix": r"\\10.12.2.150\park-photos\results"
 }
