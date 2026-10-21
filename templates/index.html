@@ -344,6 +344,140 @@
 
           <form id="search-form" onsubmit="executeSearch(event)" class="space-y-5">
 
+            <!-- ============================================== -->
+            <!-- PILIH / CARI DATA PENGUNJUNG (CRM THE LODGE)   -->
+            <!-- ============================================== -->
+            <div class="space-y-2 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-lodge-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>Data Pengunjung (Tamu)</span>
+                </label>
+                <button 
+                  type="button" 
+                  id="btn-toggle-manual-guest"
+                  onclick="toggleManualGuestEntry()"
+                  class="text-xs text-lodge-700 hover:text-lodge-900 font-medium underline focus-ring rounded"
+                >
+                  Input Manual (Walk-in)
+                </button>
+              </div>
+
+              <!-- State 1: CRM Autocomplete Search Input -->
+              <div id="guest-crm-search-container" class="relative">
+                <div class="relative">
+                  <input 
+                    type="text" 
+                    id="guest-search-input" 
+                    placeholder="Ketik nama atau 4 digit No. HP (misal: Herdi atau 7890)..." 
+                    autocomplete="off"
+                    class="w-full pl-9 pr-9 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 outline-none transition"
+                    oninput="handleGuestSearchInput(event)"
+                    onfocus="handleGuestSearchFocus()"
+                  />
+                  <!-- Search Icon -->
+                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <!-- Spinner / Clear button -->
+                  <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center">
+                    <svg id="guest-search-spinner" class="hidden w-4 h-4 text-lodge-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <button 
+                      type="button" 
+                      id="guest-search-clear-btn"
+                      onclick="clearGuestSearchInput()" 
+                      class="hidden text-slate-400 hover:text-slate-600 text-sm p-1 rounded-full"
+                      title="Hapus pencarian"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Autocomplete Dropdown Menu -->
+                <div 
+                  id="guest-autocomplete-dropdown" 
+                  class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-30 max-h-60 overflow-y-auto divide-y divide-slate-100"
+                >
+                  <!-- Populated by JavaScript -->
+                </div>
+              </div>
+
+              <!-- State 2: Selected Guest Chip / Card -->
+              <div id="guest-selected-card" class="hidden bg-emerald-50 border border-emerald-300 rounded-xl p-3 flex items-center justify-between">
+                <div class="flex items-center space-x-3 min-w-0">
+                  <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-xs">
+                    ✓
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center space-x-2">
+                      <span id="selected-guest-name-display" class="font-bold text-slate-900 text-xs truncate">Nama Tamu</span>
+                      <span id="selected-guest-today-badge" class="hidden text-[10px] font-semibold bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">Hari Ini</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600 truncate flex items-center space-x-1.5 mt-0.5">
+                      <span id="selected-guest-phone-display">0812••••7890</span>
+                      <span>&bull;</span>
+                      <span class="font-mono text-emerald-800 font-semibold" id="selected-guest-folder-preview">Herdi_Rudian_7890</span>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  onclick="clearSelectedGuest()" 
+                  class="ml-2 px-2.5 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition shrink-0"
+                  title="Ganti Tamu"
+                >
+                  Ganti
+                </button>
+              </div>
+
+              <!-- State 3: Manual Guest Entry (for walk-ins without online form) -->
+              <div id="guest-manual-entry-card" class="hidden bg-white border border-slate-200 rounded-xl p-3 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-800">Input Tamu Manual (Walk-in)</span>
+                  <button 
+                    type="button" 
+                    onclick="toggleManualGuestEntry()" 
+                    class="text-xs text-lodge-700 hover:text-lodge-900 font-semibold underline"
+                  >
+                    Cari di Form Online
+                  </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Nama Tamu</label>
+                    <input 
+                      type="text" 
+                      id="manual-guest-name-input" 
+                      placeholder="Contoh: Herdi Rudian" 
+                      class="w-full px-2.5 py-1.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:border-lodge-600 focus:outline-none transition"
+                      oninput="updateManualFolderPreview()"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">4 Digit No HP / Catatan</label>
+                    <input 
+                      type="text" 
+                      id="manual-guest-phone-input" 
+                      maxlength="15" 
+                      placeholder="Contoh: 7890" 
+                      class="w-full px-2.5 py-1.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:border-lodge-600 focus:outline-none transition"
+                      oninput="updateManualFolderPreview()"
+                    />
+                  </div>
+                </div>
+                <div class="text-[11px] text-slate-500 flex items-center justify-between pt-0.5">
+                  <span>Nama folder hasil: <strong class="font-mono text-lodge-900" id="manual-folder-preview">Customer_...</strong></span>
+                </div>
+              </div>
+            </div>
+
             <!-- Drag and Drop Upload Area -->
             <div>
               <div class="flex items-center justify-between mb-2.5">
@@ -797,9 +931,15 @@
             
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
               <div>
-                <span class="text-xs font-mono font-bold text-lodge-900 bg-lodge-100 px-2.5 py-1 rounded-md border border-lodge-200 inline-block" id="res-customer-id">
-                  Customer_00000000
-                </span>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-mono font-bold text-lodge-900 bg-lodge-100 px-2.5 py-1 rounded-md border border-lodge-200 inline-block" id="res-customer-id">
+                    Customer_00000000
+                  </span>
+                  <span id="res-guest-name-pill" class="hidden text-xs font-bold text-emerald-900 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300 items-center gap-1.5 shadow-2xs">
+                    <span>👤</span>
+                    <span id="res-guest-name-text">Nama Tamu</span>
+                  </span>
+                </div>
                 <div class="flex flex-wrap items-center gap-2 mt-1.5">
                   <h3 class="text-lg font-bold text-slate-900 tracking-tight">Hasil Foto Wahana Ditemukan</h3>
                   <span id="group-mode-pill" class="hidden text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full items-center gap-1 shadow-2xs">
@@ -1452,6 +1592,236 @@
       : '\\\\10.12.2.150\\park-photos\\results\\Customer_XXXX';
     let isSambaPathVisible = false;
 
+    // ==========================================
+    // CRM GUEST INTEGRATION & SELECTION LOGIC
+    // ==========================================
+    let activeGuest = null; // { name, phone, clean_name, phone_suffix, masked_phone, is_today }
+    let guestSearchDebounceTimer = null;
+    let isManualGuestMode = false;
+
+    function getActiveGuestInfo() {
+      if (isManualGuestMode) {
+        const manualName = (document.getElementById('manual-guest-name-input')?.value || '').trim();
+        const manualPhone = (document.getElementById('manual-guest-phone-input')?.value || '').trim();
+        return { name: manualName, phone: manualPhone };
+      }
+      if (activeGuest) {
+        return { name: activeGuest.name, phone: activeGuest.phone };
+      }
+      return { name: '', phone: '' };
+    }
+
+    function toggleManualGuestEntry() {
+      isManualGuestMode = !isManualGuestMode;
+      const crmContainer = document.getElementById('guest-crm-search-container');
+      const selectedContainer = document.getElementById('guest-selected-card');
+      const manualContainer = document.getElementById('guest-manual-entry-card');
+      const toggleBtn = document.getElementById('btn-toggle-manual-guest');
+
+      if (isManualGuestMode) {
+        crmContainer?.classList.add('hidden');
+        selectedContainer?.classList.add('hidden');
+        manualContainer?.classList.remove('hidden');
+        if (toggleBtn) toggleBtn.textContent = 'Cari di Form Online';
+        updateManualFolderPreview();
+      } else {
+        manualContainer?.classList.add('hidden');
+        if (toggleBtn) toggleBtn.textContent = 'Input Manual (Walk-in)';
+        if (activeGuest) {
+          crmContainer?.classList.add('hidden');
+          selectedContainer?.classList.remove('hidden');
+        } else {
+          crmContainer?.classList.remove('hidden');
+          selectedContainer?.classList.add('hidden');
+        }
+      }
+    }
+
+    function updateManualFolderPreview() {
+      const nameInput = document.getElementById('manual-guest-name-input')?.value || '';
+      const phoneInput = document.getElementById('manual-guest-phone-input')?.value || '';
+      const previewEl = document.getElementById('manual-folder-preview');
+      if (!previewEl) return;
+
+      const cleanName = nameInput.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      const digits = phoneInput.replace(/\D/g, '');
+      const suffix = digits.length >= 4 ? digits.slice(-4) : (digits || 'XXXX');
+
+      if (cleanName) {
+        previewEl.textContent = `${cleanName}_${suffix}`;
+      } else {
+        previewEl.textContent = 'Customer_XXXXXXXX';
+      }
+    }
+
+    function handleGuestSearchInput(e) {
+      const val = e.target.value.trim();
+      const clearBtn = document.getElementById('guest-search-clear-btn');
+      if (clearBtn) {
+        clearBtn.classList.toggle('hidden', val.length === 0);
+      }
+
+      clearTimeout(guestSearchDebounceTimer);
+      if (val.length < 1) {
+        hideGuestDropdown();
+        return;
+      }
+
+      guestSearchDebounceTimer = setTimeout(() => {
+        fetchGuestSuggestions(val);
+      }, 250);
+    }
+
+    function handleGuestSearchFocus() {
+      const val = (document.getElementById('guest-search-input')?.value || '').trim();
+      if (val.length >= 1) {
+        fetchGuestSuggestions(val);
+      }
+    }
+
+    function clearGuestSearchInput() {
+      const input = document.getElementById('guest-search-input');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      document.getElementById('guest-search-clear-btn')?.classList.add('hidden');
+      hideGuestDropdown();
+    }
+
+    async function fetchGuestSuggestions(query) {
+      const spinner = document.getElementById('guest-search-spinner');
+      const clearBtn = document.getElementById('guest-search-clear-btn');
+      if (spinner) spinner.classList.remove('hidden');
+      if (clearBtn) clearBtn.classList.add('hidden');
+
+      try {
+        const res = await fetch(`/api/guests/search?q=${encodeURIComponent(query)}&limit=12`);
+        const data = await res.json();
+        renderGuestDropdown(data, query);
+      } catch (err) {
+        console.error('Error fetching guests:', err);
+        renderGuestDropdown({ success: false, guests: [], error: 'Gagal menghubungi server CRM.' }, query);
+      } finally {
+        if (spinner) spinner.classList.add('hidden');
+        if (clearBtn && query.length > 0) clearBtn.classList.remove('hidden');
+      }
+    }
+
+    function renderGuestDropdown(data, query) {
+      const dropdown = document.getElementById('guest-autocomplete-dropdown');
+      if (!dropdown) return;
+
+      dropdown.innerHTML = '';
+      dropdown.classList.remove('hidden');
+
+      if (!data || !data.success || !data.guests || data.guests.length === 0) {
+        const msg = data?.error || 'Tidak ada data tamu ditemukan';
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'p-3 text-xs text-slate-500 text-center space-y-1.5';
+        const escapedQuery = query.replace(/'/g, "\\'");
+        emptyDiv.innerHTML = `
+          <div class="font-medium text-slate-700">${msg}</div>
+          <button type="button" onclick="selectManualGuestFallback('${escapedQuery}')" class="text-lodge-700 hover:text-lodge-900 font-semibold underline block mx-auto text-xs">
+            Gunakan nama "${query}" secara manual
+          </button>
+        `;
+        dropdown.appendChild(emptyDiv);
+        return;
+      }
+
+      data.guests.forEach(guest => {
+        const item = document.createElement('div');
+        item.className = 'px-3.5 py-2.5 hover:bg-lodge-50 cursor-pointer transition flex items-center justify-between text-xs group';
+        
+        const badgeToday = guest.is_today 
+          ? `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-emerald-300">Hari ini ${guest.time_str || ''}</span>`
+          : `<span class="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded">${new Date(guest.submitted_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}</span>`;
+
+        item.innerHTML = `
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-slate-900 group-hover:text-lodge-900 truncate">${guest.name}</span>
+              ${badgeToday}
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 flex items-center space-x-1.5 truncate">
+              <span>${guest.masked_phone || 'Tanpa No HP'}</span>
+              ${guest.city ? `<span>&bull;</span><span>${guest.city}</span>` : ''}
+              <span>&bull;</span>
+              <span class="font-mono text-lodge-800 font-medium">${guest.clean_name}_${guest.phone_suffix}</span>
+            </div>
+          </div>
+          <div class="pl-2 text-lodge-600 font-semibold group-hover:translate-x-0.5 transition shrink-0">
+            Pilih &rarr;
+          </div>
+        `;
+
+        item.addEventListener('click', () => {
+          selectGuest(guest);
+        });
+
+        dropdown.appendChild(item);
+      });
+    }
+
+    function hideGuestDropdown() {
+      const dropdown = document.getElementById('guest-autocomplete-dropdown');
+      if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      const container = document.getElementById('guest-crm-search-container');
+      if (container && !container.contains(e.target)) {
+        hideGuestDropdown();
+      }
+    });
+
+    function selectGuest(guest) {
+      activeGuest = guest;
+      isManualGuestMode = false;
+      hideGuestDropdown();
+
+      document.getElementById('guest-crm-search-container')?.classList.add('hidden');
+      document.getElementById('guest-manual-entry-card')?.classList.add('hidden');
+      
+      const card = document.getElementById('guest-selected-card');
+      if (card) {
+        card.classList.remove('hidden');
+        document.getElementById('selected-guest-name-display').textContent = guest.name;
+        document.getElementById('selected-guest-phone-display').textContent = guest.masked_phone || 'Tanpa No HP';
+        document.getElementById('selected-guest-folder-preview').textContent = `${guest.clean_name}_${guest.phone_suffix}`;
+        
+        const todayBadge = document.getElementById('selected-guest-today-badge');
+        if (todayBadge) {
+          todayBadge.classList.toggle('hidden', !guest.is_today);
+        }
+      }
+    }
+
+    function selectManualGuestFallback(name) {
+      isManualGuestMode = true;
+      toggleManualGuestEntry();
+      const input = document.getElementById('manual-guest-name-input');
+      if (input) {
+        input.value = name;
+        updateManualFolderPreview();
+      }
+      hideGuestDropdown();
+    }
+
+    function clearSelectedGuest() {
+      activeGuest = null;
+      document.getElementById('guest-selected-card')?.classList.add('hidden');
+      document.getElementById('guest-crm-search-container')?.classList.remove('hidden');
+      const searchInput = document.getElementById('guest-search-input');
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+      }
+      document.getElementById('guest-search-clear-btn')?.classList.add('hidden');
+    }
+
     function updateSambaPathDisplay() {
       const el = document.getElementById('res-samba-path');
       const iconShow = document.getElementById('eye-icon-show');
@@ -1930,6 +2300,15 @@
         formData.append('ride_filter', rideFilter);
       }
 
+      // Attach guest identification from CRM or manual input
+      const guestInfo = getActiveGuestInfo();
+      if (guestInfo.name) {
+        formData.append('guest_name', guestInfo.name);
+      }
+      if (guestInfo.phone) {
+        formData.append('guest_phone', guestInfo.phone);
+      }
+
       const submitBtn = document.getElementById('submit-btn');
       submitBtn.disabled = true;
       showState('loading');
@@ -1975,6 +2354,21 @@
       currentGroupFilter = 'all';
       currentCustomerId = data.customer_id;
       document.getElementById('res-customer-id').textContent = data.customer_id;
+
+      // Update guest name badge
+      const guestPill = document.getElementById('res-guest-name-pill');
+      const guestText = document.getElementById('res-guest-name-text');
+      if (guestPill && guestText) {
+        if (data.guest_name) {
+          guestText.textContent = data.guest_name;
+          guestPill.classList.remove('hidden');
+          guestPill.classList.add('inline-flex');
+        } else {
+          guestPill.classList.add('hidden');
+          guestPill.classList.remove('inline-flex');
+        }
+      }
+
       document.getElementById('res-match-count').textContent = `${data.match_count} foto cocok ditemukan`;
       document.getElementById('res-query-time').textContent = `${data.query_time_ms} ms`;
       let sambaPath = data.samba_path || '';

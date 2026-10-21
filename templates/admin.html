@@ -695,6 +695,71 @@
           </div>
         </div>
 
+        <!-- Kartu Integrasi CRM Cloud The Lodge -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-lg bg-lodge-50 text-lodge-600 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">Integrasi Form Tamu Online (CRM)</h3>
+                <p class="text-xs text-slate-600">Sinkronisasi data kunjungan tamu dari Cloud VPS</p>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-lodge-50 text-lodge-800 border border-lodge-200">
+              submit.thelodgegroup.id
+            </span>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <label for="crm_guest_api_url" class="block font-semibold text-slate-700 mb-1">
+                URL Endpoint Pencarian Tamu (Cloud)
+              </label>
+              <input 
+                type="text" 
+                id="crm_guest_api_url" 
+                value="https://submit.thelodgegroup.id/api/guests/search" 
+                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs font-mono focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+              />
+            </div>
+
+            <div>
+              <label for="crm_guest_api_key" class="block font-semibold text-slate-700 mb-1">
+                API Key Rahasia (x-api-key)
+              </label>
+              <input 
+                type="password" 
+                id="crm_guest_api_key" 
+                value="thelodge-photo-secret-2026" 
+                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs font-mono focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+              />
+            </div>
+
+            <div id="crm-test-result" class="hidden p-2.5 rounded-xl text-xs font-medium"></div>
+
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <button 
+                type="button" 
+                onclick="testCrmConnection()"
+                class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-xl text-xs transition border border-slate-300"
+              >
+                Tes Koneksi CRM
+              </button>
+              <button 
+                type="button" 
+                onclick="saveCrmSettings()"
+                class="flex-1 py-2 bg-lodge-600 hover:bg-lodge-700 text-white font-semibold rounded-xl text-xs transition shadow-xs"
+              >
+                Simpan Integrasi CRM
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Kartu Pemeliharaan Sistem -->
         <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 space-y-3.5">
           <div class="flex items-center space-x-2">
@@ -923,6 +988,12 @@
           }
           const pinToggle = document.getElementById('require_pin_to_access');
           if (pinToggle) pinToggle.checked = (data.require_pin_to_access !== false);
+          if (document.getElementById('crm_guest_api_url')) {
+            document.getElementById('crm_guest_api_url').value = data.crm_guest_api_url || 'https://submit.thelodgegroup.id/api/guests/search';
+          }
+          if (document.getElementById('crm_guest_api_key')) {
+            document.getElementById('crm_guest_api_key').value = data.crm_guest_api_key || 'thelodge-photo-secret-2026';
+          }
           updateMountCommandDisplay();
         }
       } catch (e) {
@@ -1138,6 +1209,53 @@
         if (icon) icon.classList.remove('hidden');
         if (spinner) spinner.classList.add('hidden');
         if (btnText) btnText.textContent = "Simpan PIN & Keamanan";
+      }
+    }
+
+    async function testCrmConnection() {
+      const resBox = document.getElementById('crm-test-result');
+      if (!resBox) return;
+      resBox.className = 'p-2.5 rounded-xl text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200 block';
+      resBox.textContent = 'Menghubungi server CRM cloud...';
+
+      try {
+        const res = await fetch('/api/guests/search?limit=1');
+        const data = await res.json();
+        if (data.success) {
+          resBox.className = 'p-2.5 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-900 border border-emerald-300 block';
+          resBox.textContent = `✓ Koneksi CRM Berhasil! Terhubung ke submit.thelodgegroup.id.`;
+        } else {
+          resBox.className = 'p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-900 border border-rose-300 block';
+          resBox.textContent = `⚠ ${data.error || 'Gagal menghubungi CRM.'}`;
+        }
+      } catch (err) {
+        resBox.className = 'p-2.5 rounded-xl text-xs font-medium bg-rose-50 text-rose-900 border border-rose-300 block';
+        resBox.textContent = `⚠ Kesalahan jaringan: ${err.message}`;
+      }
+    }
+
+    async function saveCrmSettings() {
+      const url = document.getElementById('crm_guest_api_url')?.value || '';
+      const key = document.getElementById('crm_guest_api_key')?.value || '';
+      const resBox = document.getElementById('crm-test-result');
+
+      try {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            crm_guest_api_url: url,
+            crm_guest_api_key: key
+          })
+        });
+        if (res.ok) {
+          if (resBox) {
+            resBox.className = 'p-2.5 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-900 border border-emerald-300 block';
+            resBox.textContent = '✓ Pengaturan integrasi CRM berhasil disimpan.';
+          }
+        }
+      } catch (err) {
+        alert('Gagal menyimpan pengaturan CRM: ' + err.message);
       }
     }
 

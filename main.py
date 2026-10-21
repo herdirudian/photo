@@ -14,6 +14,8 @@ import base64
 import logging
 import traceback
 import threading
+import re
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, List
 import numpy as np
@@ -598,13 +600,102 @@ async def trigger_reindex(force: bool = Query(True)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/guests/search")
+async def search_crm_guests(
+    q: Optional[str] = Query(None, description="Search keyword for guest name or phone number"),
+    limit: int = Query(15, ge=1, le=50)
+):
+    """
+    Proxy endpoint to query guest registrations from Cloud CRM (submit.thelodgegroup.id).
+    Sends the request with x-api-key header and browser User-Agent.
+    Handles network timeouts and VPS status gracefully.
+    """
+    cfg = config_manager.load_settings()
+    api_url = os.getenv("CRM_GUEST_API_URL", cfg.get("crm_guest_api_url", "https://submit.thelodgegroup.id/api/guests/search"))
+    api_key = os.getenv("CRM_GUEST_API_KEY", cfg.get("crm_guest_api_key", "thelodge-photo-secret-2026"))
+    
+    clean_q = (q or "").strip()
+    
+    def _fetch_from_crm():
+        import urllib.request
+        import urllib.parse
+        import urllib.error
+        import ssl
+        
+        params = {"limit": str(limit)}
+        if clean_q:
+            params["q"] = clean_q
+            
+        full_url = f"{api_url}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(
+            full_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "x-api-key": api_key,
+                "Accept": "application/json"
+            }
+        )
+        
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        
+        try:
+            with urllib.request.urlopen(req, timeout=4.0, context=ctx) as resp:
+                data = resp.read().decode("utf-8")
+                return json.loads(data)
+        except urllib.error.HTTPError as he:
+            err_body = ""
+            try:
+                err_body = he.read().decode("utf-8")
+            except Exception:
+                pass
+            logger.warning(f"CRM API HTTP error {he.code}: {err_body[:200]}")
+            if he.code == 404:
+                return {
+                    "success": False,
+                    "error": "Endpoint CRM belum aktif di server cloud (404). Silakan deploy pembaruan di VPS, atau gunakan input manual.",
+                    "guests": []
+                }
+            elif he.code in (401, 403):
+                return {
+                    "success": False,
+                    "error": "Akses ke CRM cloud ditolak (Autentikasi API Key tidak valid).",
+                    "guests": []
+                }
+            return {
+                "success": False,
+                "error": f"Server CRM mengembalikan status {he.code}.",
+                "guests": []
+            }
+        except urllib.error.URLError as ue:
+            logger.warning(f"CRM API connection failed: {ue}")
+            return {
+                "success": False,
+                "error": "Tidak dapat terhubung ke server CRM cloud (Koneksi offline/timeout). Silakan gunakan input manual.",
+                "guests": []
+            }
+        except Exception as ex:
+            logger.error(f"CRM API unexpected error: {ex}")
+            return {
+                "success": False,
+                "error": f"Kesalahan koneksi CRM: {str(ex)}",
+                "guests": []
+            }
+
+    data = await asyncio.to_thread(_fetch_from_crm)
+    return data
+
+
 @app.post("/api/search")
 async def search_guest_photos(
     request: Request,
     files: List[UploadFile] = File(...),
     threshold: float = Form(DEFAULT_THRESHOLD),
     top_k: int = Form(0),
-    ride_filter: Optional[str] = Form(None)
+    ride_filter: Optional[str] = Form(None),
+    guest_name: Optional[str] = Form(None),
+    guest_phone: Optional[str] = Form(None)
 ):
     """
     Search endpoint:
@@ -718,8 +809,36 @@ async def search_guest_photos(
             matched_photos.append(item)
 
         elapsed_ms = round((time.time() - start_time) * 1000, 2)
-        customer_uuid = uuid.uuid4().hex[:10].upper()
-        customer_folder_name = f"Customer_{customer_uuid}"
+
+        # Determine customer folder name (Option 2: [Nama_Tamu]_[4_Digit_NoHP])
+        clean_guest_name = ""
+        if guest_name and guest_name.strip():
+            clean_guest_name = re.sub(r'[^a-zA-Z0-9]', '_', guest_name.strip())
+            clean_guest_name = re.sub(r'_+', '_', clean_guest_name).strip('_')
+
+        phone_suffix = ""
+        if guest_phone and guest_phone.strip():
+            digits = re.sub(r'\D', '', guest_phone.strip())
+            if len(digits) >= 4:
+                phone_suffix = digits[-4:]
+            elif digits:
+                phone_suffix = digits
+
+        if clean_guest_name:
+            if not phone_suffix:
+                phone_suffix = uuid.uuid4().hex[:4].upper()
+            base_folder_name = f"{clean_guest_name}_{phone_suffix}"
+        else:
+            customer_uuid = uuid.uuid4().hex[:10].upper()
+            base_folder_name = f"Customer_{customer_uuid}"
+
+        # Guarantee unique result directory name
+        customer_folder_name = base_folder_name
+        counter = 2
+        while os.path.exists(os.path.join(RESULTS_DIR, customer_folder_name)):
+            customer_folder_name = f"{base_folder_name}_{counter}"
+            counter += 1
+
         customer_dir = os.path.join(RESULTS_DIR, customer_folder_name)
 
         # Create destination virtual folder for customer
@@ -800,6 +919,8 @@ async def search_guest_photos(
         # Write audit summary into the customer result folder
         summary_data = {
             "customer_id": customer_folder_name,
+            "guest_name": (guest_name or "").strip(),
+            "guest_phone": (guest_phone or "").strip(),
             "search_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "similarity_threshold": float(threshold),
             "query_time_ms": float(elapsed_ms),
@@ -835,6 +956,8 @@ async def search_guest_photos(
         return {
             "success": True,
             "customer_id": customer_folder_name,
+            "guest_name": (guest_name or "").strip(),
+            "guest_phone": (guest_phone or "").strip(),
             "result_dir": customer_dir,
             "samba_path": samba_path,
             "match_count": len(matched_photos),
@@ -1044,7 +1167,8 @@ async def download_results_zip(customer_id: str):
     """
     Package all matched raw photos into a single zip file for direct browser download by front-desk staff.
     """
-    customer_dir = os.path.join(RESULTS_DIR, customer_id)
+    clean_id = os.path.basename(customer_id.strip())
+    customer_dir = os.path.join(RESULTS_DIR, clean_id)
     if not os.path.exists(customer_dir) or not os.path.isdir(customer_dir):
         raise HTTPException(status_code=404, detail="Customer result folder not found.")
 
