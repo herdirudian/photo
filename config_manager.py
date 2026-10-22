@@ -29,6 +29,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "ai_engine": "insightface",  # "insightface" (ArcFace 512-D) or "dlib" (ResNet-34 128-D)
     "insightface_model": "buffalo_l",  # "buffalo_l" (ResNet-50 highest accuracy) or "buffalo_sc" (fast CPU)
     "insightface_det_thresh": 0.50,
+    "insightface_det_size": 1280,  # 1280x1280 High Resolution Multi-Scale (Dell R740 Xeon), 640 for legacy
     "default_threshold": 0.50,  # 0.50 for InsightFace 512-D; 0.82 for dlib 128-D
     "default_threshold_insightface": 0.50,
     "default_threshold_dlib": 0.82,

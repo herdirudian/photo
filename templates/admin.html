@@ -193,7 +193,7 @@
               Wajah Terindeks (AI)
             </span>
             <span class="px-1.5 py-0.5 rounded text-xs font-bold {% if ai_engine == 'insightface' %}bg-emerald-100 text-emerald-800 border border-emerald-200{% else %}bg-slate-100 text-slate-700{% endif %}">
-              {% if ai_engine == 'insightface' %}ArcFace 512-D{% else %}dlib 128-D{% endif %}
+              {% if ai_engine == 'insightface' %}ArcFace 512-D ({{ stats.det_size or 1280 }}px){% else %}dlib 128-D{% endif %}
             </span>
           </div>
           <span id="stat-indexed-faces" class="text-sm font-bold text-slate-900 mt-0.5 block truncate">
@@ -564,6 +564,21 @@
                     class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs font-mono focus:bg-white focus:border-lodge-600 focus:outline-none transition"
                   />
                   <span class="text-xs text-slate-600 mt-0.5 block">ArcFace standar: 0.50 (50%)</span>
+                </div>
+                <div class="sm:col-span-2">
+                  <label for="insightface_det_size" class="block font-semibold text-slate-700 mb-1">
+                    Resolusi Deteksi Multi-Skala (det_size)
+                  </label>
+                  <select 
+                    id="insightface_det_size" 
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-xs focus:bg-white focus:border-lodge-600 focus:outline-none transition"
+                  >
+                    <option value="1280" selected>1280x1280 (Dell R740 Xeon - Sangat Teliti, Wajah Jarak Jauh/Kecil Terdeteksi)</option>
+                    <option value="640">640x640 (Standar Cepat - Hemat CPU, Jarak Dekat/Menengah)</option>
+                  </select>
+                  <span class="text-xs text-slate-600 mt-1 block">
+                    Mode 1280x1280 memindai foto DSLR wahana dengan resolusi 2x lebih tajam sehingga wajah di kejauhan (20-30px) tetap terindeks ke FAISS tanpa ada yang terlewat.
+                  </span>
                 </div>
               </div>
             </div>
@@ -983,6 +998,9 @@
           if (document.getElementById('insightface_model')) {
             document.getElementById('insightface_model').value = data.insightface_model || 'buffalo_l';
           }
+          if (document.getElementById('insightface_det_size')) {
+            document.getElementById('insightface_det_size').value = data.insightface_det_size ? String(data.insightface_det_size) : '1280';
+          }
           if (document.getElementById('admin_default_threshold')) {
             document.getElementById('admin_default_threshold').value = data.default_threshold !== undefined ? data.default_threshold : 0.50;
           }
@@ -1128,6 +1146,7 @@
         require_pin_to_access: document.getElementById('require_pin_to_access') ? document.getElementById('require_pin_to_access').checked : true,
         ai_engine: document.getElementById('ai_engine') ? document.getElementById('ai_engine').value : 'insightface',
         insightface_model: document.getElementById('insightface_model') ? document.getElementById('insightface_model').value : 'buffalo_l',
+        insightface_det_size: document.getElementById('insightface_det_size') ? (parseInt(document.getElementById('insightface_det_size').value) || 1280) : 1280,
         default_threshold: document.getElementById('admin_default_threshold') ? parseFloat(document.getElementById('admin_default_threshold').value) : 0.50
       };
 

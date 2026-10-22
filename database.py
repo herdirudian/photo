@@ -116,7 +116,7 @@ class FaceEngine:
         model: str = "buffalo_l",
         model_root: Optional[str] = None,
         det_thresh: float = 0.50,
-        det_size: Tuple[int, int] = (640, 640)
+        det_size: Tuple[int, int] = (1280, 1280)
     ):
         self.requested_engine = (engine or "insightface").lower()
         self.model_name = model or "buffalo_l"
@@ -177,6 +177,18 @@ class FaceEngine:
         self.model = model if model in ["hog", "cnn"] else "hog"
         self.insight_app = None
         logger.info(f"Active Face Engine: dlib ResNet-34 (128-D, detector: {self.model})")
+
+    def update_det_size(self, new_size: int):
+        """Update detection resolution dynamically (e.g. 640 or 1280)."""
+        new_size = int(new_size)
+        self.det_size = (new_size, new_size)
+        if self.insight_app is not None:
+            try:
+                with self.inference_lock:
+                    self.insight_app.prepare(ctx_id=-1, det_size=self.det_size)
+                logger.info(f"InsightFace det_size successfully updated to {self.det_size}")
+            except Exception as e:
+                logger.warning(f"Could not re-prepare InsightFace det_size: {e}")
 
     @staticmethod
     def _compute_iou(boxA: Tuple[int, int, int, int], boxB: Tuple[int, int, int, int]) -> float:
@@ -491,8 +503,9 @@ class FaceEngine:
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
-        if max_dim > 2560:
-            scale_factor = 2560.0 / float(max_dim)
+        # Preserve high resolution for 1280x1280 detection on Dell PowerEdge R740 Xeon
+        if max_dim > 3200:
+            scale_factor = 3200.0 / float(max_dim)
             proc_w = int(round(orig_w * scale_factor))
             proc_h = int(round(orig_h * scale_factor))
             proc_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_AREA)

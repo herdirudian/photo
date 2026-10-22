@@ -47,6 +47,8 @@ AI_ENGINE = os.getenv("AI_ENGINE", app_settings.get("ai_engine", "insightface"))
 INSIGHTFACE_MODEL = os.getenv("INSIGHTFACE_MODEL", app_settings.get("insightface_model", "buffalo_l"))
 FACE_MODEL = os.getenv("FACE_DETECTION_MODEL", "hog")
 DEFAULT_THRESHOLD = float(app_settings.get("default_threshold", 0.50 if AI_ENGINE == "insightface" else 0.82))
+INSIGHTFACE_DET_SIZE = int(os.getenv("INSIGHTFACE_DET_SIZE", app_settings.get("insightface_det_size", 1280)))
+INSIGHTFACE_DET_THRESH = float(os.getenv("INSIGHTFACE_DET_THRESH", app_settings.get("insightface_det_thresh", 0.50)))
 
 # Ensure required directories exist
 MODELS_DIR = os.getenv("MODELS_DIR", os.path.join(os.path.dirname(os.path.abspath(DB_DIR)), "models", "insightface"))
@@ -57,7 +59,9 @@ for directory in [RAW_DIR, RESULTS_DIR, DB_DIR, MODELS_DIR]:
 face_engine = FaceEngine(
     engine=AI_ENGINE,
     model=INSIGHTFACE_MODEL if AI_ENGINE == "insightface" else FACE_MODEL,
-    model_root=MODELS_DIR
+    model_root=MODELS_DIR,
+    det_size=(INSIGHTFACE_DET_SIZE, INSIGHTFACE_DET_SIZE),
+    det_thresh=INSIGHTFACE_DET_THRESH
 )
 db_manager = DatabaseManager(db_dir=DB_DIR, vector_dim=face_engine.dimension)
 indexer = PhotoIndexer(
@@ -307,6 +311,9 @@ def get_comprehensive_stats() -> dict:
     stats["ai_engine"] = face_engine.engine_name
     stats["vector_dimension"] = face_engine.dimension
     stats["model_name"] = face_engine.model_name
+    det_size_val = face_engine.det_size[0] if isinstance(getattr(face_engine, "det_size", None), (list, tuple)) else 1280
+    stats["det_size"] = det_size_val
+    stats["det_thresh"] = getattr(face_engine, "det_thresh", 0.50)
     return stats
 
 
@@ -394,6 +401,13 @@ async def update_admin_settings(request: Request):
             indexer.polling_interval = float(updated["polling_interval"])
         except Exception:
             pass
+    if "insightface_det_size" in updated:
+        try:
+            new_det_size = int(updated["insightface_det_size"])
+            if hasattr(face_engine, "update_det_size"):
+                face_engine.update_det_size(new_det_size)
+        except Exception as e:
+            logger.warning(f"Could not apply new det_size: {e}")
     return {"success": True, "settings": updated}
 
 
