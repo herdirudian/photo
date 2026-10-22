@@ -247,7 +247,7 @@
             id="btn-lock-kiosk" 
             type="button"
             onclick="lockKioskScreen()" 
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-lodge-800/80 hover:bg-lodge-700/80 active:bg-lodge-800 text-lodge-100 hover:text-white rounded-lg border border-lodge-700/70 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400/50 min-h-[36px] text-xs font-medium cursor-pointer"
+            class="{% if not require_pin_to_access %}hidden {% endif %}inline-flex items-center gap-1.5 px-3 py-1.5 bg-lodge-800/80 hover:bg-lodge-700/80 active:bg-lodge-800 text-lodge-100 hover:text-white rounded-lg border border-lodge-700/70 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400/50 min-h-[36px] text-xs font-medium cursor-pointer"
             title="Kunci layar kembali dengan PIN keamanan"
           >
             <svg class="w-3.5 h-3.5 text-lodge-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2890,8 +2890,7 @@
     // KIOSK ACCESS GATE (PIN SEBELUM PENCARIAN)
     // ==========================================
     const REQUIRE_PIN_GATE = {{ 'true' if require_pin_to_access else 'false' }};
-    let kioskIdleTimer = null;
-    const KIOSK_IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 menit idle auto-lock
+    let kioskIdleTimer = null; // Auto-lock idle dinonaktifkan (kunci hanya manual via tombol)
 
     function appendGatePin(digit) {
       const input = document.getElementById('gate-pin-input');
@@ -2947,6 +2946,7 @@
 
         if (data.valid) {
           sessionStorage.setItem('lodge_kiosk_unlocked', 'true');
+          localStorage.setItem('lodge_kiosk_unlocked', 'true');
           if (data.role === 'admin') {
             unlockOperatorMode();
           }
@@ -2966,6 +2966,7 @@
         const fallbackPins = ['1234', 'BI5mill4h@@@', localStorage.getItem('lodge_operator_pin')];
         if (fallbackPins.includes(pin)) {
           sessionStorage.setItem('lodge_kiosk_unlocked', 'true');
+          localStorage.setItem('lodge_kiosk_unlocked', 'true');
           unlockKioskScreen();
         } else {
           if (err) {
@@ -2995,6 +2996,7 @@
 
     function lockKioskScreen() {
       sessionStorage.removeItem('lodge_kiosk_unlocked');
+      localStorage.removeItem('lodge_kiosk_unlocked');
       // Bersihkan input foto dan hasil pencarian sebelumnya
       clearSelectedFile();
       showState('empty');
@@ -3015,22 +3017,13 @@
     }
 
     function resetKioskInactivityTimer() {
-      if (kioskIdleTimer) clearTimeout(kioskIdleTimer);
-      if (REQUIRE_PIN_GATE) {
-        kioskIdleTimer = setTimeout(() => {
-          lockKioskScreen();
-        }, KIOSK_IDLE_TIMEOUT_MS);
+      // Auto-lock idle dinonaktifkan: PIN dimasukkan cukup 1 kali dan tidak terkunci otomatis saat tidak digunakan.
+      // Kiosk hanya terkunci jika petugas secara manual mengklik tombol 'Kunci Layar'.
+      if (kioskIdleTimer) {
+        clearTimeout(kioskIdleTimer);
+        kioskIdleTimer = null;
       }
     }
-
-    // Reset timer saat pengguna berinteraksi
-    ['mousedown', 'mousemove', 'keydown', 'touchstart'].forEach(eventName => {
-      window.addEventListener(eventName, () => {
-        if (sessionStorage.getItem('lodge_kiosk_unlocked') === 'true') {
-          resetKioskInactivityTimer();
-        }
-      }, { passive: true });
-    });
 
     // ==========================================
     // OPERATOR SECURITY & KIOSK MODE MANAGEMENT
@@ -3197,7 +3190,7 @@
       refreshStats();
 
       if (REQUIRE_PIN_GATE) {
-        const isUnlocked = sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';
+        const isUnlocked = localStorage.getItem('lodge_kiosk_unlocked') === 'true' || sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';
         if (!isUnlocked) {
           const lockScreen = document.getElementById('kiosk-lock-screen');
           if (lockScreen) {
