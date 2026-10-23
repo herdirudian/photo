@@ -4,6 +4,7 @@ database.py - SQLite persistence and FAISS vector similarity search for face ret
 
 import os
 import io
+import time
 import sqlite3
 import threading
 import logging
