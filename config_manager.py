@@ -148,14 +148,26 @@ def test_network_connection(host: str, port: int = 445, timeout: float = 4.0) ->
         }
 
 
-def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
+_storage_cache: Dict[str, Any] = {}
+_storage_cache_time: float = 0.0
+_storage_cache_lock = threading.Lock()
+
+
+def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[str, Any]:
     """
     Inspect the active photo directory:
     - Checks disk read accessibility
     - Recursively counts image files across all nested subdirectories
     - Lists ride subfolders at any depth with exact photo counts
     - Detects if currently mounted
+    Cached for 2.5 seconds to prevent disk thrashing from concurrent frontend polling.
     """
+    global _storage_cache, _storage_cache_time
+    now = time.time()
+    with _storage_cache_lock:
+        if not force_refresh and (now - _storage_cache_time) < 2.5 and _storage_cache.get(raw_dir):
+            return _storage_cache[raw_dir]
+
     if not os.path.exists(raw_dir):
         return {
             "exists": False,
@@ -246,7 +258,7 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
             except Exception:
                 pass
 
-        return {
+        res = {
             "exists": True,
             "readable": is_readable,
             "total_images": total_images,
@@ -258,6 +270,10 @@ def inspect_storage_status(raw_dir: str) -> Dict[str, Any]:
             "mount_type": mount_type,
             "raw_dir": raw_dir
         }
+        with _storage_cache_lock:
+            _storage_cache[raw_dir] = res
+            _storage_cache_time = time.time()
+        return res
 
     except Exception as e:
         logger.error(f"Error inspecting storage {raw_dir}: {e}")

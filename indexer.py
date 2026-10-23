@@ -29,7 +29,42 @@ def is_valid_image(file_path: str) -> bool:
     return ext.lower() in SUPPORTED_EXTENSIONS
 
 
-def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, poll_interval: float = 0.3) -> bool:
+def is_image_file_ready(file_path: str) -> bool:
+    """
+    Sub-millisecond verification if an image file has finished transferring and is ready to read.
+    """
+    try:
+        stat = os.stat(file_path)
+        sz = stat.st_size
+        if sz <= 1024:
+            return False
+
+        # If file was modified more than 1.5 seconds ago, it is already completely written
+        if (time.time() - stat.st_mtime) >= 1.5:
+            return True
+
+        with open(file_path, "rb") as f:
+            head = f.read(16)
+            if head.startswith(b"\xff\xd8"):
+                # JPEG: read last 2048 bytes to find \xff\xd9 EOI marker (handles camera trailers/padding)
+                f.seek(max(0, sz - 2048))
+                tail = f.read(2048)
+                if b"\xff\xd9" in tail:
+                    return True
+            elif head.startswith(b"\x89PNG"):
+                # PNG: check IEND in last 64 bytes
+                f.seek(max(0, sz - 64))
+                tail = f.read(64)
+                if b"IEND" in tail:
+                    return True
+            elif head.startswith(b"RIFF") and b"WEBP" in head:
+                return True
+    except (OSError, IOError):
+        pass
+    return False
+
+
+def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 3.0, poll_interval: float = 0.2) -> bool:
     """
     Ensure the file is completely written to disk before attempting computer vision extraction.
     Crucial for theme park network shares (Samba) or camera offloads where files arrive in chunks.
@@ -38,27 +73,8 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
     if not os.path.exists(file_path):
         return False
 
-    try:
-        stat = os.stat(file_path)
-        sz = stat.st_size
-
-        # If file is 0 bytes and was created/modified > 3 seconds ago, it is an abandoned 0-byte stub
-        if sz == 0 and (time.time() - stat.st_mtime > 3.0):
-            return False
-
-        if sz > 1024:
-            with open(file_path, "rb") as f:
-                head = f.read(4)
-                f.seek(max(0, sz - 4))
-                tail = f.read(4)
-                # Valid JPEG: starts with \xff\xd8 and ends with \xff\xd9
-                if head.startswith(b"\xff\xd8") and tail.endswith(b"\xff\xd9"):
-                    return True
-                # Valid PNG: starts with \x89PNG and ends with IEND...
-                if head.startswith(b"\x89PNG") and b"IEND" in tail:
-                    return True
-    except (OSError, IOError):
-        pass
+    if is_image_file_ready(file_path):
+        return True
 
     start_time = time.time()
     last_size = -1
@@ -71,34 +87,22 @@ def wait_for_file_transfer_complete(file_path: str, max_wait_sec: float = 6.0, p
             stat = os.stat(file_path)
             current_size = stat.st_size
         except OSError:
-            # File may be exclusively locked by transfer process
             time.sleep(poll_interval)
             continue
 
         if current_size == 0 and (time.time() - stat.st_mtime > 3.0):
             return False
 
-        if current_size > 0 and current_size == last_size:
-            # Size has stabilized over the interval, quick check if readable
-            try:
-                with open(file_path, "rb") as f:
-                    f.seek(0)
-                    head = f.read(10)
-                    f.seek(max(0, current_size - 10))
-                    tail = f.read(10)
-                    if head and tail:
-                        return True
-            except OSError:
-                pass
+        if is_image_file_ready(file_path):
+            return True
+
+        if current_size > 1024 and current_size == last_size:
+            return True
 
         last_size = current_size
         time.sleep(poll_interval)
 
-    # Final check
-    try:
-        return os.path.exists(file_path) and os.path.getsize(file_path) > 0
-    except OSError:
-        return False
+    return is_image_file_ready(file_path)
 
 
 class RawPhotoEventHandler(FileSystemEventHandler):
@@ -136,7 +140,9 @@ class RawPhotoEventHandler(FileSystemEventHandler):
                             status="empty_file"
                         )
                     else:
-                        logger.warning(f"File transfer timeout or incomplete write for {os.path.basename(file_path)}")
+                        logger.info(f"File {os.path.basename(file_path)} still transferring over network/Samba. Re-queueing in 1s...")
+                        if self.indexer:
+                            threading.Timer(1.0, self.indexer.enqueue_file, args=[file_path]).start()
             except Exception as e:
                 logger.debug(f"Could not register incomplete file status: {e}")
             return
@@ -206,6 +212,13 @@ class RawPhotoEventHandler(FileSystemEventHandler):
             else:
                 self.process_file(event.src_path)
 
+    def on_modified(self, event):
+        if not event.is_directory and is_valid_image(event.src_path):
+            if self.indexer:
+                self.indexer.enqueue_file(event.src_path)
+            else:
+                self.process_file(event.src_path)
+
     def on_moved(self, event):
         if event.is_directory:
             self.db_manager.delete_folder(event.src_path)
@@ -251,6 +264,7 @@ class PhotoIndexer:
         self._worker_threads = []
         self._running = False
         self._scan_lock = threading.Lock()
+        self._enqueue_lock = threading.Lock()
         
         # Real-time ingestion queue
         self._queue = queue.Queue()
@@ -310,23 +324,42 @@ class PhotoIndexer:
         Fast scan that discovers any photos on disk that haven't been indexed in DB
         and enqueues them. Guarantees that files copied over Samba / CIFS are picked up
         even if kernel inotify events were missed.
+        Uses in-memory indexed metadata mapping to avoid thousands of individual SQLite queries.
         """
         if not os.path.exists(self.raw_dir):
             return
 
-        for root, _, files in os.walk(self.raw_dir, followlinks=True):
-            for filename in files:
-                full_path = os.path.abspath(os.path.join(root, filename))
-                if is_valid_image(full_path):
-                    with self._queue_lock:
-                        if full_path in self._enqueued_paths:
-                            continue
-                    try:
-                        stat = os.stat(full_path)
-                        if not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
-                            self.enqueue_file(full_path)
-                    except OSError:
-                        pass
+        if not self._enqueue_lock.acquire(blocking=False):
+            return  # Scan already in progress; avoid overlapping disk walks
+
+        try:
+            try:
+                indexed_map = self.db_manager.get_all_indexed_metadata()
+            except Exception as e:
+                logger.debug(f"Failed to load indexed metadata cache: {e}")
+                indexed_map = {}
+
+            to_enqueue = []
+            for root, _, files in os.walk(self.raw_dir, followlinks=True):
+                for filename in files:
+                    full_path = os.path.abspath(os.path.join(root, filename))
+                    if is_valid_image(full_path):
+                        with self._queue_lock:
+                            if full_path in self._enqueued_paths:
+                                continue
+                        try:
+                            stat = os.stat(full_path)
+                            cached = indexed_map.get(full_path)
+                            if cached is not None and abs(cached[0] - stat.st_mtime) < 1e-4 and cached[1] == stat.st_size:
+                                continue
+                            to_enqueue.append(full_path)
+                        except OSError:
+                            pass
+
+            for p in to_enqueue:
+                self.enqueue_file(p)
+        finally:
+            self._enqueue_lock.release()
 
     def _queue_worker(self):
         """Dedicated background thread worker that drains the photo ingestion queue."""

@@ -1052,6 +1052,20 @@ class DatabaseManager:
                     return True
             return False
 
+    def get_all_indexed_metadata(self) -> Dict[str, Tuple[float, int]]:
+        """
+        High-performance batch check: returns {file_path: (file_mtime, file_size)}
+        in a single query across the entire database, eliminating thousands of individual SQLite queries.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute("SELECT file_path, file_mtime, file_size, status FROM photos")
+            rows = cursor.fetchall()
+            return {
+                r["file_path"]: (float(r["file_mtime"]), int(r["file_size"]))
+                for r in rows
+                if r["status"] not in ("error", "empty_file")
+            }
+
     def get_next_vector_id(self) -> int:
         """Generate a sequential unique vector ID for FAISS."""
         with self._get_connection() as conn:

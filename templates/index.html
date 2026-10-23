@@ -3385,13 +3385,12 @@
           if (wasIndexingPhotos) {
             wasIndexingPhotos = false;
             showExplorerToast(`🎉 Semua foto sudah terupdate! (${totalIndexed} foto siap dicari)`);
+            loadRideSubfolders();
           }
 
           // Polling responsif tiap 3 detik saat idle (agar seketika terdeteksi saat foto baru disalin)
           scheduleNextStatsRefresh(3000);
         }
-
-        await loadRideSubfolders();
       } catch (e) {
         console.error("Stats refresh error:", e);
         scheduleNextStatsRefresh(8000);
