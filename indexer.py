@@ -247,7 +247,7 @@ class PhotoIndexer:
         self.polling_interval = polling_interval
         self.observer: Optional[Observer] = None
         self._polling_thread: Optional[threading.Thread] = None
-        self.num_workers = int(os.getenv("INDEXER_WORKERS", "3"))
+        self.num_workers = int(os.getenv("INDEXER_WORKERS", "6"))
         self._worker_threads = []
         self._running = False
         self._scan_lock = threading.Lock()
@@ -379,16 +379,6 @@ class PhotoIndexer:
             q_size = self._queue.qsize()
             is_busy = bool((self._active_workers > 0) or self.is_indexing or (q_size > 0) or self._scan_lock.locked())
             pending = q_size + self._active_workers
-        return {
-            "is_indexing": is_busy,
-            "queue_size": q_size,
-            "pending_in_queue": pending,
-            "current_processed": self.current_processed,
-            "total_to_process": self.total_to_process,
-            "newly_indexed": self.newly_indexed_count,
-            "current_file": self.current_file,
-            "last_completed_at": self.last_completed_at
-        }
         return {
             "is_indexing": is_busy,
             "queue_size": q_size,

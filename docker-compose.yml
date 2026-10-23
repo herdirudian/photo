@@ -38,7 +38,10 @@ services:
       - FACE_DETECTION_MODEL=hog
       # Samba network path displayed to operators for one-click copy-paste
       - SAMBA_NETWORK_PREFIX=\\10.12.2.150\park-photos\results
+      # Indexer worker concurrency and CPU thread tuning for Xeon AVX-512
+      - INDEXER_WORKERS=6
+      - OMP_NUM_THREADS=2
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 8G

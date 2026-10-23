@@ -58,40 +58,55 @@ except Exception:
 def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
     """
     Decodes an image file path or bytes into a BGR numpy array while honoring EXIF orientation.
-    DSLR cameras frequently record portrait photos with EXIF Orientation tags (6 or 8).
-    Fast path: If the image has standard orientation (1 or no EXIF), decodes directly via cv2.imread / cv2.imdecode
-    (libjpeg-turbo C++), which is 3x to 5x faster than Pillow + numpy conversion.
+    DSLR cameras frequently record portrait photos with EXIF Orientation tags (3, 6, or 8).
+    Fast path: Uses libjpeg-turbo C++ cv2.imread / cv2.imdecode and rotates directly in C++,
+    avoiding slow Pillow full-image RGB conversions and reducing memory pressure.
     """
     try:
         if isinstance(img_source, (str, os.PathLike)):
-            with Image.open(img_source) as pil_img:
-                exif = pil_img.getexif()
-                orientation = exif.get(0x0112, 1) if exif else 1
-                if orientation == 1:
-                    arr = cv2.imread(str(img_source), cv2.IMREAD_COLOR)
-                    if arr is not None:
-                        return arr
+            orientation = 1
+            try:
+                with Image.open(img_source) as pil_img:
+                    exif = pil_img.getexif()
+                    if exif:
+                        orientation = exif.get(0x0112, 1)
+            except Exception:
+                pass
 
-                transposed = ImageOps.exif_transpose(pil_img)
-                if transposed.mode != "RGB":
-                    transposed = transposed.convert("RGB")
-                rgb_arr = np.array(transposed)
-                return cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+            arr = cv2.imread(str(img_source), cv2.IMREAD_COLOR)
+            if arr is not None:
+                if orientation == 1:
+                    return arr
+                elif orientation == 3:
+                    return cv2.rotate(arr, cv2.ROTATE_180)
+                elif orientation == 6:
+                    return cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                elif orientation == 8:
+                    return cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                return arr
+
         elif isinstance(img_source, (bytes, bytearray)):
-            with Image.open(io.BytesIO(img_source)) as pil_img:
-                exif = pil_img.getexif()
-                orientation = exif.get(0x0112, 1) if exif else 1
-                if orientation == 1:
-                    nparr = np.frombuffer(img_source, np.uint8)
-                    arr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    if arr is not None:
-                        return arr
+            orientation = 1
+            try:
+                with Image.open(io.BytesIO(img_source)) as pil_img:
+                    exif = pil_img.getexif()
+                    if exif:
+                        orientation = exif.get(0x0112, 1)
+            except Exception:
+                pass
 
-                transposed = ImageOps.exif_transpose(pil_img)
-                if transposed.mode != "RGB":
-                    transposed = transposed.convert("RGB")
-                rgb_arr = np.array(transposed)
-                return cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+            nparr = np.frombuffer(img_source, np.uint8)
+            arr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if arr is not None:
+                if orientation == 1:
+                    return arr
+                elif orientation == 3:
+                    return cv2.rotate(arr, cv2.ROTATE_180)
+                elif orientation == 6:
+                    return cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                elif orientation == 8:
+                    return cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                return arr
     except Exception:
         pass
 
@@ -161,11 +176,19 @@ class FaceEngine:
                         except Exception:
                             pass
 
-                    self.insight_app = FaceAnalysis(
-                        name=self.model_name,
-                        root=self.model_root,
-                        providers=providers
-                    )
+                    try:
+                        self.insight_app = FaceAnalysis(
+                            name=self.model_name,
+                            root=self.model_root,
+                            providers=providers,
+                            allowed_modules=['detection', 'recognition']
+                        )
+                    except TypeError:
+                        self.insight_app = FaceAnalysis(
+                            name=self.model_name,
+                            root=self.model_root,
+                            providers=providers
+                        )
                     ctx_id = 0 if ('CUDAExecutionProvider' in providers) else -1
                     self.insight_app.prepare(ctx_id=ctx_id, det_size=self.det_size)
                     self.engine_name = "insightface"
@@ -474,9 +497,11 @@ class FaceEngine:
             return np.zeros(256, dtype=np.float32)
             
         crop = image[torso_top:torso_bottom, torso_left:torso_right]
+        if crop.size == 0:
+            return np.zeros(256, dtype=np.float32)
         
-        # Convert RGB to HSV
-        hsv_crop = cv2.cvtColor(crop, cv2.COLOR_RGB2HSV)
+        # Convert BGR crop directly to HSV (avoiding massive full-image RGB conversion)
+        hsv_crop = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
         
         # Compute 2D histogram of Hue and Saturation
         # Hue range: 0-180, Saturation: 0-256
@@ -501,9 +526,9 @@ class FaceEngine:
             logger.error(f"Failed to read image file {file_path}")
             return []
 
+        if self.engine_name == "insightface" and self.insight_app is not None:
+            return self._extract_insightface_file(file_path, image_bgr=image_bgr)
         with self.inference_lock:
-            if self.engine_name == "insightface" and self.insight_app is not None:
-                return self._extract_insightface_file(file_path, image_bgr=image_bgr)
             return self._extract_dlib_file(file_path)
 
     def _extract_insightface_file(self, file_path: str, image_bgr: Optional[np.ndarray] = None) -> List[Dict[str, Any]]:
@@ -522,12 +547,12 @@ class FaceEngine:
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
-        # Preserve high resolution for 1280x1280 detection on Dell PowerEdge R740 Xeon
+        # Fast bilinear interpolation (cv2.INTER_LINEAR) runs OUTSIDE inference lock!
         if max_dim > 3200:
             scale_factor = 3200.0 / float(max_dim)
             proc_w = int(round(orig_w * scale_factor))
             proc_h = int(round(orig_h * scale_factor))
-            proc_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_AREA)
+            proc_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_LINEAR)
         else:
             scale_factor = 1.0
             proc_bgr = image_bgr
@@ -536,82 +561,83 @@ class FaceEngine:
         h, w = proc_h, proc_w
         all_raw_faces = []
 
-        # 1. Main Global Detection Pass
-        try:
-            global_faces = self.insight_app.get(proc_bgr)
-            all_raw_faces.extend(global_faces)
-        except Exception as e:
-            logger.error(f"InsightFace inference error on {file_path}: {e}")
-            return []
+        # Critical AI Section: Lock is held ONLY during ONNX Runtime model inference!
+        with self.inference_lock:
+            # 1. Main Global Detection Pass
+            try:
+                global_faces = self.insight_app.get(proc_bgr)
+                all_raw_faces.extend(global_faces)
+            except Exception as e:
+                logger.error(f"InsightFace inference error on {file_path}: {e}")
+                return []
 
-        # Multi-Orientation Fallback:
-        # If no high-confidence faces were found at 0°, many DSLR cameras capture portrait
-        # wahana photos without EXIF orientation tags, leaving the raw image 90° or 270° sideways.
-        has_high_conf_face = any(getattr(f, "det_score", 0.0) >= 0.60 for f in all_raw_faces)
-        if not has_high_conf_face:
-            for rot_code, rot_name in [
-                (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
-                (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
-            ]:
-                try:
-                    rotated_bgr = cv2.rotate(proc_bgr, rot_code)
-                    rot_faces = self.insight_app.get(rotated_bgr)
-                    valid_rot_faces = [f for f in rot_faces if getattr(f, "det_score", 0.0) >= 0.52]
-                    if valid_rot_faces:
-                        logger.info(
-                            f"Multi-Orientation Recovery: Found {len(valid_rot_faces)} face(s) in "
-                            f"{os.path.basename(file_path)} after rotating {rot_name}."
-                        )
-                        for rf in valid_rot_faces:
-                            bx1, by1, bx2, by2 = rf.bbox
-                            if rot_code == cv2.ROTATE_90_CLOCKWISE:
-                                orig_x1 = by1
-                                orig_x2 = by2
-                                orig_y1 = h - 1 - bx2
-                                orig_y2 = h - 1 - bx1
-                            elif rot_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
-                                orig_x1 = w - 1 - by2
-                                orig_x2 = w - 1 - by1
-                                orig_y1 = bx1
-                                orig_y2 = bx2
+            # Multi-Orientation Fallback:
+            # If no high-confidence faces were found at 0°, many DSLR cameras capture portrait
+            # wahana photos without EXIF orientation tags, leaving the raw image 90° or 270° sideways.
+            has_high_conf_face = any(getattr(f, "det_score", 0.0) >= 0.60 for f in all_raw_faces)
+            if not has_high_conf_face:
+                for rot_code, rot_name in [
+                    (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
+                    (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
+                ]:
+                    try:
+                        rotated_bgr = cv2.rotate(proc_bgr, rot_code)
+                        rot_faces = self.insight_app.get(rotated_bgr)
+                        valid_rot_faces = [f for f in rot_faces if getattr(f, "det_score", 0.0) >= 0.52]
+                        if valid_rot_faces:
+                            logger.info(
+                                f"Multi-Orientation Recovery: Found {len(valid_rot_faces)} face(s) in "
+                                f"{os.path.basename(file_path)} after rotating {rot_name}."
+                            )
+                            for rf in valid_rot_faces:
+                                bx1, by1, bx2, by2 = rf.bbox
+                                if rot_code == cv2.ROTATE_90_CLOCKWISE:
+                                    orig_x1 = by1
+                                    orig_x2 = by2
+                                    orig_y1 = h - 1 - bx2
+                                    orig_y2 = h - 1 - bx1
+                                elif rot_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+                                    orig_x1 = w - 1 - by2
+                                    orig_x2 = w - 1 - by1
+                                    orig_y1 = bx1
+                                    orig_y2 = bx2
 
-                            rf.bbox = np.array([
-                                min(orig_x1, orig_x2),
-                                min(orig_y1, orig_y2),
-                                max(orig_x1, orig_x2),
-                                max(orig_y1, orig_y2)
+                                rf.bbox = np.array([
+                                    min(orig_x1, orig_x2),
+                                    min(orig_y1, orig_y2),
+                                    max(orig_x1, orig_x2),
+                                    max(orig_y1, orig_y2)
+                                ])
+                                all_raw_faces.append(rf)
+                            break
+                    except Exception as e_rot:
+                        logger.debug(f"Rotation check error ({rot_name}): {e_rot}")
+
+            # 2. Targeted Ride Zone Crop:
+            # High-resolution DSLR balloon ride photos pack 6 guests in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
+            # Optimize: Only execute crop inference if the photo belongs to a Balloon ride OR as fallback if 0 faces were found.
+            p_lower = file_path.lower()
+            is_balloon_ride = any(k in p_lower for k in ["balon", "balloon", "basket", "udara", "/bl/"])
+            if (is_balloon_ride or len(all_raw_faces) == 0) and max(orig_h, orig_w) > 1800:
+                by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
+                basket_crop = proc_bgr[by1:by2, bx1:bx2]
+                if basket_crop.size > 0:
+                    try:
+                        basket_faces = self.insight_app.get(basket_crop)
+                        for bf in basket_faces:
+                            # Translate bbox to full frame coordinates
+                            bx1_c, by1_c, bx2_c, by2_c = bf.bbox
+                            bf.bbox = np.array([
+                                bx1_c + bx1,
+                                by1_c + by1,
+                                bx2_c + bx1,
+                                by2_c + by1
                             ])
-                            all_raw_faces.append(rf)
-                        break
-                except Exception as e_rot:
-                    logger.debug(f"Rotation check error ({rot_name}): {e_rot}")
+                            all_raw_faces.append(bf)
+                    except Exception:
+                        pass
 
-        # 2. Targeted Ride Zone Crop:
-        # High-resolution DSLR balloon ride photos pack 6 guests in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
-        # Optimize: Only execute crop inference if the photo belongs to a Balloon ride OR as fallback if 0 faces were found.
-        p_lower = file_path.lower()
-        is_balloon_ride = any(k in p_lower for k in ["balon", "balloon", "basket", "udara", "/bl/"])
-        if (is_balloon_ride or len(all_raw_faces) == 0) and max(orig_h, orig_w) > 1800:
-            by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
-            basket_crop = proc_bgr[by1:by2, bx1:bx2]
-            if basket_crop.size > 0:
-                try:
-                    basket_faces = self.insight_app.get(basket_crop)
-                    for bf in basket_faces:
-                        # Translate bbox to full frame coordinates
-                        bx1_c, by1_c, bx2_c, by2_c = bf.bbox
-                        bf.bbox = np.array([
-                            bx1_c + bx1,
-                            by1_c + by1,
-                            bx2_c + bx1,
-                            by2_c + by1
-                        ])
-                        all_raw_faces.append(bf)
-                except Exception:
-                    pass
-
-        # 3. Filter, validate, normalize, and extract upper-body color histograms
-        image_rgb = None
+        # 3. Filter, validate, normalize, and extract upper-body color histograms OUTSIDE inference lock
         results = []
         for face in all_raw_faces:
             det_score = float(getattr(face, "det_score", 1.0))
@@ -664,10 +690,8 @@ class FaceEngine:
             if embedding.shape[0] != 512:
                 continue
 
-            # Torso color histogram for clothing matching boost
-            if image_rgb is None:
-                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            color_hist = self.compute_torso_color_hist(image_rgb, box_tuple)
+            # Torso color histogram directly cropped from image_bgr (no full-image RGB conversion)
+            color_hist = self.compute_torso_color_hist(image_bgr, box_tuple)
 
             results.append({
                 "bbox": box_tuple,
@@ -741,14 +765,16 @@ class FaceEngine:
             return []
 
         h, w = image_bgr.shape[:2]
-        raw_faces = self.insight_app.get(image_bgr)
+        with self.inference_lock:
+            raw_faces = self.insight_app.get(image_bgr)
 
         # Fallback multi-orientation check for selfies taken sideways on smartphones
         if not raw_faces:
             for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]:
                 try:
                     rotated_bgr = cv2.rotate(image_bgr, rot_code)
-                    rot_faces = self.insight_app.get(rotated_bgr)
+                    with self.inference_lock:
+                        rot_faces = self.insight_app.get(rotated_bgr)
                     if rot_faces:
                         image_bgr = rotated_bgr
                         h, w = image_bgr.shape[:2]
@@ -759,9 +785,9 @@ class FaceEngine:
 
         # Fallback with relaxed det_thresh if tricky webcam lighting
         if not raw_faces and self.det_thresh > 0.35:
-            raw_faces = [f for f in self.insight_app.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
+            with self.inference_lock:
+                raw_faces = [f for f in self.insight_app.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
 
-        image_rgb = None
         results = []
         for face in raw_faces:
             det_score = float(getattr(face, "det_score", 1.0))
@@ -784,9 +810,7 @@ class FaceEngine:
             if embedding.shape[0] != 512:
                 continue
 
-            if image_rgb is None:
-                image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            color_hist = self.compute_torso_color_hist(image_rgb, box_tuple)
+            color_hist = self.compute_torso_color_hist(image_bgr, box_tuple)
 
             results.append({
                 "bbox": box_tuple,
