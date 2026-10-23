@@ -572,10 +572,9 @@ class FaceEngine:
                 return []
 
             # Multi-Orientation Fallback:
-            # If no high-confidence faces were found at 0°, many DSLR cameras capture portrait
-            # wahana photos without EXIF orientation tags, leaving the raw image 90° or 270° sideways.
-            has_high_conf_face = any(getattr(f, "det_score", 0.0) >= 0.60 for f in all_raw_faces)
-            if not has_high_conf_face:
+            # Only run if zero faces were detected at 0°!
+            # If faces were already found upright, rotation is completely unnecessary.
+            if not all_raw_faces:
                 for rot_code, rot_name in [
                     (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
                     (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
@@ -618,7 +617,7 @@ class FaceEngine:
             # Optimize: Only execute crop inference if the photo belongs to a Balloon ride OR as fallback if 0 faces were found.
             p_lower = file_path.lower()
             is_balloon_ride = any(k in p_lower for k in ["balon", "balloon", "basket", "udara", "/bl/"])
-            if (is_balloon_ride or len(all_raw_faces) == 0) and max(orig_h, orig_w) > 1800:
+            if is_balloon_ride and max(orig_h, orig_w) > 1800:
                 by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
                 basket_crop = proc_bgr[by1:by2, bx1:bx2]
                 if basket_crop.size > 0:
