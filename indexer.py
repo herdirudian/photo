@@ -247,7 +247,8 @@ class PhotoIndexer:
         self.polling_interval = polling_interval
         self.observer: Optional[Observer] = None
         self._polling_thread: Optional[threading.Thread] = None
-        self._worker_thread: Optional[threading.Thread] = None
+        self.num_workers = int(os.getenv("INDEXER_WORKERS", "3"))
+        self._worker_threads = []
         self._running = False
         self._scan_lock = threading.Lock()
         
@@ -255,7 +256,7 @@ class PhotoIndexer:
         self._queue = queue.Queue()
         self._enqueued_paths: Set[str] = set()
         self._queue_lock = threading.Lock()
-        self._is_worker_busy = False
+        self._active_workers = 0
 
         # Real-time progress metrics
         self.is_indexing = False
@@ -288,7 +289,7 @@ class PhotoIndexer:
             self._enqueued_paths.add(abs_path)
             self._queue.put((abs_path, force))
             self.is_indexing = True
-            self.total_to_process = max(self.total_to_process, self._queue.qsize() + (1 if self._is_worker_busy else 0))
+            self.total_to_process = max(self.total_to_process, self._queue.qsize() + self._active_workers)
 
         logger.info(f"Enqueued photo: {os.path.basename(abs_path)} (Queue length: {self._queue.qsize()})")
 
@@ -328,51 +329,66 @@ class PhotoIndexer:
                         pass
 
     def _queue_worker(self):
-        """Dedicated background thread that drains the photo ingestion queue."""
-        logger.info("Photo ingestion queue worker started.")
+        """Dedicated background thread worker that drains the photo ingestion queue."""
+        thread_name = threading.current_thread().name
+        logger.info(f"Photo ingestion worker [{thread_name}] started.")
         while self._running:
             try:
                 item = self._queue.get(timeout=0.5)
             except queue.Empty:
                 with self._queue_lock:
-                    if self._queue.empty() and not self._is_worker_busy:
+                    if self._queue.empty() and self._active_workers == 0:
                         if self.is_indexing and not self._scan_lock.locked():
                             self.is_indexing = False
                             self.current_file = ""
                             self.total_to_process = 0
                             self.current_processed = 0
                             self.last_completed_at = time.time()
+                            self.db_manager.flush_faiss()
                 continue
 
             file_path, force = item
-            self._is_worker_busy = True
-            self.is_indexing = True
-            self.current_file = os.path.basename(file_path)
+            with self._queue_lock:
+                self._active_workers += 1
+                self.is_indexing = True
+                self.current_file = os.path.basename(file_path)
 
             try:
                 self._handler.process_file(file_path, force=force)
-                self.current_processed += 1
-                self.newly_indexed_count += 1
+                with self._queue_lock:
+                    self.current_processed += 1
+                    self.newly_indexed_count += 1
             except Exception as e:
-                logger.error(f"Error processing {file_path} from queue: {e}")
+                logger.error(f"Error processing {file_path} from queue in [{thread_name}]: {e}")
             finally:
                 with self._queue_lock:
                     self._enqueued_paths.discard(file_path)
-                    self._is_worker_busy = False
-                    if self._queue.empty() and not self._scan_lock.locked():
+                    self._active_workers = max(0, self._active_workers - 1)
+                    if self._queue.empty() and self._active_workers == 0 and not self._scan_lock.locked():
                         self.is_indexing = False
                         self.current_file = ""
                         self.total_to_process = 0
                         self.current_processed = 0
                         self.last_completed_at = time.time()
+                        self.db_manager.flush_faiss()
                 self._queue.task_done()
 
     def get_progress(self) -> dict:
         """Return real-time progress of ongoing directory indexing and queue metrics."""
         with self._queue_lock:
             q_size = self._queue.qsize()
-            is_busy = bool(self._is_worker_busy or self.is_indexing or (q_size > 0) or self._scan_lock.locked())
-            pending = q_size + (1 if self._is_worker_busy else 0)
+            is_busy = bool((self._active_workers > 0) or self.is_indexing or (q_size > 0) or self._scan_lock.locked())
+            pending = q_size + self._active_workers
+        return {
+            "is_indexing": is_busy,
+            "queue_size": q_size,
+            "pending_in_queue": pending,
+            "current_processed": self.current_processed,
+            "total_to_process": self.total_to_process,
+            "newly_indexed": self.newly_indexed_count,
+            "current_file": self.current_file,
+            "last_completed_at": self.last_completed_at
+        }
         return {
             "is_indexing": is_busy,
             "queue_size": q_size,
@@ -432,20 +448,38 @@ class PhotoIndexer:
                         if is_valid_image(full_path):
                             files_to_check.append(full_path)
 
-                self.total_to_process = len(files_to_check)
-
+                files_to_index = []
                 for full_path in files_to_check:
                     scanned_count += 1
-                    self.current_file = os.path.basename(full_path)
                     try:
                         stat = os.stat(full_path)
                         if force or not self.db_manager.is_photo_indexed(full_path, stat.st_mtime, stat.st_size):
-                            handler.process_file(full_path, force=force)
-                            new_indexed_count += 1
-                            self.newly_indexed_count = new_indexed_count
+                            files_to_index.append((full_path, stat))
                     except Exception as e:
                         logger.error(f"Error checking {full_path}: {e}")
-                    self.current_processed += 1
+
+                self.total_to_process = len(files_to_index)
+                self.current_processed = 0
+
+                if files_to_index:
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                    def _scan_worker_task(item):
+                        f_path, _ = item
+                        self.current_file = os.path.basename(f_path)
+                        handler.process_file(f_path, force=force)
+                        return f_path
+
+                    with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+                        futures = [executor.submit(_scan_worker_task, item) for item in files_to_index]
+                        for future in as_completed(futures):
+                            try:
+                                future.result()
+                                new_indexed_count += 1
+                                self.newly_indexed_count = new_indexed_count
+                            except Exception as e:
+                                logger.error(f"Error processing file in parallel scan: {e}")
+                            self.current_processed += 1
 
             summary = {
                 "scanned": scanned_count,
@@ -460,6 +494,7 @@ class PhotoIndexer:
             return summary
 
         finally:
+            self.db_manager.flush_faiss()
             self.is_indexing = False
             self.current_file = ""
             self.last_completed_at = time.time()
@@ -491,15 +526,19 @@ class PhotoIndexer:
                 logger.error(f"Error in background polling scanner: {e}")
 
     def start(self):
-        """Start the watchdog observer, queue worker, and periodic network share polling worker."""
+        """Start the watchdog observer, queue workers pool, and periodic network share polling worker."""
         if self._running:
             return
 
         self._running = True
 
-        # Start ingestion queue worker
-        self._worker_thread = threading.Thread(target=self._queue_worker, daemon=True, name="IndexerQueueWorker")
-        self._worker_thread.start()
+        # Start ingestion queue worker pool (utilizes multiple Xeon CPU threads)
+        self._worker_threads = []
+        for i in range(self.num_workers):
+            t = threading.Thread(target=self._queue_worker, daemon=True, name=f"IndexerWorker-{i+1}")
+            t.start()
+            self._worker_threads.append(t)
+        logger.info(f"Started {self.num_workers} photo ingestion workers.")
 
         # Start Watchdog observer (works on local file systems)
         try:
@@ -529,13 +568,15 @@ class PhotoIndexer:
             except Exception:
                 pass
 
-        if self._worker_thread and self._worker_thread.is_alive():
-            self._worker_thread.join(timeout=2.0)
+        for t in self._worker_threads:
+            if t and t.is_alive():
+                t.join(timeout=1.5)
 
         if self._polling_thread and self._polling_thread.is_alive():
-            self._polling_thread.join(timeout=2.0)
+            self._polling_thread.join(timeout=1.5)
 
-        logger.info("Watchdog, queue worker, and polling monitors stopped cleanly.")
+        self.db_manager.flush_faiss()
+        logger.info("Watchdog, queue workers, and polling monitors stopped cleanly.")
 
 
 if __name__ == "__main__":

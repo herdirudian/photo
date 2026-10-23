@@ -45,6 +45,14 @@ try:
 except ImportError:
     ONNXRUNTIME_AVAILABLE = False
 
+try:
+    import multiprocessing
+    # Configure OpenCV thread pool to optimize throughput without oversubscribing Xeon cores
+    _cpu_cnt = multiprocessing.cpu_count()
+    cv2.setNumThreads(min(4, max(1, _cpu_cnt // 2)))
+except Exception:
+    pass
+
 
 def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
     """
@@ -482,24 +490,34 @@ class FaceEngine:
         Routes to InsightFace (512-D ArcFace) or dlib (128-D ResNet) based on active engine.
         Guarantees thread-safe inference when background indexing and search execute concurrently.
         """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Image not found at {file_path}")
+
+        # Decode JPEG/PNG image from disk OUTSIDE the inference lock
+        # so multiple background workers decompress images in parallel!
+        image_bgr = read_image_exif_aware(file_path)
+        if image_bgr is None:
+            logger.error(f"Failed to read image file {file_path}")
+            return []
+
         with self.inference_lock:
             if self.engine_name == "insightface" and self.insight_app is not None:
-                return self._extract_insightface_file(file_path)
+                return self._extract_insightface_file(file_path, image_bgr=image_bgr)
             return self._extract_dlib_file(file_path)
 
-    def _extract_insightface_file(self, file_path: str) -> List[Dict[str, Any]]:
+    def _extract_insightface_file(self, file_path: str, image_bgr: Optional[np.ndarray] = None) -> List[Dict[str, Any]]:
         """
         High-Performance 512-Dimensional ArcFace embedding extraction using ONNX Runtime.
         Highly resilient against sunglasses, hats, masks, dappled tree shadows,
         and extreme face pose angles up to 60 degrees.
         """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Image not found at {file_path}")
-
-        image_bgr = read_image_exif_aware(file_path)
         if image_bgr is None:
-            logger.error(f"Failed to read image file {file_path}")
-            return []
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Image not found at {file_path}")
+            image_bgr = read_image_exif_aware(file_path)
+            if image_bgr is None:
+                logger.error(f"Failed to read image file {file_path}")
+                return []
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
@@ -528,12 +546,11 @@ class FaceEngine:
         # Multi-Orientation Fallback:
         # If no high-confidence faces were found at 0°, many DSLR cameras capture portrait
         # wahana photos without EXIF orientation tags, leaving the raw image 90° or 270° sideways.
-        has_high_conf_face = any(getattr(f, "det_score", 0.0) >= 0.65 for f in all_raw_faces)
+        has_high_conf_face = any(getattr(f, "det_score", 0.0) >= 0.60 for f in all_raw_faces)
         if not has_high_conf_face:
             for rot_code, rot_name in [
                 (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
-                (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW"),
-                (cv2.ROTATE_180, "180°")
+                (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
             ]:
                 try:
                     rotated_bgr = cv2.rotate(proc_bgr, rot_code)
@@ -556,11 +573,6 @@ class FaceEngine:
                                 orig_x2 = w - 1 - by1
                                 orig_y1 = bx1
                                 orig_y2 = bx2
-                            elif rot_code == cv2.ROTATE_180:
-                                orig_x1 = w - 1 - bx2
-                                orig_x2 = w - 1 - bx1
-                                orig_y1 = h - 1 - by2
-                                orig_y2 = h - 1 - by1
 
                             rf.bbox = np.array([
                                 min(orig_x1, orig_x2),
@@ -573,9 +585,12 @@ class FaceEngine:
                 except Exception as e_rot:
                     logger.debug(f"Rotation check error ({rot_name}): {e_rot}")
 
-        # 2. Targeted Ride Zone Crop for Balloon Basket / Distant Swing if high-resolution
-        # In Hot Air Balloon photos, 6 guests stand packed in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
-        if max(orig_h, orig_w) > 1800:
+        # 2. Targeted Ride Zone Crop:
+        # High-resolution DSLR balloon ride photos pack 6 guests in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
+        # Optimize: Only execute crop inference if the photo belongs to a Balloon ride OR as fallback if 0 faces were found.
+        p_lower = file_path.lower()
+        is_balloon_ride = any(k in p_lower for k in ["balon", "balloon", "basket", "udara", "/bl/"])
+        if (is_balloon_ride or len(all_raw_faces) == 0) and max(orig_h, orig_w) > 1800:
             by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
             basket_crop = proc_bgr[by1:by2, bx1:bx2]
             if basket_crop.size > 0:
@@ -834,6 +849,8 @@ class DatabaseManager:
         self.vector_dim = vector_dim
 
         self.lock = threading.RLock()
+        self._faiss_dirty = False
+        self._last_faiss_save_time = time.time()
         self._init_sqlite()
         self._init_faiss()
 
@@ -967,8 +984,18 @@ class DatabaseManager:
         if FAISS_AVAILABLE and self.index is not None:
             try:
                 faiss.write_index(self.index, self.faiss_index_path)
+                self._faiss_dirty = False
             except Exception as e:
                 logger.error(f"Error saving FAISS index: {e}")
+
+    def flush_faiss(self):
+        """Ensure any pending in-memory FAISS modifications are written to disk."""
+        with self.lock:
+            if getattr(self, "_faiss_dirty", False) and FAISS_AVAILABLE and self.index is not None:
+                self._save_faiss()
+                self._last_faiss_save_time = time.time()
+                self._faiss_dirty = False
+                logger.info("Flushed FAISS index to disk.")
 
     def is_photo_indexed(self, file_path: str, file_mtime: float, file_size: int) -> bool:
         """Check if a file has already been indexed with matching modification time, size, and vector dimension."""
@@ -1077,12 +1104,17 @@ class DatabaseManager:
 
                 conn.commit()
 
-            # Add to FAISS in memory and persist
+            # Add to FAISS in memory and persist with debouncing
             if faiss_vectors and FAISS_AVAILABLE and self.index is not None:
                 v_matrix = np.vstack(faiss_vectors).astype(np.float32)
                 id_matrix = np.array(faiss_ids, dtype=np.int64)
                 self.index.add_with_ids(v_matrix, id_matrix)
-                self._save_faiss()
+                self._faiss_dirty = True
+                # Debounced save: persist to disk at most every 15 seconds during bulk ingestion
+                now = time.time()
+                if now - getattr(self, "_last_faiss_save_time", 0) >= 15.0:
+                    self._save_faiss()
+                    self._last_faiss_save_time = now
 
             logger.info(f"Registered {file_name}: {len(faces)} faces indexed (photo_id: {photo_id}).")
             return photo_id
