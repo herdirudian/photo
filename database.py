@@ -1497,6 +1497,18 @@ class DatabaseManager:
                 "affected_photos": len(affected_photo_ids)
             }
 
+    def reset_all_data(self):
+        """Reset photos and faces index while safely preserving guest visit analytics."""
+        with self.lock:
+            with self._get_connection() as conn:
+                conn.execute("DELETE FROM faces")
+                conn.execute("DELETE FROM photos")
+                conn.commit()
+            if FAISS_AVAILABLE:
+                self.index = faiss.IndexIDMap2(faiss.IndexFlatIP(self.vector_dim))
+                self._save_faiss()
+            logger.info("Database photos and FAISS index reset. Guest visits history preserved.")
+
     def search_similar_faces(
         self,
         query_faces: Optional[List[Dict[str, Any]]] = None,
