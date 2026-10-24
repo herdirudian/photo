@@ -945,6 +945,10 @@
                     <span>👤</span>
                     <span id="res-guest-name-text">Nama Tamu</span>
                   </span>
+                  <span id="res-guest-dwell-pill" class="hidden text-xs font-bold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-md border border-amber-300 items-center gap-1.5 shadow-2xs">
+                    <svg class="w-3.5 h-3.5 text-amber-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span id="res-guest-dwell-text">Durasi: -</span>
+                  </span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 mt-1.5">
                   <h3 class="text-lg font-bold text-slate-900 tracking-tight">Hasil Foto Wahana Ditemukan</h3>
@@ -2315,6 +2319,14 @@
       if (guestInfo.phone) {
         formData.append('guest_phone', guestInfo.phone);
       }
+      if (!isManualGuestMode && activeGuest) {
+        if (activeGuest.id) {
+          formData.append('guest_crm_id', activeGuest.id);
+        }
+        if (activeGuest.submitted_at) {
+          formData.append('guest_registered_at', activeGuest.submitted_at);
+        }
+      }
 
       const submitBtn = document.getElementById('submit-btn');
       submitBtn.disabled = true;
@@ -2373,6 +2385,21 @@
         } else {
           guestPill.classList.add('hidden');
           guestPill.classList.remove('inline-flex');
+        }
+      }
+
+      // Update guest dwell time badge
+      const dwellPill = document.getElementById('res-guest-dwell-pill');
+      const dwellText = document.getElementById('res-guest-dwell-text');
+      if (dwellPill && dwellText) {
+        const dwellFormatted = data.visit?.dwell_time_formatted;
+        if (dwellFormatted && !dwellFormatted.includes('Input Manual')) {
+          dwellText.textContent = `Durasi Area: ${dwellFormatted}`;
+          dwellPill.classList.remove('hidden');
+          dwellPill.classList.add('inline-flex');
+        } else {
+          dwellPill.classList.add('hidden');
+          dwellPill.classList.remove('inline-flex');
         }
       }
 

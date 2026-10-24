@@ -15,13 +15,14 @@ import logging
 import traceback
 import threading
 import re
+import datetime
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, List
 import numpy as np
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -543,6 +544,32 @@ async def verify_admin_pin(request: Request):
     return {"valid": is_valid}
 
 
+@app.get("/api/admin/reports/dwell-time")
+async def get_dwell_time_report(
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format")
+):
+    """Retrieve daily visitor dwell time metrics and breakdown."""
+    summary = db_manager.get_analytics_summary(date)
+    return summary
+
+
+@app.get("/api/admin/reports/export-csv")
+async def export_dwell_time_csv(
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format or 'all'")
+):
+    """Download CSV report of guest dwell time and visits."""
+    csv_str = db_manager.export_analytics_csv(date)
+    target_date = date or datetime.date.today().strftime("%Y-%m-%d")
+    filename = f"laporan-kunjungan-thelodge-{target_date}.csv"
+    return Response(
+        content=csv_str,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
 @app.post("/api/verify-access-pin")
 async def verify_access_pin(request: Request):
     """
@@ -701,6 +728,38 @@ async def search_crm_guests(
     return data
 
 
+def _sync_visit_to_crm(visit_record: dict):
+    """Send visit completion callback to Cloud CRM (submit.thelodgegroup.id)."""
+    try:
+        import urllib.request
+        import urllib.error
+        import ssl
+        cfg = config_manager.load_settings()
+        base_api = os.getenv("CRM_GUEST_API_URL", cfg.get("crm_guest_api_url", "https://submit.thelodgegroup.id/api/guests/search"))
+        callback_url = base_api.rsplit("/", 1)[0] + "/visit-complete"
+        api_key = os.getenv("CRM_GUEST_API_KEY", cfg.get("crm_guest_api_key", "thelodge-photo-secret-2026"))
+
+        payload = json.dumps(visit_record).encode("utf-8")
+        req = urllib.request.Request(
+            callback_url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "LodgePhotoRetrieval/1.0",
+                "x-api-key": api_key,
+                "Accept": "application/json"
+            },
+            method="POST"
+        )
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=5.0, context=ctx) as resp:
+            logger.info(f"Successfully synced visit to CRM: HTTP {resp.status}")
+    except Exception as e:
+        logger.warning(f"Could not sync visit to CRM ({e})")
+
+
 @app.post("/api/search")
 async def search_guest_photos(
     request: Request,
@@ -709,7 +768,9 @@ async def search_guest_photos(
     top_k: int = Form(0),
     ride_filter: Optional[str] = Form(None),
     guest_name: Optional[str] = Form(None),
-    guest_phone: Optional[str] = Form(None)
+    guest_phone: Optional[str] = Form(None),
+    guest_crm_id: Optional[str] = Form(None),
+    guest_registered_at: Optional[str] = Form(None)
 ):
     """
     Search endpoint:
@@ -967,6 +1028,27 @@ async def search_guest_photos(
                 SAMBA_PREFIX, f"{customer_folder_name}\\{item['file_name']}", fallback_host=host
             )
 
+        # Record guest visit and calculate stay duration
+        visit_record = None
+        if (guest_name and guest_name.strip()) or guest_crm_id:
+            try:
+                visit_record = db_manager.record_guest_visit(
+                    crm_guest_id=guest_crm_id,
+                    guest_name=(guest_name or "Tamu").strip(),
+                    guest_phone=guest_phone,
+                    registered_at=guest_registered_at,
+                    photo_count=len(matched_photos),
+                    customer_folder=customer_folder_name
+                )
+                if guest_crm_id:
+                    threading.Thread(
+                        target=_sync_visit_to_crm,
+                        args=(visit_record,),
+                        daemon=True
+                    ).start()
+            except Exception as e_visit:
+                logger.error(f"Failed to record guest visit: {e_visit}")
+
         return {
             "success": True,
             "customer_id": customer_folder_name,
@@ -980,7 +1062,8 @@ async def search_guest_photos(
             "total_members": total_members,
             "together_count": together_count,
             "single_count": single_count,
-            "matches": matched_photos
+            "matches": matched_photos,
+            "visit": visit_record
         }
 
     except Exception as e:

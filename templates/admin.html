@@ -125,6 +125,308 @@
   <!-- Main Container -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
 
+    <!-- Tab Navigation Bar -->
+    <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 flex-wrap gap-3">
+      <div class="flex items-center gap-2">
+        <button 
+          type="button" 
+          id="tab-btn-reports" 
+          onclick="switchAdminTab('reports')" 
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer min-h-[44px] bg-lodge-900 text-white shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400"
+        >
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <span>Laporan & Durasi Tamu</span>
+        </button>
+
+        <button 
+          type="button" 
+          id="tab-btn-system" 
+          onclick="switchAdminTab('system')" 
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer min-h-[44px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400"
+        >
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>Pengaturan Sumber & Sistem</span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+        <span class="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+        <span>Akses Terautentikasi (Admin)</span>
+      </div>
+    </div>
+
+    <!-- Tab 1: Laporan & Durasi Tamu Panel -->
+    <div id="panel-admin-reports" class="space-y-6">
+
+      <!-- Action & Filter Bar -->
+      <div class="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        
+        <!-- Left: Date Selection -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <label for="report-date-picker" class="text-xs font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">
+            Pilih Tanggal:
+          </label>
+          <div class="relative">
+            <input 
+              type="date" 
+              id="report-date-picker" 
+              onchange="loadReportsData()"
+              class="px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-lodge-600 focus-ring min-h-[44px] cursor-pointer"
+            />
+          </div>
+
+          <!-- Quick Date Buttons -->
+          <div class="flex items-center gap-1.5">
+            <button 
+              type="button" 
+              onclick="setReportDateQuick(0)" 
+              class="px-3.5 py-2 bg-lodge-50 hover:bg-lodge-100 active:bg-lodge-200 text-lodge-800 rounded-xl text-xs font-bold border border-lodge-200 transition min-h-[44px] cursor-pointer"
+            >
+              Hari Ini
+            </button>
+            <button 
+              type="button" 
+              onclick="setReportDateQuick(-1)" 
+              class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 transition min-h-[44px] cursor-pointer"
+            >
+              Kemarin
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Actions (Refresh & Export CSV) -->
+        <div class="flex items-center gap-2.5 self-end md:self-auto">
+          <button 
+            type="button" 
+            onclick="loadReportsData()" 
+            id="btn-refresh-reports"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 transition min-h-[44px] cursor-pointer"
+            title="Segarkan data laporan"
+          >
+            <svg id="icon-refresh-reports" class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Segarkan</span>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="downloadReportCSV()" 
+            class="inline-flex items-center gap-2 px-4 py-2 bg-lodge-700 hover:bg-lodge-800 active:bg-lodge-900 text-white rounded-xl text-xs font-bold transition shadow-xs min-h-[44px] cursor-pointer focus-ring"
+            title="Unduh laporan kunjungan dalam format CSV"
+          >
+            <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Unduh CSV</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- 4 KPI Metrics Cards -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Card 1: Rata-rata Durasi Tamu -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">
+          <div class="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-lodge-600 shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+              Rata-rata Durasi Tamu
+            </span>
+            <span id="rep-avg-dwell" class="text-base font-extrabold text-slate-900 mt-0.5 block truncate">
+              -
+            </span>
+            <span id="rep-avg-subtitle" class="text-[11px] text-slate-500 mt-0.5 block truncate">
+              Akumulasi harian
+            </span>
+          </div>
+        </div>
+
+        <!-- Card 2: Total Tamu Ambil Foto -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">
+          <div class="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-700 shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+              Total Tamu Terlayani
+            </span>
+            <span id="rep-total-visits" class="text-base font-extrabold text-slate-900 mt-0.5 block truncate">
+              0 Tamu
+            </span>
+            <span id="rep-total-subtitle" class="text-[11px] text-slate-500 mt-0.5 block truncate">
+              Kios foto The Lodge
+            </span>
+          </div>
+        </div>
+
+        <!-- Card 3: Rentang Durasi (Min - Max) -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">
+          <div class="w-12 h-12 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-700 shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+              Durasi Tercepat & Terlama
+            </span>
+            <span id="rep-min-max-dwell" class="text-base font-extrabold text-slate-900 mt-0.5 block truncate">
+              -
+            </span>
+            <span class="text-[11px] text-slate-500 mt-0.5 block truncate">
+              Rentang stay tamu
+            </span>
+          </div>
+        </div>
+
+        <!-- Card 4: Total Foto Terklaim -->
+        <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">
+          <div class="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+              Total Foto Terklaim
+            </span>
+            <span id="rep-total-photos" class="text-base font-extrabold text-slate-900 mt-0.5 block truncate">
+              0 Foto
+            </span>
+            <span class="text-[11px] text-slate-500 mt-0.5 block truncate">
+              Hasil pencarian wajah
+            </span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Hourly Traffic Breakdown (Gate Entry vs Kiosk Claim) -->
+      <section class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">
+              Distribusi Jam Kunjungan & Pengambilan Foto
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Perbandingan jam masuk registrasi gerbang vs jam tamu mengambil foto di kios
+            </p>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-semibold">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-lodge-600 inline-block"></span>
+              <span class="text-slate-700">Registrasi Form Masuk</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-sky-500 inline-block"></span>
+              <span class="text-slate-700">Ambil Foto Kios</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hourly Bars Grid -->
+        <div id="rep-hourly-container" class="space-y-3">
+          <!-- Populated by JavaScript -->
+        </div>
+      </section>
+
+      <!-- 7-Day Trend Table / Cards -->
+      <section class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900">
+            Riwayat 7 Hari Terakhir
+          </h3>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Tren rata-rata durasi kunjungan dan jumlah tamu per hari
+          </p>
+        </div>
+        <div id="rep-trend-container" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+          <!-- Populated by JavaScript -->
+        </div>
+      </section>
+
+      <!-- Guest Visit Log Table -->
+      <section class="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+        
+        <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">
+              Daftar Kunjungan & Durasi Tamu
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5" id="rep-table-count-label">
+              Menampilkan riwayat klaim foto
+            </p>
+          </div>
+          
+          <!-- Search input -->
+          <div class="relative w-full sm:w-64">
+            <input 
+              type="text" 
+              id="rep-table-search" 
+              placeholder="Cari nama atau telepon..." 
+              oninput="filterReportTable()"
+              class="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-lodge-600 focus-ring min-h-[44px]"
+            />
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-700 divide-y divide-slate-100">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-semibold text-[10px] tracking-wider">
+              <tr>
+                <th scope="col" class="px-4 py-3 text-center w-12">No</th>
+                <th scope="col" class="px-4 py-3">Nama Tamu</th>
+                <th scope="col" class="px-4 py-3">No. Telepon</th>
+                <th scope="col" class="px-4 py-3">Waktu Masuk</th>
+                <th scope="col" class="px-4 py-3">Waktu Klaim Kios</th>
+                <th scope="col" class="px-4 py-3">Durasi di Area</th>
+                <th scope="col" class="px-4 py-3 text-center">Foto Cocok</th>
+                <th scope="col" class="px-4 py-3">Folder Hasil</th>
+              </tr>
+            </thead>
+            <tbody id="rep-table-body" class="divide-y divide-slate-100">
+              <!-- Populated by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty State Container -->
+        <div id="rep-table-empty" class="hidden p-8 text-center space-y-2">
+          <div class="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <p class="text-xs font-semibold text-slate-700">Belum ada data kunjungan pada tanggal ini.</p>
+          <p class="text-[11px] text-slate-500">Data otomatis tercatat saat tamu melakukan pencarian foto di kios.</p>
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- Tab 2: Pengaturan Sumber & Sistem Panel -->
+    <div id="panel-admin-system" class="space-y-6 hidden">
+
     <!-- Overview Metrics Cards (Clean White Surface) -->
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       
@@ -830,6 +1132,7 @@
       </section>
 
     </div>
+  </div>
 
   </main>
 
@@ -964,10 +1267,279 @@
   <!-- JavaScript Application Logic -->
   <script>
     let currentSettings = {};
+    let currentReportData = null;
+    let activeAdminTab = 'reports';
 
     document.addEventListener('DOMContentLoaded', () => {
-      loadInitialData();
+      // Set default date to today in report date picker
+      const todayStr = new Date().toISOString().split('T')[0];
+      const picker = document.getElementById('report-date-picker');
+      if (picker) picker.value = todayStr;
+
+      const isAuth = sessionStorage.getItem('lodge_admin_authenticated') === 'true';
+      if (!isAuth) {
+        const modal = document.getElementById('admin-pin-modal');
+        if (modal) modal.classList.remove('hidden');
+        const input = document.getElementById('input-admin-modal-pin');
+        if (input) setTimeout(() => input.focus(), 150);
+      } else {
+        loadReportsData();
+        loadInitialData();
+      }
     });
+
+    function switchAdminTab(tab) {
+      activeAdminTab = tab;
+      const reportsPanel = document.getElementById('panel-admin-reports');
+      const systemPanel = document.getElementById('panel-admin-system');
+      const btnReports = document.getElementById('tab-btn-reports');
+      const btnSystem = document.getElementById('tab-btn-system');
+
+      if (tab === 'reports') {
+        reportsPanel?.classList.remove('hidden');
+        systemPanel?.classList.add('hidden');
+
+        btnReports?.classList.remove('text-slate-600', 'hover:text-slate-900', 'hover:bg-slate-100');
+        btnReports?.classList.add('bg-lodge-900', 'text-white', 'shadow-xs');
+
+        btnSystem?.classList.remove('bg-lodge-900', 'text-white', 'shadow-xs');
+        btnSystem?.classList.add('text-slate-600', 'hover:text-slate-900', 'hover:bg-slate-100');
+
+        if (!currentReportData) {
+          loadReportsData();
+        }
+      } else {
+        reportsPanel?.classList.add('hidden');
+        systemPanel?.classList.remove('hidden');
+
+        btnSystem?.classList.remove('text-slate-600', 'hover:text-slate-900', 'hover:bg-slate-100');
+        btnSystem?.classList.add('bg-lodge-900', 'text-white', 'shadow-xs');
+
+        btnReports?.classList.remove('bg-lodge-900', 'text-white', 'shadow-xs');
+        btnReports?.classList.add('text-slate-600', 'hover:text-slate-900', 'hover:bg-slate-100');
+      }
+    }
+
+    function setReportDateQuick(offsetDays) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      const dateStr = d.toISOString().split('T')[0];
+      const picker = document.getElementById('report-date-picker');
+      if (picker) {
+        picker.value = dateStr;
+        loadReportsData();
+      }
+    }
+
+    async function loadReportsData() {
+      const picker = document.getElementById('report-date-picker');
+      const targetDate = picker?.value || new Date().toISOString().split('T')[0];
+      const icon = document.getElementById('icon-refresh-reports');
+
+      if (icon) icon.classList.add('animate-spin');
+
+      try {
+        const res = await fetch(`/api/admin/reports/dwell-time?date=${targetDate}`);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const data = await res.json();
+        currentReportData = data;
+        renderReportsUI(data);
+      } catch (err) {
+        console.error('Failed to load dwell time reports:', err);
+        showToast('Gagal memuat laporan data kunjungan.', 'error');
+      } finally {
+        if (icon) icon.classList.remove('animate-spin');
+      }
+    }
+
+    function renderReportsUI(data) {
+      // 1. KPI Cards
+      const avgEl = document.getElementById('rep-avg-dwell');
+      if (avgEl) avgEl.textContent = data.avg_dwell_formatted || '-';
+
+      const avgSub = document.getElementById('rep-avg-subtitle');
+      if (avgSub) {
+        avgSub.textContent = data.valid_dwell_count > 0 
+          ? `Berdasarkan ${data.valid_dwell_count} tamu terdata`
+          : 'Belum ada data durasi';
+      }
+
+      const totalVisitsEl = document.getElementById('rep-total-visits');
+      if (totalVisitsEl) totalVisitsEl.textContent = `${data.total_visits || 0} Tamu`;
+
+      const minMaxEl = document.getElementById('rep-min-max-dwell');
+      if (minMaxEl) {
+        if (data.min_dwell_formatted !== '-' && data.max_dwell_formatted !== '-') {
+          minMaxEl.textContent = `${data.min_dwell_formatted} s/d ${data.max_dwell_formatted}`;
+        } else {
+          minMaxEl.textContent = '-';
+        }
+      }
+
+      const totalPhotosEl = document.getElementById('rep-total-photos');
+      if (totalPhotosEl) {
+        totalPhotosEl.textContent = `${(data.total_photos_claimed || 0).toLocaleString('id-ID')} Foto`;
+      }
+
+      // 2. Hourly Distribution Breakdown
+      renderHourlyBreakdown(data.hourly_entry || {}, data.hourly_exit || {});
+
+      // 3. 7-Day Trend
+      renderTrendCards(data.trend_7days || []);
+
+      // 4. Guest Table
+      renderVisitsTable(data.visits || []);
+    }
+
+    function renderHourlyBreakdown(entryObj, exitObj) {
+      const container = document.getElementById('rep-hourly-container');
+      if (!container) return;
+
+      const hours = Object.keys(entryObj).sort();
+      if (!hours.length) {
+        container.innerHTML = '<p class="text-xs text-slate-500 py-3">Tidak ada data distribusi jam.</p>';
+        return;
+      }
+
+      let maxVal = 1;
+      hours.forEach(h => {
+        if ((entryObj[h] || 0) > maxVal) maxVal = entryObj[h];
+        if ((exitObj[h] || 0) > maxVal) maxVal = exitObj[h];
+      });
+
+      let html = '';
+      hours.forEach(h => {
+        const inCount = entryObj[h] || 0;
+        const outCount = exitObj[h] || 0;
+        const inPct = Math.round((inCount / maxVal) * 100);
+        const outPct = Math.round((outCount / maxVal) * 100);
+
+        html += `
+          <div class="flex items-center gap-3 text-xs">
+            <span class="w-14 font-mono font-bold text-slate-700 shrink-0">${h}</span>
+            <div class="flex-1 space-y-1.5 min-w-0">
+              <div class="flex items-center gap-2">
+                <div class="h-4 bg-lodge-600 rounded-sm transition-all duration-300" style="width: ${Math.max(inCount ? 6 : 0, inPct)}%"></div>
+                <span class="text-[11px] font-bold text-slate-600 min-w-[3rem]">${inCount} masuk</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="h-4 bg-sky-500 rounded-sm transition-all duration-300" style="width: ${Math.max(outCount ? 6 : 0, outPct)}%"></div>
+                <span class="text-[11px] font-bold text-slate-600 min-w-[3rem]">${outCount} klaim foto</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function renderTrendCards(trend) {
+      const container = document.getElementById('rep-trend-container');
+      if (!container) return;
+
+      if (!trend || !trend.length) {
+        container.innerHTML = '<p class="text-xs text-slate-500 col-span-full py-2">Belum ada data riwayat kunjungan 7 hari terakhir.</p>';
+        return;
+      }
+
+      container.innerHTML = trend.map(t => {
+        return `
+          <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center space-y-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+              ${t.date}
+            </span>
+            <span class="text-xs font-extrabold text-slate-900 block truncate">
+              ${t.total_guests} Tamu
+            </span>
+            <span class="text-[11px] font-semibold text-lodge-700 block truncate">
+              ⏱ ${t.avg_dwell_formatted}
+            </span>
+            <span class="text-[10px] text-slate-500 block truncate">
+              ${t.total_photos} Foto
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderVisitsTable(visits) {
+      const tbody = document.getElementById('rep-table-body');
+      const emptyBox = document.getElementById('rep-table-empty');
+      const countLabel = document.getElementById('rep-table-count-label');
+
+      if (!tbody) return;
+
+      if (!visits || !visits.length) {
+        tbody.innerHTML = '';
+        if (emptyBox) emptyBox.classList.remove('hidden');
+        if (countLabel) countLabel.textContent = '0 tamu pada tanggal ini';
+        return;
+      }
+
+      if (emptyBox) emptyBox.classList.add('hidden');
+      if (countLabel) countLabel.textContent = `Menampilkan ${visits.length} kunjungan tamu`;
+
+      tbody.innerHTML = visits.map((v, idx) => {
+        const inTime = v.registered_at ? v.registered_at.slice(11, 16) : '-';
+        const outTime = v.claimed_at ? v.claimed_at.slice(11, 16) : '-';
+        const isManual = v.dwell_time_formatted.includes('Input Manual');
+
+        const badgeClass = isManual
+          ? 'bg-slate-100 text-slate-600 border border-slate-200'
+          : 'bg-emerald-50 text-lodge-800 border border-emerald-200 font-bold';
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition-colors visit-row" data-name="${(v.guest_name || '').toLowerCase()}" data-phone="${(v.masked_phone || '').toLowerCase()}">
+            <td class="px-4 py-3 text-center font-mono text-slate-500 font-semibold">${idx + 1}</td>
+            <td class="px-4 py-3">
+              <div class="font-bold text-slate-900 flex items-center gap-1.5">
+                <span>${v.guest_name}</span>
+                ${v.crm_guest_id ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold uppercase tracking-wider">CRM</span>' : ''}
+              </div>
+            </td>
+            <td class="px-4 py-3 font-mono text-slate-600">${v.masked_phone || '-'}</td>
+            <td class="px-4 py-3 font-mono text-slate-700">${inTime}</td>
+            <td class="px-4 py-3 font-mono text-slate-700">${outTime}</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${badgeClass}">
+                ${v.dwell_time_formatted}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-center font-bold text-slate-800">${v.photo_count || 0}</td>
+            <td class="px-4 py-3 font-mono text-[11px] text-slate-500 truncate max-w-[150px]">${v.customer_folder || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterReportTable() {
+      const q = (document.getElementById('rep-table-search')?.value || '').toLowerCase().trim();
+      const rows = document.querySelectorAll('#rep-table-body .visit-row');
+      let visible = 0;
+
+      rows.forEach(r => {
+        const name = r.getAttribute('data-name') || '';
+        const phone = r.getAttribute('data-phone') || '';
+        if (!q || name.includes(q) || phone.includes(q)) {
+          r.style.display = '';
+          visible++;
+        } else {
+          r.style.display = 'none';
+        }
+      });
+
+      const countLabel = document.getElementById('rep-table-count-label');
+      if (countLabel) {
+        countLabel.textContent = `Menampilkan ${visible} dari ${rows.length} kunjungan tamu`;
+      }
+    }
+
+    function downloadReportCSV() {
+      const picker = document.getElementById('report-date-picker');
+      const targetDate = picker?.value || new Date().toISOString().split('T')[0];
+      window.location.href = `/api/admin/reports/export-csv?date=${targetDate}`;
+    }
 
     async function loadInitialData() {
       await fetchSettings();
@@ -1610,6 +2182,11 @@
     }
 
     function closeAdminPinModal() {
+      const isAuth = sessionStorage.getItem('lodge_admin_authenticated') === 'true';
+      if (!isAuth) {
+        window.location.href = '/';
+        return;
+      }
       const modal = document.getElementById('admin-pin-modal');
       if (modal) modal.classList.add('hidden');
     }
@@ -1633,9 +2210,12 @@
         const data = await res.json();
         if (data.valid) {
           sessionStorage.setItem('lodge_admin_authenticated', 'true');
-          closeAdminPinModal();
+          const modal = document.getElementById('admin-pin-modal');
+          if (modal) modal.classList.add('hidden');
           if (err) err.classList.add('hidden');
           showToast('Akses Admin berhasil diverifikasi.', 'success');
+          loadReportsData();
+          loadInitialData();
         } else {
           if (err) {
             err.textContent = 'PIN yang Anda masukkan salah.';
@@ -1649,9 +2229,12 @@
       } catch (e) {
         if (pin === '1234' || pin === 'BI5mill4h@@@') {
           sessionStorage.setItem('lodge_admin_authenticated', 'true');
-          closeAdminPinModal();
+          const modal = document.getElementById('admin-pin-modal');
+          if (modal) modal.classList.add('hidden');
           if (err) err.classList.add('hidden');
           showToast('Akses Admin dibuka.', 'success');
+          loadReportsData();
+          loadInitialData();
         } else {
           if (err) {
             err.textContent = 'Gagal memverifikasi PIN.';

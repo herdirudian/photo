@@ -4,7 +4,10 @@ database.py - SQLite persistence and FAISS vector similarity search for face ret
 
 import os
 import io
+import re
+import csv
 import time
+import datetime
 import sqlite3
 import threading
 import logging
@@ -118,6 +121,62 @@ def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
             return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     except Exception:
         return None
+
+
+def parse_datetime_flexible(val: Any) -> Optional[datetime.datetime]:
+    """Parse various ISO and datetime formats into a naive local datetime object."""
+    if not val:
+        return None
+    if isinstance(val, datetime.datetime):
+        if val.tzinfo is not None:
+            return val.astimezone().replace(tzinfo=None)
+        return val
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        if s.endswith("Z"):
+            dt = datetime.datetime.fromisoformat(s[:-1] + "+00:00")
+            return dt.astimezone().replace(tzinfo=None)
+        if "+" in s or ("-" in s[10:] and len(s) > 19):
+            dt = datetime.datetime.fromisoformat(s)
+            return dt.astimezone().replace(tzinfo=None)
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d"):
+            try:
+                return datetime.datetime.strptime(s, fmt)
+            except ValueError:
+                pass
+        return datetime.datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+
+def format_dwell_time(seconds: int) -> str:
+    """Format dwell time duration into clear Indonesian time string."""
+    if seconds <= 0:
+        return "Baru Masuk (< 1 Menit)"
+    total_minutes = seconds // 60
+    if total_minutes < 1:
+        return "< 1 Menit"
+    hours = total_minutes // 60
+    mins = total_minutes % 60
+    if hours > 0:
+        if mins > 0:
+            return f"{hours} Jam {mins} Menit"
+        return f"{hours} Jam"
+    return f"{mins} Menit"
+
+
+def mask_phone_number(phone: Optional[str]) -> str:
+    """Mask guest phone number for privacy display."""
+    if not phone:
+        return ""
+    digits = re.sub(r"\D", "", str(phone).strip())
+    if len(digits) >= 8:
+        return f"{digits[:4]}****{digits[-4:]}"
+    elif len(digits) >= 4:
+        return f"{digits[:2]}**{digits[-2:]}"
+    return digits
 
 
 class FaceEngine:
@@ -921,6 +980,25 @@ class DatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_photos_status ON photos(status);
                 CREATE INDEX IF NOT EXISTS idx_faces_photo_id ON faces(photo_id);
                 CREATE INDEX IF NOT EXISTS idx_faces_vector_id ON faces(vector_id);
+
+                CREATE TABLE IF NOT EXISTS guest_visits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    crm_guest_id TEXT,
+                    guest_name TEXT NOT NULL,
+                    guest_phone TEXT,
+                    masked_phone TEXT,
+                    registered_at TIMESTAMP,
+                    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    dwell_time_seconds INTEGER DEFAULT 0,
+                    dwell_time_formatted TEXT,
+                    photo_count INTEGER DEFAULT 0,
+                    customer_folder TEXT,
+                    date_key TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_guest_visits_date ON guest_visits(date_key);
+                CREATE INDEX IF NOT EXISTS idx_guest_visits_crm_id ON guest_visits(crm_guest_id);
             """)
             
             # Migration
@@ -1624,3 +1702,248 @@ class DatabaseManager:
             "face_rec_ready": FACE_REC_AVAILABLE,
             "insightface_ready": INSIGHTFACE_AVAILABLE and ONNXRUNTIME_AVAILABLE
         }
+
+    def record_guest_visit(
+        self,
+        crm_guest_id: Optional[str],
+        guest_name: str,
+        guest_phone: Optional[str] = None,
+        registered_at: Optional[str] = None,
+        claimed_at: Optional[datetime.datetime] = None,
+        photo_count: int = 0,
+        customer_folder: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Record guest visit and calculate stay duration."""
+        claimed_dt = claimed_at or datetime.datetime.now()
+        reg_dt = parse_datetime_flexible(registered_at)
+
+        if reg_dt is not None:
+            dwell_time_seconds = max(0, int((claimed_dt - reg_dt).total_seconds()))
+            dwell_time_formatted = format_dwell_time(dwell_time_seconds)
+            reg_str = reg_dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            dwell_time_seconds = 0
+            dwell_time_formatted = "Input Manual (Tanpa Form)"
+            reg_str = None
+
+        claimed_str = claimed_dt.strftime("%Y-%m-%d %H:%M:%S")
+        date_key = claimed_dt.strftime("%Y-%m-%d")
+        clean_name = (guest_name or "Tamu").strip()
+        masked_phone = mask_phone_number(guest_phone)
+
+        with self.lock, self._get_connection() as conn:
+            existing_id = None
+            if crm_guest_id:
+                cur = conn.execute(
+                    "SELECT id FROM guest_visits WHERE crm_guest_id = ? AND date_key = ?",
+                    (str(crm_guest_id).strip(), date_key)
+                )
+                row = cur.fetchone()
+                if row:
+                    existing_id = row[0]
+
+            if not existing_id and clean_name != "Tamu" and masked_phone:
+                cur = conn.execute(
+                    "SELECT id FROM guest_visits WHERE guest_name = ? AND masked_phone = ? AND date_key = ?",
+                    (clean_name, masked_phone, date_key)
+                )
+                row = cur.fetchone()
+                if row:
+                    existing_id = row[0]
+
+            if existing_id:
+                conn.execute("""
+                    UPDATE guest_visits
+                    SET claimed_at = ?,
+                        dwell_time_seconds = ?,
+                        dwell_time_formatted = ?,
+                        photo_count = MAX(photo_count, ?),
+                        customer_folder = COALESCE(?, customer_folder)
+                    WHERE id = ?
+                """, (claimed_str, dwell_time_seconds, dwell_time_formatted, photo_count, customer_folder, existing_id))
+                visit_id = existing_id
+            else:
+                cur = conn.execute("""
+                    INSERT INTO guest_visits (
+                        crm_guest_id, guest_name, guest_phone, masked_phone,
+                        registered_at, claimed_at, dwell_time_seconds, dwell_time_formatted,
+                        photo_count, customer_folder, date_key
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    crm_guest_id, clean_name, guest_phone, masked_phone,
+                    reg_str, claimed_str, dwell_time_seconds, dwell_time_formatted,
+                    photo_count, customer_folder, date_key
+                ))
+                visit_id = cur.lastrowid
+            conn.commit()
+
+        return {
+            "id": visit_id,
+            "crm_guest_id": crm_guest_id,
+            "guest_name": clean_name,
+            "guest_phone": guest_phone,
+            "masked_phone": masked_phone,
+            "registered_at": reg_str,
+            "claimed_at": claimed_str,
+            "dwell_time_seconds": dwell_time_seconds,
+            "dwell_time_formatted": dwell_time_formatted,
+            "photo_count": photo_count,
+            "customer_folder": customer_folder,
+            "date_key": date_key
+        }
+
+    def get_analytics_summary(self, date_str: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch daily dwell time analytics, visitor counts, and hourly trends."""
+        target_date = date_str or datetime.date.today().strftime("%Y-%m-%d")
+        with self.lock, self._get_connection() as conn:
+            cur = conn.execute("""
+                SELECT 
+                    COUNT(*),
+                    COALESCE(AVG(CASE WHEN dwell_time_seconds > 0 THEN dwell_time_seconds END), 0),
+                    COALESCE(MIN(CASE WHEN dwell_time_seconds > 0 THEN dwell_time_seconds END), 0),
+                    COALESCE(MAX(CASE WHEN dwell_time_seconds > 0 THEN dwell_time_seconds END), 0),
+                    COALESCE(SUM(photo_count), 0),
+                    COUNT(CASE WHEN dwell_time_seconds > 0 THEN 1 END)
+                FROM guest_visits
+                WHERE date_key = ?
+            """, (target_date,))
+            row = cur.fetchone()
+            total_visits, avg_sec, min_sec, max_sec, total_photos, valid_dwell_count = row
+
+            cur = conn.execute("""
+                SELECT id, crm_guest_id, guest_name, guest_phone, masked_phone,
+                       registered_at, claimed_at, dwell_time_seconds, dwell_time_formatted,
+                       photo_count, customer_folder, created_at
+                FROM guest_visits
+                WHERE date_key = ?
+                ORDER BY claimed_at DESC
+            """, (target_date,))
+            visits = []
+            for r in cur.fetchall():
+                visits.append({
+                    "id": r[0],
+                    "crm_guest_id": r[1] or "",
+                    "guest_name": r[2],
+                    "guest_phone": r[3] or "",
+                    "masked_phone": r[4] or "",
+                    "registered_at": r[5] or "",
+                    "claimed_at": r[6] or "",
+                    "dwell_time_seconds": r[7] or 0,
+                    "dwell_time_formatted": r[8] or "-",
+                    "photo_count": r[9] or 0,
+                    "customer_folder": r[10] or "",
+                    "created_at": r[11]
+                })
+
+            hourly_entry = {f"{h:02d}:00": 0 for h in range(7, 19)}
+            hourly_exit = {f"{h:02d}:00": 0 for h in range(7, 19)}
+
+            for v in visits:
+                if v["registered_at"]:
+                    try:
+                        hr = v["registered_at"][11:13] + ":00"
+                        if hr in hourly_entry:
+                            hourly_entry[hr] += 1
+                    except Exception:
+                        pass
+                if v["claimed_at"]:
+                    try:
+                        hr = v["claimed_at"][11:13] + ":00"
+                        if hr in hourly_exit:
+                            hourly_exit[hr] += 1
+                    except Exception:
+                        pass
+
+            cur = conn.execute("""
+                SELECT 
+                    date_key,
+                    COUNT(*),
+                    COALESCE(AVG(CASE WHEN dwell_time_seconds > 0 THEN dwell_time_seconds END), 0),
+                    COALESCE(SUM(photo_count), 0)
+                FROM guest_visits
+                WHERE date_key <= ?
+                GROUP BY date_key
+                ORDER BY date_key DESC
+                LIMIT 7
+            """, (target_date,))
+            trend = []
+            for r in cur.fetchall():
+                trend.append({
+                    "date": r[0],
+                    "total_guests": r[1],
+                    "avg_dwell_seconds": int(r[2]),
+                    "avg_dwell_formatted": format_dwell_time(int(r[2])),
+                    "total_photos": r[3]
+                })
+            trend.reverse()
+
+        return {
+            "date": target_date,
+            "total_visits": total_visits,
+            "valid_dwell_count": valid_dwell_count,
+            "avg_dwell_seconds": int(avg_sec),
+            "avg_dwell_formatted": format_dwell_time(int(avg_sec)),
+            "min_dwell_seconds": int(min_sec),
+            "min_dwell_formatted": format_dwell_time(int(min_sec)) if min_sec > 0 else "-",
+            "max_dwell_seconds": int(max_sec),
+            "max_dwell_formatted": format_dwell_time(int(max_sec)) if max_sec > 0 else "-",
+            "total_photos_claimed": total_photos,
+            "visits": visits,
+            "hourly_entry": hourly_entry,
+            "hourly_exit": hourly_exit,
+            "trend_7days": trend
+        }
+
+    def export_analytics_csv(self, date_str: Optional[str] = None) -> str:
+        """Export guest visits data to CSV format."""
+        target_date = date_str or datetime.date.today().strftime("%Y-%m-%d")
+        with self.lock, self._get_connection() as conn:
+            if target_date.lower() == "all":
+                cur = conn.execute("""
+                    SELECT id, date_key, crm_guest_id, guest_name, guest_phone,
+                           registered_at, claimed_at, dwell_time_formatted, dwell_time_seconds,
+                           photo_count, customer_folder
+                    FROM guest_visits
+                    ORDER BY claimed_at DESC
+                """)
+            else:
+                cur = conn.execute("""
+                    SELECT id, date_key, crm_guest_id, guest_name, guest_phone,
+                           registered_at, claimed_at, dwell_time_formatted, dwell_time_seconds,
+                           photo_count, customer_folder
+                    FROM guest_visits
+                    WHERE date_key = ?
+                    ORDER BY claimed_at DESC
+                """, (target_date,))
+            rows = cur.fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "No",
+            "Tanggal",
+            "ID CRM",
+            "Nama Tamu",
+            "No Telepon",
+            "Waktu Registrasi Masuk",
+            "Waktu Klaim Kios Foto",
+            "Durasi di Area",
+            "Durasi (Detik)",
+            "Jumlah Foto Cocok",
+            "Folder Hasil"
+        ])
+        for idx, r in enumerate(rows, start=1):
+            writer.writerow([
+                idx,
+                r[1] or "",
+                r[2] or "",
+                r[3] or "",
+                r[4] or "",
+                r[5] or "",
+                r[6] or "",
+                r[7] or "",
+                r[8] or 0,
+                r[9] or 0,
+                r[10] or ""
+            ])
+        return output.getvalue()
