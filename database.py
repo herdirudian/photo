@@ -123,30 +123,39 @@ def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
         return None
 
 
+WIB = datetime.timezone(datetime.timedelta(hours=7))
+
+
+def get_now_wib() -> datetime.datetime:
+    """Return current timestamp in Western Indonesia Time (WIB, UTC+7)."""
+    return datetime.datetime.now(datetime.timezone.utc).astimezone(WIB)
+
+
 def parse_datetime_flexible(val: Any) -> Optional[datetime.datetime]:
-    """Parse various ISO and datetime formats into a naive local datetime object."""
+    """Parse various ISO and datetime formats into a Western Indonesia Time (WIB, UTC+7) datetime object."""
     if not val:
         return None
     if isinstance(val, datetime.datetime):
-        if val.tzinfo is not None:
-            return val.astimezone().replace(tzinfo=None)
-        return val
+        if val.tzinfo is None:
+            return val.replace(tzinfo=WIB)
+        return val.astimezone(WIB)
     s = str(val).strip()
-    if not s:
+    if not s or s.lower() in ("none", "null"):
         return None
     try:
         if s.endswith("Z"):
             dt = datetime.datetime.fromisoformat(s[:-1] + "+00:00")
-            return dt.astimezone().replace(tzinfo=None)
+            return dt.astimezone(WIB)
         if "+" in s or ("-" in s[10:] and len(s) > 19):
             dt = datetime.datetime.fromisoformat(s)
-            return dt.astimezone().replace(tzinfo=None)
+            return dt.astimezone(WIB)
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d"):
             try:
-                return datetime.datetime.strptime(s, fmt)
+                dt = datetime.datetime.strptime(s, fmt)
+                return dt.replace(tzinfo=WIB)
             except ValueError:
                 pass
-        return datetime.datetime.fromisoformat(s)
+        return datetime.datetime.fromisoformat(s).replace(tzinfo=WIB)
     except Exception:
         return None
 
@@ -1714,7 +1723,7 @@ class DatabaseManager:
         customer_folder: Optional[str] = None
     ) -> Dict[str, Any]:
         """Record guest visit and calculate stay duration."""
-        claimed_dt = claimed_at or datetime.datetime.now()
+        claimed_dt = claimed_at if (isinstance(claimed_at, datetime.datetime) and claimed_at.tzinfo is not None) else get_now_wib()
         reg_dt = parse_datetime_flexible(registered_at)
 
         if reg_dt is not None:
@@ -1755,13 +1764,32 @@ class DatabaseManager:
                 conn.execute("""
                     UPDATE guest_visits
                     SET claimed_at = ?,
-                        dwell_time_seconds = ?,
-                        dwell_time_formatted = ?,
+                        dwell_time_seconds = CASE WHEN ? > 0 THEN ? ELSE dwell_time_seconds END,
+                        dwell_time_formatted = CASE WHEN ? IS NOT NULL THEN ? ELSE dwell_time_formatted END,
                         photo_count = MAX(photo_count, ?),
-                        customer_folder = COALESCE(?, customer_folder)
+                        customer_folder = COALESCE(?, customer_folder),
+                        crm_guest_id = COALESCE(?, crm_guest_id),
+                        registered_at = COALESCE(?, registered_at)
                     WHERE id = ?
-                """, (claimed_str, dwell_time_seconds, dwell_time_formatted, photo_count, customer_folder, existing_id))
+                """, (
+                    claimed_str,
+                    dwell_time_seconds, dwell_time_seconds,
+                    reg_str, dwell_time_formatted,
+                    photo_count,
+                    customer_folder,
+                    crm_guest_id,
+                    reg_str,
+                    existing_id
+                ))
                 visit_id = existing_id
+
+                cur = conn.execute("SELECT crm_guest_id, registered_at, dwell_time_formatted, dwell_time_seconds FROM guest_visits WHERE id = ?", (existing_id,))
+                u_row = cur.fetchone()
+                if u_row:
+                    crm_guest_id = u_row[0] or crm_guest_id
+                    reg_str = u_row[1] or reg_str
+                    dwell_time_formatted = u_row[2] or dwell_time_formatted
+                    dwell_time_seconds = u_row[3] or dwell_time_seconds
             else:
                 cur = conn.execute("""
                     INSERT INTO guest_visits (
@@ -1794,7 +1822,7 @@ class DatabaseManager:
 
     def get_analytics_summary(self, date_str: Optional[str] = None) -> Dict[str, Any]:
         """Fetch daily dwell time analytics, visitor counts, and hourly trends."""
-        target_date = date_str or datetime.date.today().strftime("%Y-%m-%d")
+        target_date = date_str or get_now_wib().strftime("%Y-%m-%d")
         with self.lock, self._get_connection() as conn:
             cur = conn.execute("""
                 SELECT 
@@ -1896,7 +1924,7 @@ class DatabaseManager:
 
     def export_analytics_csv(self, date_str: Optional[str] = None) -> str:
         """Export guest visits data to CSV format."""
-        target_date = date_str or datetime.date.today().strftime("%Y-%m-%d")
+        target_date = date_str or get_now_wib().strftime("%Y-%m-%d")
         with self.lock, self._get_connection() as conn:
             if target_date.lower() == "all":
                 cur = conn.execute("""

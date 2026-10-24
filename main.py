@@ -1032,6 +1032,33 @@ async def search_guest_photos(
         visit_record = None
         if (guest_name and guest_name.strip()) or guest_crm_id:
             try:
+                # Auto-resolve check-in time from Cloud CRM if not provided by client
+                if not guest_registered_at and ((guest_phone and guest_phone.strip()) or (guest_name and guest_name.strip())):
+                    try:
+                        lookup_kw = (guest_phone or guest_name).strip()
+                        crm_res = await search_crm_guests(q=lookup_kw, limit=10)
+                        if crm_res and crm_res.get("success") and crm_res.get("guests"):
+                            matched_crm = None
+                            if guest_phone:
+                                clean_ph = re.sub(r'\D', '', guest_phone)
+                                for g in crm_res["guests"]:
+                                    g_ph = re.sub(r'\D', '', g.get("phone") or "")
+                                    if clean_ph and (clean_ph in g_ph or g_ph in clean_ph):
+                                        matched_crm = g
+                                        break
+                            if not matched_crm and guest_name:
+                                t_name = guest_name.strip().lower()
+                                for g in crm_res["guests"]:
+                                    if (g.get("name") or "").strip().lower() == t_name:
+                                        matched_crm = g
+                                        break
+                            if matched_crm:
+                                guest_crm_id = matched_crm.get("id") or guest_crm_id
+                                guest_registered_at = matched_crm.get("submitted_at")
+                                logger.info(f"Auto-matched CRM guest registration: {matched_crm.get('name')} -> {guest_registered_at}")
+                    except Exception as e_lookup:
+                        logger.warning(f"Could not auto-lookup guest from CRM: {e_lookup}")
+
                 visit_record = db_manager.record_guest_visit(
                     crm_guest_id=guest_crm_id,
                     guest_name=(guest_name or "Tamu").strip(),

@@ -2326,6 +2326,12 @@
         if (activeGuest.submitted_at) {
           formData.append('guest_registered_at', activeGuest.submitted_at);
         }
+      } else if (!isManualGuestMode && !activeGuest) {
+        // Fallback: If operator typed in the CRM search box without clicking autocomplete dropdown
+        const rawSearchVal = (document.getElementById('guest-search-input')?.value || '').trim();
+        if (rawSearchVal && !guestInfo.name) {
+          formData.append('guest_name', rawSearchVal);
+        }
       }
 
       const submitBtn = document.getElementById('submit-btn');
