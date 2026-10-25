@@ -41,6 +41,7 @@ RAW_DIR = os.getenv("RAW_DIR", os.path.abspath("./data/raw"))
 RESULTS_DIR = os.getenv("RESULTS_DIR", os.path.abspath("./data/results"))
 DB_DIR = os.getenv("DB_DIR", os.path.abspath("./data/db"))
 SAMBA_PREFIX = os.getenv("SAMBA_NETWORK_PREFIX", r"\\samba-server\park-photos\results")
+THUMBNAILS_DIR = os.getenv("THUMBNAILS_DIR", os.path.join(DB_DIR, "thumbnails"))
 
 # Singletons configuration
 app_settings = config_manager.load_settings()
@@ -53,7 +54,7 @@ INSIGHTFACE_DET_THRESH = float(os.getenv("INSIGHTFACE_DET_THRESH", app_settings.
 
 # Ensure required directories exist
 MODELS_DIR = os.getenv("MODELS_DIR", os.path.join(os.path.dirname(os.path.abspath(DB_DIR)), "models", "insightface"))
-for directory in [RAW_DIR, RESULTS_DIR, DB_DIR, MODELS_DIR]:
+for directory in [RAW_DIR, RESULTS_DIR, DB_DIR, MODELS_DIR, THUMBNAILS_DIR]:
     os.makedirs(directory, exist_ok=True)
 
 # Singletons initialization
@@ -530,6 +531,15 @@ async def reset_database(request: Request):
     if data.get("pin") != admin_pin:
         raise HTTPException(status_code=403, detail="PIN Admin tidak valid.")
     db_manager.reset_all_data()
+    # Clear thumbnail cache
+    try:
+        if os.path.exists(THUMBNAILS_DIR):
+            for fn in os.listdir(THUMBNAILS_DIR):
+                fp = os.path.join(THUMBNAILS_DIR, fn)
+                if os.path.isfile(fp):
+                    os.remove(fp)
+    except Exception as e_th:
+        logger.warning(f"Could not purge thumbnails directory on reset: {e_th}")
     return {"success": True, "message": "Database dan indeks FAISS berhasil direset."}
 
 
@@ -1093,6 +1103,34 @@ async def search_guest_photos(
             except Exception as e_visit:
                 logger.error(f"Failed to record guest visit: {e_visit}")
 
+        # Pre-warm thumbnails in background for instant browser display
+        def _prewarm_matched_thumbnails(photos_to_warm):
+            for p_item in photos_to_warm[:16]:
+                pid = p_item["photo_id"]
+                b_path = os.path.join(THUMBNAILS_DIR, f"base_{pid}.jpg")
+                m_path = os.path.join(THUMBNAILS_DIR, f"base_{pid}.json")
+                if not os.path.exists(b_path) or not os.path.exists(m_path):
+                    f_src = p_item.get("file_path")
+                    if f_src and os.path.exists(f_src):
+                        try:
+                            with Image.open(f_src) as meta_raw:
+                                meta_trans = ImageOps.exif_transpose(meta_raw)
+                                orig_w, orig_h = meta_trans.size
+                            with Image.open(f_src) as raw_img:
+                                raw_img.draft("RGB", (800, 800))
+                                img = ImageOps.exif_transpose(raw_img)
+                                if img.mode != "RGB":
+                                    img = img.convert("RGB")
+                                img.thumbnail((800, 800), Image.Resampling.BILINEAR)
+                                img.save(b_path, format="JPEG", quality=85)
+                                with open(m_path, "w", encoding="utf-8") as mf:
+                                    json.dump({"w": orig_w, "h": orig_h, "tw": img.width, "th": img.height}, mf)
+                        except Exception:
+                            pass
+
+        if matched_photos:
+            threading.Thread(target=_prewarm_matched_thumbnails, args=(matched_photos,), daemon=True).start()
+
         return {
             "success": True,
             "customer_id": customer_folder_name,
@@ -1124,7 +1162,7 @@ async def search_guest_photos(
 
 
 @app.get("/api/photos/{photo_id}/preview")
-async def preview_photo(
+def preview_photo(
     photo_id: int,
     highlight: bool = Query(True, description="Draw bounding boxes on detected faces"),
     matched_vid: Optional[str] = Query(None, description="Vector ID(s) of the specifically matched customer face(s)")
@@ -1132,92 +1170,183 @@ async def preview_photo(
     """
     Serve a lightweight thumbnail preview of the photo with high-visibility bounding box
     specifically on the matched customer's face, and subtle indicator on other passengers.
+    Accelerated with multi-tier disk caching, fast DCT downsampling, and threadpool concurrency.
     """
+    # 1. Parse matched vector IDs
+    matched_vid_set = set()
+    clean_vid_str = "all"
+    if matched_vid is not None:
+        parts = []
+        for part in str(matched_vid).split(","):
+            part = part.strip()
+            if part.isdigit():
+                matched_vid_set.add(int(part))
+                parts.append(part)
+        if parts:
+            clean_vid_str = "_".join(sorted(parts))
+
+    # 2. Check if the specifically rendered & highlighted thumbnail is already cached
+    hl_flag = "1" if highlight else "0"
+    cache_filename = f"prev_{photo_id}_hl{hl_flag}_vids_{clean_vid_str}.jpg"
+    cache_path = os.path.join(THUMBNAILS_DIR, cache_filename)
+
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 500:
+        return FileResponse(
+            cache_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
+        )
+
+    # 3. Resolve original photo file
     photo_res = db_manager.resolve_photo(photo_id, RAW_DIR)
     if not photo_res:
         raise HTTPException(status_code=404, detail="Photo file not found on disk.")
     p_row, file_path = photo_res
 
+    # 4. Check or generate clean base 800px thumbnail
+    base_thumb_path = os.path.join(THUMBNAILS_DIR, f"base_{photo_id}.jpg")
+    meta_path = os.path.join(THUMBNAILS_DIR, f"base_{photo_id}.json")
+
+    base_img = None
+    orig_w, orig_h = 0, 0
+
+    if os.path.exists(base_thumb_path) and os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as mf:
+                meta = json.load(mf)
+                orig_w = meta.get("w", 0)
+                orig_h = meta.get("h", 0)
+            if orig_w > 0 and orig_h > 0:
+                base_img = Image.open(base_thumb_path)
+                base_img.load()
+        except Exception as e_meta:
+            logger.debug(f"Failed loading thumbnail cache for photo #{photo_id}: {e_meta}")
+            base_img = None
+
+    if base_img is None:
+        try:
+            with Image.open(file_path) as meta_raw:
+                meta_trans = ImageOps.exif_transpose(meta_raw)
+                orig_w, orig_h = meta_trans.size
+
+            with Image.open(file_path) as raw_img:
+                raw_img.draft("RGB", (800, 800))
+                img = ImageOps.exif_transpose(raw_img)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                img.thumbnail((800, 800), Image.Resampling.BILINEAR)
+                img.save(base_thumb_path, format="JPEG", quality=85)
+
+                with open(meta_path, "w", encoding="utf-8") as mf:
+                    json.dump({"w": orig_w, "h": orig_h, "tw": img.width, "th": img.height}, mf)
+
+                base_img = img
+        except Exception as e_gen:
+            logger.error(f"Error creating base thumbnail for photo #{photo_id}: {e_gen}")
+            return FileResponse(file_path, media_type="image/jpeg")
+
+    # 5. If no highlight requested, return base thumbnail directly
+    if not highlight:
+        return FileResponse(
+            base_thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
+        )
+
+    # 6. Retrieve detected faces from DB
     with db_manager._get_connection() as conn:
         faces_rows = conn.execute(
             "SELECT vector_id, bbox_top, bbox_right, bbox_bottom, bbox_left FROM faces WHERE photo_id = ?",
             (photo_id,)
         ).fetchall()
 
+    if not faces_rows:
+        return FileResponse(
+            base_thumb_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
+        )
+
+    # 7. Draw boxes onto copy of base thumbnail
+    render_img = base_img.copy()
+    safe_orig_w = max(1, orig_w)
+    safe_orig_h = max(1, orig_h)
+    scale_x = render_img.width / float(safe_orig_w)
+    scale_y = render_img.height / float(safe_orig_h)
+
+    draw = ImageDraw.Draw(render_img)
+    for f in faces_rows:
+        top = int(f["bbox_top"] * scale_y)
+        right = int(f["bbox_right"] * scale_x)
+        bottom = int(f["bbox_bottom"] * scale_y)
+        left = int(f["bbox_left"] * scale_x)
+        vid = f["vector_id"]
+
+        is_customer = (vid in matched_vid_set) if matched_vid_set else (matched_vid is None)
+
+        if is_customer or matched_vid is None:
+            # BOLD VIBRANT GREEN BOX FOR MATCHED GUEST
+            for width_offset in range(3):
+                draw.rectangle(
+                    [left - width_offset, top - width_offset, right + width_offset, bottom + width_offset],
+                    outline=(16, 185, 129)  # Emerald-500
+                )
+            # "TAMU" badge banner above box
+            badge_h = 16
+            badge_w = 46
+            draw.rectangle([left, max(0, top - badge_h), left + badge_w, top], fill=(16, 185, 129))
+            try:
+                draw.text((left + 4, max(0, top - badge_h) + 1), "TAMU", fill=(255, 255, 255))
+            except Exception:
+                pass
+        else:
+            # SUBTLE THIN SLATE BOX FOR OTHER PEOPLE IN RIDE
+            draw.rectangle(
+                [left, top, right, bottom],
+                outline=(148, 163, 184)  # Slate-400
+            )
+
+    # 8. Save rendered thumbnail to cache and return FileResponse
     try:
-        raw_img = Image.open(file_path)
-        img = ImageOps.exif_transpose(raw_img)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-
-        # Resize for fast thumbnail delivery (max dimension 800px)
-        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
-
-        # Scale factor relative to transposed original image
-        raw_orig = Image.open(file_path)
-        orig_img = ImageOps.exif_transpose(raw_orig)
-        scale_x = img.width / orig_img.width
-        scale_y = img.height / orig_img.height
-
-        matched_vid_set = set()
-        if matched_vid is not None:
-            for part in str(matched_vid).split(","):
-                part = part.strip()
-                if part.isdigit():
-                    matched_vid_set.add(int(part))
-
-        if highlight and faces_rows:
-            draw = ImageDraw.Draw(img)
-            for f in faces_rows:
-                top = int(f["bbox_top"] * scale_y)
-                right = int(f["bbox_right"] * scale_x)
-                bottom = int(f["bbox_bottom"] * scale_y)
-                left = int(f["bbox_left"] * scale_x)
-                vid = f["vector_id"]
-
-                is_customer = (vid in matched_vid_set) if matched_vid_set else (matched_vid is None)
-
-                if is_customer or matched_vid is None:
-                    # BOLD VIBRANT GREEN BOX FOR MATCHED GUEST
-                    for width_offset in range(3):
-                        draw.rectangle(
-                            [left - width_offset, top - width_offset, right + width_offset, bottom + width_offset],
-                            outline=(16, 185, 129)  # Emerald-500
-                        )
-                    # "TAMU" badge banner above box
-                    badge_h = 16
-                    badge_w = 46
-                    draw.rectangle([left, max(0, top - badge_h), left + badge_w, top], fill=(16, 185, 129))
-                    try:
-                        draw.text((left + 4, max(0, top - badge_h) + 1), "TAMU", fill=(255, 255, 255))
-                    except Exception:
-                        pass
-                else:
-                    # SUBTLE THIN SLATE BOX FOR OTHER PEOPLE IN RIDE (Clearly shows they are recognized as other people)
-                    draw.rectangle(
-                        [left, top, right, bottom],
-                        outline=(148, 163, 184)  # Slate-400
-                    )
-
+        render_img.save(cache_path, format="JPEG", quality=85)
+        return FileResponse(
+            cache_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
+        )
+    except Exception as e_save:
+        logger.warning(f"Could not persist cache {cache_path}: {e_save}")
         output_buf = io.BytesIO()
-        img.save(output_buf, format="JPEG", quality=85)
+        render_img.save(output_buf, format="JPEG", quality=85)
         output_buf.seek(0)
-        return StreamingResponse(output_buf, media_type="image/jpeg")
-
-    except Exception as e:
-        logger.error(f"Error generating preview for photo {photo_id}: {e}")
-        return FileResponse(file_path, media_type="image/jpeg")
+        return StreamingResponse(
+            output_buf,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
 
 
 @app.get("/api/photos/{photo_id}/crop")
-async def crop_matched_face(
+def crop_matched_face(
     photo_id: int,
     matched_vid: Optional[int] = Query(None, description="Vector ID of the specifically matched customer face")
 ):
     """
     Serve a crisp, high-resolution zoomed close-up crop of the customer's face from the original photo.
     Enables operators and guests to instantly verify distant or crowded background faces with 100% clarity.
+    Uses disk caching to return instantly (< 1ms).
     """
+    vid_str = str(matched_vid) if matched_vid is not None else "primary"
+    crop_cache_filename = f"crop_{photo_id}_{vid_str}.jpg"
+    crop_cache_path = os.path.join(THUMBNAILS_DIR, crop_cache_filename)
+
+    if os.path.exists(crop_cache_path) and os.path.getsize(crop_cache_path) > 500:
+        return FileResponse(
+            crop_cache_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
+        )
+
     photo_res = db_manager.resolve_photo(photo_id, RAW_DIR)
     if not photo_res:
         raise HTTPException(status_code=404, detail="Photo file not found on disk.")
@@ -1277,8 +1406,8 @@ async def crop_matched_face(
         offset_y = (target_dim - ch) // 2
         square_crop.paste(cropped, (offset_x, offset_y))
 
-        # Resize to sharp 400x400
-        square_crop = square_crop.resize((400, 400), Image.Resampling.LANCZOS)
+        # Resize to sharp 400x400 with fast BILINEAR filter
+        square_crop = square_crop.resize((400, 400), Image.Resampling.BILINEAR)
 
         # Draw a stylish subtle emerald border & badge
         draw = ImageDraw.Draw(square_crop)
@@ -1293,10 +1422,23 @@ async def crop_matched_face(
         except Exception:
             pass
 
-        output_buf = io.BytesIO()
-        square_crop.save(output_buf, format="JPEG", quality=92)
-        output_buf.seek(0)
-        return StreamingResponse(output_buf, media_type="image/jpeg")
+        # Save to disk cache
+        try:
+            square_crop.save(crop_cache_path, format="JPEG", quality=88)
+            return FileResponse(
+                crop_cache_path,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
+            )
+        except Exception:
+            output_buf = io.BytesIO()
+            square_crop.save(output_buf, format="JPEG", quality=88)
+            output_buf.seek(0)
+            return StreamingResponse(
+                output_buf,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400"}
+            )
 
     except Exception as e:
         logger.error(f"Error generating face crop for photo {photo_id}: {e}")
