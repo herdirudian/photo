@@ -774,13 +774,30 @@ async def search_guest_photos(
 ):
     """
     Search endpoint:
-    1. Reads reference photos of guest (Multi-pose).
-    2. Extracts 128-d or 512-d face vector and HSV color histogram from each pose.
-    3. Searches FAISS for matching faces above similarity threshold.
-    4. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks.
-    5. Returns matches and network folder path.
+    1. Validates mandatory guest identification (CRM form or manual entry).
+    2. Reads reference photos of guest (Multi-pose).
+    3. Extracts 128-d or 512-d face vector and HSV color histogram from each pose.
+    4. Searches FAISS for matching faces above similarity threshold.
+    5. Creates virtual folder /app/data/results/Customer_{UUID} with Linux symlinks.
+    6. Returns matches and network folder path.
     """
     try:
+        # Mandatory validation: Guest data must be provided either via CRM or manual walk-in
+        clean_name = (guest_name or "").strip()
+        clean_phone = (guest_phone or "").strip()
+        clean_crm = (guest_crm_id or "").strip()
+
+        if not clean_name and not clean_phone and not clean_crm:
+            logger.warning("Pencarian foto ditolak: Data identitas tamu wajib diisi.")
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "success": False,
+                    "error": "Data Tamu Wajib Diisi",
+                    "suggestion": "Silakan pilih data tamu dari Form Online CRM atau masukkan Nama Tamu (Walk-in) secara manual sebelum melakukan pencarian foto."
+                }
+            )
+
         start_time = time.time()
         raw_query_faces = []
         
