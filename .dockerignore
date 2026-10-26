@@ -9,6 +9,8 @@ venv/
 .git
 .gitignore
 .env
-data/results/*
-data/temp/*
+data/
+data/**
 *.log
+.DS_Store
+
