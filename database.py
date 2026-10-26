@@ -580,6 +580,75 @@ class FaceEngine:
 
         return True
 
+    @staticmethod
+    def is_valid_insightface_geometry(face: Any, min_score: float = 0.58) -> bool:
+        """
+        Validate whether an InsightFace candidate detection is genuinely a human face
+        using 5-point facial landmark geometry and detection confidence.
+        Filters out false positives on trees, foliage, poles, ropes, and equipment.
+        """
+        det_score = float(getattr(face, "det_score", 1.0))
+        if det_score < min_score:
+            return False
+
+        kps = getattr(face, "kps", None)
+        bbox = getattr(face, "bbox", None)
+        if kps is None or bbox is None or len(kps) != 5:
+            # If no landmarks available, accept only with very high confidence
+            return det_score >= 0.72
+
+        x1, y1, x2, y2 = bbox[:4]
+        box_w = float(x2 - x1)
+        box_h = float(y2 - y1)
+        if box_w < 18 or box_h < 18:
+            return False
+
+        # Aspect ratio: human faces are roughly 0.55 to 1.75 (h / w)
+        ratio = box_h / max(1.0, box_w)
+        if ratio < 0.55 or ratio > 1.75:
+            return False
+
+        # Check landmark coordinates lie within or close to bbox (with 25% margin)
+        margin_x = box_w * 0.25
+        margin_y = box_h * 0.25
+        for kp in kps:
+            kx, ky = float(kp[0]), float(kp[1])
+            if kx < (x1 - margin_x) or kx > (x2 + margin_x):
+                return False
+            if ky < (y1 - margin_y) or ky > (y2 + margin_y):
+                return False
+
+        # Eye distance check: left eye (kps[0]) and right eye (kps[1])
+        # In real human faces, eye distance is between 16% and 75% of face width
+        eye_left = np.array(kps[0], dtype=np.float32)
+        eye_right = np.array(kps[1], dtype=np.float32)
+        eye_dist = float(np.linalg.norm(eye_left - eye_right))
+        if eye_dist < (0.16 * box_w) or eye_dist > (0.75 * box_w):
+            return False
+
+        # Mouth corners: left mouth (kps[3]) and right mouth (kps[4])
+        mouth_left = np.array(kps[3], dtype=np.float32)
+        mouth_right = np.array(kps[4], dtype=np.float32)
+        mouth_dist = float(np.linalg.norm(mouth_left - mouth_right))
+        if mouth_dist < (0.12 * box_w) or mouth_dist > (0.75 * box_w):
+            return False
+
+        # Vertical face span: distance between eyes center and mouth center
+        eye_center = (eye_left + eye_right) / 2.0
+        mouth_center = (mouth_left + mouth_right) / 2.0
+        vertical_span = float(np.linalg.norm(eye_center - mouth_center))
+        if vertical_span < (0.15 * box_h) or vertical_span > (0.75 * box_h):
+            return False
+
+        # Nose position check: nose (kps[2]) should not be identical to eyes or mouth
+        nose = np.array(kps[2], dtype=np.float32)
+        nose_to_eye = float(np.linalg.norm(nose - eye_center))
+        nose_to_mouth = float(np.linalg.norm(nose - mouth_center))
+        if nose_to_eye < (0.05 * box_h) or nose_to_mouth < (0.05 * box_h):
+            return False
+
+        return True
+
     def compute_torso_color_hist(self, image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
         """
         Extract upper body crop and compute normalized HSV histogram.
@@ -721,6 +790,19 @@ class FaceEngine:
                                     max(orig_x1, orig_x2),
                                     max(orig_y1, orig_y2)
                                 ])
+
+                                if hasattr(rf, "kps") and rf.kps is not None:
+                                    try:
+                                        rot_kps = np.copy(rf.kps)
+                                        for idx_k, kp in enumerate(rot_kps):
+                                            kx, ky = kp[0], kp[1]
+                                            if rot_code == cv2.ROTATE_90_CLOCKWISE:
+                                                rf.kps[idx_k] = [ky, h - 1 - kx]
+                                            elif rot_code == cv2.ROTATE_90_COUNTERCLOCKWISE:
+                                                rf.kps[idx_k] = [w - 1 - ky, kx]
+                                    except Exception:
+                                        pass
+
                                 all_raw_faces.append(rf)
                             break
                     except Exception as e_rot:
@@ -746,6 +828,12 @@ class FaceEngine:
                                 bx2_c + bx1,
                                 by2_c + by1
                             ])
+                            if hasattr(bf, "kps") and bf.kps is not None:
+                                try:
+                                    for idx_k, kp in enumerate(bf.kps):
+                                        bf.kps[idx_k] = [kp[0] + bx1, kp[1] + by1]
+                                except Exception:
+                                    pass
                             all_raw_faces.append(bf)
                     except Exception:
                         pass
@@ -754,7 +842,11 @@ class FaceEngine:
         results = []
         for face in all_raw_faces:
             det_score = float(getattr(face, "det_score", 1.0))
-            if det_score < self.det_thresh:
+            if det_score < 0.58:
+                continue
+
+            # Strict anatomical landmark validation: rejects trees, pine bark, leaves, ropes, and metal railings
+            if not self.is_valid_insightface_geometry(face, min_score=0.58):
                 continue
 
             bbox = face.bbox
@@ -918,6 +1010,8 @@ class FaceEngine:
         results = []
         for face in raw_faces:
             det_score = float(getattr(face, "det_score", 1.0))
+            if not self.is_valid_insightface_geometry(face, min_score=0.45):
+                continue
             bbox = face.bbox
             x1, y1, x2, y2 = int(round(bbox[0])), int(round(bbox[1])), int(round(bbox[2])), int(round(bbox[3]))
             left = max(0, min(w - 1, x1))
@@ -1517,11 +1611,11 @@ class DatabaseManager:
                     h = r["bbox_bottom"] - r["bbox_top"]
 
                     is_invalid = False
-                    if w < 16 or h < 16:
+                    if w < 18 or h < 18:
                         is_invalid = True
                     else:
                         ratio = float(h) / float(w)
-                        if ratio < 0.50 or ratio > 1.80:
+                        if ratio < 0.55 or ratio > 1.75:
                             is_invalid = True
 
                     if is_invalid:
@@ -1614,7 +1708,7 @@ class DatabaseManager:
                         q_hist = qf.get("color_hist")
                         if q_hist is not None and q_hist.size == 256:
                             dist = cv2.compareHist(q_hist, db_hist, cv2.HISTCMP_BHATTACHARYYA)
-                            boost = max(0.0, 0.10 * (1.0 - dist))
+                            boost = max(0.0, 0.04 * (1.0 - dist))
                             if boost > best_boost:
                                 best_boost = boost
                     return best_boost
@@ -1713,6 +1807,7 @@ class DatabaseManager:
                         "created_at": r["created_at"],
                         "num_faces": r["num_faces"],
                         "max_score": round(final_score, 4),
+                        "best_base_score": round(base_score, 4),
                         "best_vector_id": vid,
                         "best_bbox": [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]],
                         "matched_faces": [face_info],
@@ -1723,6 +1818,10 @@ class DatabaseManager:
                     results_by_photo[photo_id]["matched_member_ids"].add(best_member_id)
                     if final_score > results_by_photo[photo_id]["max_score"]:
                         results_by_photo[photo_id]["max_score"] = round(final_score, 4)
+                    
+                    # Prioritize best_vector_id (used for Zoom Wajah avatar) by highest pure facial likeness (base_score)
+                    if base_score > results_by_photo[photo_id].get("best_base_score", 0.0):
+                        results_by_photo[photo_id]["best_base_score"] = round(base_score, 4)
                         results_by_photo[photo_id]["best_vector_id"] = vid
                         results_by_photo[photo_id]["best_bbox"] = [r["bbox_top"], r["bbox_right"], r["bbox_bottom"], r["bbox_left"]]
 

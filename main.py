@@ -120,6 +120,10 @@ async def lifespan(app: FastAPI):
     """Start watchdog folder monitoring on application launch, and stop on shutdown."""
     logger.info("Initializing Theme Park Photo Retrieval Engine...")
     heal_customer_symlinks()
+    try:
+        db_manager.purge_invalid_face_boxes()
+    except Exception as e_purge:
+        logger.warning(f"Could not purge invalid face boxes on startup: {e_purge}")
     indexer.start()
     yield
     logger.info("Shutting down Photo Retrieval Engine...")
