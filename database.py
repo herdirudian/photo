@@ -228,8 +228,12 @@ class FaceEngine:
         self.engine_name = "insightface"
         self.dimension = 512
         self.insight_app = None
+        self.search_insight_app = None
         self.model = "hog"
         self.inference_lock = threading.RLock()
+        self.search_inference_lock = threading.Lock()
+        self._search_active_counter = 0
+        self._search_active_lock = threading.Lock()
 
         if self.requested_engine == "insightface":
             if INSIGHTFACE_AVAILABLE and FaceAnalysis is not None:
@@ -259,6 +263,28 @@ class FaceEngine:
                         )
                     ctx_id = 0 if ('CUDAExecutionProvider' in providers) else -1
                     self.insight_app.prepare(ctx_id=ctx_id, det_size=self.det_size)
+
+                    # Dedicated real-time search instance (640x640) for zero lock contention with background indexer
+                    try:
+                        try:
+                            self.search_insight_app = FaceAnalysis(
+                                name=self.model_name,
+                                root=self.model_root,
+                                providers=providers,
+                                allowed_modules=['detection', 'recognition']
+                            )
+                        except TypeError:
+                            self.search_insight_app = FaceAnalysis(
+                                name=self.model_name,
+                                root=self.model_root,
+                                providers=providers
+                            )
+                        self.search_insight_app.prepare(ctx_id=ctx_id, det_size=(640, 640))
+                        logger.info("Dedicated real-time search FaceAnalysis (640x640) initialized successfully.")
+                    except Exception as e_s:
+                        logger.warning(f"Could not load dedicated search instance ({e_s}), will share primary instance.")
+                        self.search_insight_app = None
+
                     self.engine_name = "insightface"
                     self.dimension = 512
                     logger.info(f"InsightFace ArcFace 512-D initialized successfully with {providers[0]}")
@@ -270,6 +296,20 @@ class FaceEngine:
                 self._init_dlib_fallback(model)
         else:
             self._init_dlib_fallback(model)
+
+    def begin_search_priority(self):
+        """Signal background indexer workers to pause and yield CPU to real-time search."""
+        with self._search_active_lock:
+            self._search_active_counter += 1
+
+    def end_search_priority(self):
+        """Signal background indexer workers that search is complete and indexing may resume."""
+        with self._search_active_lock:
+            self._search_active_counter = max(0, self._search_active_counter - 1)
+
+    @property
+    def is_search_active(self) -> bool:
+        return self._search_active_counter > 0
 
     def _init_dlib_fallback(self, model: str):
         self.engine_name = "dlib"
@@ -615,9 +655,9 @@ class FaceEngine:
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
-        # Fast bilinear interpolation (cv2.INTER_LINEAR) runs OUTSIDE inference lock!
-        if max_dim > 3200:
-            scale_factor = 3200.0 / float(max_dim)
+        # Fast bilinear interpolation: scale high-res photos to 2400px (1.8x faster, 50% less CPU & RAM)
+        if max_dim > 2400:
+            scale_factor = 2400.0 / float(max_dim)
             proc_w = int(round(orig_w * scale_factor))
             proc_h = int(round(orig_h * scale_factor))
             proc_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_LINEAR)
@@ -629,8 +669,14 @@ class FaceEngine:
         h, w = proc_h, proc_w
         all_raw_faces = []
 
+        # Priority yielding: When a front-desk search is active, yield CPU
+        while self.is_search_active:
+            time.sleep(0.05)
+
         # Critical AI Section: Lock is held ONLY during ONNX Runtime model inference!
         with self.inference_lock:
+            while self.is_search_active:
+                time.sleep(0.05)
             # 1. Main Global Detection Pass
             try:
                 global_faces = self.insight_app.get(proc_bgr)
@@ -816,32 +862,46 @@ class FaceEngine:
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
         Extract face locations and encodings from in-memory bytes for guest reference selfies.
-        Guarantees thread-safe inference when background indexing and search execute concurrently.
+        Uses dedicated search model instance and lock to execute immediately without queueing behind indexers.
         """
+        if self.engine_name == "insightface" and (self.search_insight_app is not None or self.insight_app is not None):
+            return self._extract_insightface_bytes(image_bytes)
         with self.inference_lock:
-            if self.engine_name == "insightface" and self.insight_app is not None:
-                return self._extract_insightface_bytes(image_bytes)
             return self._extract_dlib_bytes(image_bytes)
 
     def _extract_insightface_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
         Extract 512-d ArcFace embedding from in-memory selfie upload using InsightFace.
+        Accelerated with fast reference scaling (max 1280px) and dedicated search session.
         """
         image_bgr = read_image_exif_aware(image_bytes)
         if image_bgr is None:
             return []
 
-        h, w = image_bgr.shape[:2]
-        with self.inference_lock:
-            raw_faces = self.insight_app.get(image_bgr)
+        orig_h, orig_w = image_bgr.shape[:2]
+        max_dim = max(orig_h, orig_w)
+        if max_dim > 1280:
+            scale = 1280.0 / float(max_dim)
+            proc_w = int(round(orig_w * scale))
+            proc_h = int(round(orig_h * scale))
+            image_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_LINEAR)
+            h, w = proc_h, proc_w
+        else:
+            h, w = orig_h, orig_w
+
+        app_to_use = self.search_insight_app or self.insight_app
+        lock_to_use = self.search_inference_lock if self.search_insight_app else self.inference_lock
+
+        with lock_to_use:
+            raw_faces = app_to_use.get(image_bgr)
 
         # Fallback multi-orientation check for selfies taken sideways on smartphones
         if not raw_faces:
             for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]:
                 try:
                     rotated_bgr = cv2.rotate(image_bgr, rot_code)
-                    with self.inference_lock:
-                        rot_faces = self.insight_app.get(rotated_bgr)
+                    with lock_to_use:
+                        rot_faces = app_to_use.get(rotated_bgr)
                     if rot_faces:
                         image_bgr = rotated_bgr
                         h, w = image_bgr.shape[:2]
@@ -852,8 +912,8 @@ class FaceEngine:
 
         # Fallback with relaxed det_thresh if tricky webcam lighting
         if not raw_faces and self.det_thresh > 0.35:
-            with self.inference_lock:
-                raw_faces = [f for f in self.insight_app.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
+            with lock_to_use:
+                raw_faces = [f for f in app_to_use.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
 
         results = []
         for face in raw_faces:

@@ -260,7 +260,7 @@ class PhotoIndexer:
         self.polling_interval = polling_interval
         self.observer: Optional[Observer] = None
         self._polling_thread: Optional[threading.Thread] = None
-        self.num_workers = int(os.getenv("INDEXER_WORKERS", "6"))
+        self.num_workers = int(os.getenv("INDEXER_WORKERS", "4"))
         self._worker_threads = []
         self._running = False
         self._scan_lock = threading.Lock()
@@ -366,6 +366,10 @@ class PhotoIndexer:
         thread_name = threading.current_thread().name
         logger.info(f"Photo ingestion worker [{thread_name}] started.")
         while self._running:
+            # Yield CPU to real-time search when customer is searching at cashier counter
+            while self.face_engine.is_search_active and self._running:
+                time.sleep(0.05)
+
             try:
                 item = self._queue.get(timeout=0.5)
             except queue.Empty:
@@ -542,6 +546,9 @@ class PhotoIndexer:
                 if not self._running:
                     return
                 time.sleep(1)
+
+            if self.face_engine.is_search_active:
+                continue
 
             try:
                 self.enqueue_unindexed_files()

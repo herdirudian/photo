@@ -809,344 +809,348 @@ async def search_guest_photos(
             )
 
         start_time = time.time()
-        raw_query_faces = []
-        
-        for file_idx, file in enumerate(files):
-            content_type = getattr(file, "content_type", "") or ""
-            filename = getattr(file, "filename", "") or ""
-            if not content_type.startswith("image/") and not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp')):
-                continue
-                
-            try:
-                image_bytes = await file.read()
-                extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
-                
-                if extracted_faces:
-                    # If multiple faces detected in one photo, filter out tiny background passerby faces
-                    # Keep faces that are at least 12% the size of the largest face in that image
-                    max_face_area = max(
-                        (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][1] - f["bbox"][3])
-                        for f in extracted_faces
-                    )
-                    min_valid_area = max(400, int(max_face_area * 0.12))
-
-                    for face in extracted_faces:
-                        area = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][1] - face["bbox"][3])
-                        if area >= min_valid_area:
-                            face["source_file_idx"] = file_idx
-                            raw_query_faces.append(face)
+        face_engine.begin_search_priority()
+        try:
+            raw_query_faces = []
+            
+            for file_idx, file in enumerate(files):
+                content_type = getattr(file, "content_type", "") or ""
+                filename = getattr(file, "filename", "") or ""
+                if not content_type.startswith("image/") and not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp')):
+                    continue
                     
-            except Exception as e:
-                logger.error(f"Failed to process reference image: {e}")
-                continue
+                try:
+                    image_bytes = await file.read()
+                    extracted_faces = face_engine.extract_faces_from_bytes(image_bytes)
+                    
+                    if extracted_faces:
+                        # If multiple faces detected in one photo, filter out tiny background passerby faces
+                        # Keep faces that are at least 12% the size of the largest face in that image
+                        max_face_area = max(
+                            (f["bbox"][2] - f["bbox"][0]) * (f["bbox"][1] - f["bbox"][3])
+                            for f in extracted_faces
+                        )
+                        min_valid_area = max(400, int(max_face_area * 0.12))
 
-        if not raw_query_faces:
-            return JSONResponse(
-                status_code=422,
-                content={
-                    "success": False,
-                    "error": "No face detected in reference photos.",
-                    "suggestion": "Please capture clear, well-lit photos of the guest's face without heavy obstruction."
-                }
+                        for face in extracted_faces:
+                            area = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][1] - face["bbox"][3])
+                            if area >= min_valid_area:
+                                face["source_file_idx"] = file_idx
+                                raw_query_faces.append(face)
+                        
+                except Exception as e:
+                    logger.error(f"Failed to process reference image: {e}")
+                    continue
+
+            if not raw_query_faces:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "success": False,
+                        "error": "No face detected in reference photos.",
+                        "suggestion": "Please capture clear, well-lit photos of the guest's face without heavy obstruction."
+                    }
+                )
+
+            # Cluster extracted faces into distinct family / group members
+            # Cosine similarity >= 0.62 indicates different poses/photos of the SAME individual
+            # Similarity < 0.62 indicates a DIFFERENT family member
+            members = []
+            for face in raw_query_faces:
+                face_enc = face["encoding"]
+                src_idx = face.get("source_file_idx", 0)
+                
+                best_sim = -1.0
+                best_member = None
+                
+                for m in members:
+                    # Faces from the same photo cannot belong to the same person
+                    if any(mf.get("source_file_idx") == src_idx for mf in m["faces"]):
+                        continue
+                    
+                    for mf in m["faces"]:
+                        sim = float(np.dot(face_enc, mf["encoding"]))
+                        if sim > best_sim:
+                            best_sim = sim
+                            if sim >= 0.62:
+                                best_member = m
+                
+                if best_member is not None and best_sim >= 0.62:
+                    face["member_id"] = best_member["member_id"]
+                    best_member["faces"].append(face)
+                else:
+                    new_id = len(members) + 1
+                    face["member_id"] = new_id
+                    members.append({
+                        "member_id": new_id,
+                        "name": f"Anggota {new_id}",
+                        "faces": [face]
+                    })
+
+            total_members = len(members)
+            logger.info(
+                f"Reference processing complete: {len(raw_query_faces)} face(s) clustered into "
+                f"{total_members} distinct member(s) across {len(files)} uploaded file(s)."
             )
 
-        # Cluster extracted faces into distinct family / group members
-        # Cosine similarity >= 0.62 indicates different poses/photos of the SAME individual
-        # Similarity < 0.62 indicates a DIFFERENT family member
-        members = []
-        for face in raw_query_faces:
-            face_enc = face["encoding"]
-            src_idx = face.get("source_file_idx", 0)
-            
-            best_sim = -1.0
-            best_member = None
-            
-            for m in members:
-                # Faces from the same photo cannot belong to the same person
-                if any(mf.get("source_file_idx") == src_idx for mf in m["faces"]):
+            # FAISS Similarity Search with optional ride filter
+            raw_matches = db_manager.search_similar_faces(
+                query_faces=raw_query_faces,
+                threshold=threshold,
+                top_k=top_k,
+                ride_filter=ride_filter
+            )
+
+            # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails
+            matched_photos = []
+            for item in raw_matches:
+                p_res = db_manager.resolve_photo(item["photo_id"], RAW_DIR)
+                if not p_res:
+                    logger.warning(f"Omitting stale match #{item['photo_id']} ({item.get('file_name')} not found on disk)")
                     continue
-                
-                for mf in m["faces"]:
-                    sim = float(np.dot(face_enc, mf["encoding"]))
-                    if sim > best_sim:
-                        best_sim = sim
-                        if sim >= 0.62:
-                            best_member = m
-            
-            if best_member is not None and best_sim >= 0.62:
-                face["member_id"] = best_member["member_id"]
-                best_member["faces"].append(face)
+                _, actual_path = p_res
+                item["file_path"] = actual_path
+                matched_photos.append(item)
+
+            elapsed_ms = round((time.time() - start_time) * 1000, 2)
+
+            # Determine customer folder name (Option 2: [Nama_Tamu]_[4_Digit_NoHP])
+            clean_guest_name = ""
+            if guest_name and guest_name.strip():
+                clean_guest_name = re.sub(r'[^a-zA-Z0-9]', '_', guest_name.strip())
+                clean_guest_name = re.sub(r'_+', '_', clean_guest_name).strip('_')
+
+            phone_suffix = ""
+            if guest_phone and guest_phone.strip():
+                digits = re.sub(r'\D', '', guest_phone.strip())
+                if len(digits) >= 4:
+                    phone_suffix = digits[-4:]
+                elif digits:
+                    phone_suffix = digits
+
+            if clean_guest_name:
+                if not phone_suffix:
+                    phone_suffix = uuid.uuid4().hex[:4].upper()
+                base_folder_name = f"{clean_guest_name}_{phone_suffix}"
             else:
-                new_id = len(members) + 1
-                face["member_id"] = new_id
-                members.append({
-                    "member_id": new_id,
-                    "name": f"Anggota {new_id}",
-                    "faces": [face]
-                })
+                customer_uuid = uuid.uuid4().hex[:10].upper()
+                base_folder_name = f"Customer_{customer_uuid}"
 
-        total_members = len(members)
-        logger.info(
-            f"Reference processing complete: {len(raw_query_faces)} face(s) clustered into "
-            f"{total_members} distinct member(s) across {len(files)} uploaded file(s)."
-        )
-
-        # FAISS Similarity Search with optional ride filter
-        raw_matches = db_manager.search_similar_faces(
-            query_faces=raw_query_faces,
-            threshold=threshold,
-            top_k=top_k,
-            ride_filter=ride_filter
-        )
-
-        # Filter out missing/stale files and self-heal relocated paths to guarantee 100% valid thumbnails
-        matched_photos = []
-        for item in raw_matches:
-            p_res = db_manager.resolve_photo(item["photo_id"], RAW_DIR)
-            if not p_res:
-                logger.warning(f"Omitting stale match #{item['photo_id']} ({item.get('file_name')} not found on disk)")
-                continue
-            _, actual_path = p_res
-            item["file_path"] = actual_path
-            matched_photos.append(item)
-
-        elapsed_ms = round((time.time() - start_time) * 1000, 2)
-
-        # Determine customer folder name (Option 2: [Nama_Tamu]_[4_Digit_NoHP])
-        clean_guest_name = ""
-        if guest_name and guest_name.strip():
-            clean_guest_name = re.sub(r'[^a-zA-Z0-9]', '_', guest_name.strip())
-            clean_guest_name = re.sub(r'_+', '_', clean_guest_name).strip('_')
-
-        phone_suffix = ""
-        if guest_phone and guest_phone.strip():
-            digits = re.sub(r'\D', '', guest_phone.strip())
-            if len(digits) >= 4:
-                phone_suffix = digits[-4:]
-            elif digits:
-                phone_suffix = digits
-
-        if clean_guest_name:
-            if not phone_suffix:
-                phone_suffix = uuid.uuid4().hex[:4].upper()
-            base_folder_name = f"{clean_guest_name}_{phone_suffix}"
-        else:
-            customer_uuid = uuid.uuid4().hex[:10].upper()
-            base_folder_name = f"Customer_{customer_uuid}"
-
-        # Guarantee unique result directory name
-        customer_folder_name = base_folder_name
-        counter = 2
-        while os.path.exists(os.path.join(RESULTS_DIR, customer_folder_name)):
-            customer_folder_name = f"{base_folder_name}_{counter}"
-            counter += 1
-
-        customer_dir = os.path.join(RESULTS_DIR, customer_folder_name)
-
-        # Create destination virtual folder for customer
-        os.makedirs(customer_dir, exist_ok=True)
-
-        created_symlinks = []
-        used_filenames = set()
-        together_count = 0
-        single_count = 0
-
-        for item in matched_photos:
-            if item.get("matched_member_count", 1) >= 2:
-                together_count += 1
-            else:
-                single_count += 1
-
-            src_path = item["file_path"]
-            if not os.path.exists(src_path):
-                continue
-
-            base_name = os.path.basename(src_path)
-            # Prevent collisions if identical filenames exist across different ride subfolders
-            target_name = base_name
-            counter = 1
-            name_root, ext = os.path.splitext(base_name)
-            while target_name in used_filenames:
-                target_name = f"{name_root}_{counter}{ext}"
+            # Guarantee unique result directory name
+            customer_folder_name = base_folder_name
+            counter = 2
+            while os.path.exists(os.path.join(RESULTS_DIR, customer_folder_name)):
+                customer_folder_name = f"{base_folder_name}_{counter}"
                 counter += 1
-            used_filenames.add(target_name)
 
-            link_dest = os.path.join(customer_dir, target_name)
+            customer_dir = os.path.join(RESULTS_DIR, customer_folder_name)
 
-            # Calculate relative path from customer_dir to src_path
-            # so symlinks resolve identically inside Docker (/app/data/...)
-            # and on the host Samba network share (/opt/SistemPhoto/data/...)!
-            try:
-                rel_src = os.path.relpath(src_path, start=customer_dir)
-            except Exception:
-                rel_src = src_path
+            # Create destination virtual folder for customer
+            os.makedirs(customer_dir, exist_ok=True)
 
-            symlink_ok = False
-            try:
-                if os.path.lexists(link_dest):
-                    os.remove(link_dest)
-                os.symlink(rel_src, link_dest)
-                if os.path.exists(link_dest):
-                    created_symlinks.append(link_dest)
-                    symlink_ok = True
+            created_symlinks = []
+            used_filenames = set()
+            together_count = 0
+            single_count = 0
+
+            for item in matched_photos:
+                if item.get("matched_member_count", 1) >= 2:
+                    together_count += 1
                 else:
+                    single_count += 1
+
+                src_path = item["file_path"]
+                if not os.path.exists(src_path):
+                    continue
+
+                base_name = os.path.basename(src_path)
+                # Prevent collisions if identical filenames exist across different ride subfolders
+                target_name = base_name
+                counter = 1
+                name_root, ext = os.path.splitext(base_name)
+                while target_name in used_filenames:
+                    target_name = f"{name_root}_{counter}{ext}"
+                    counter += 1
+                used_filenames.add(target_name)
+
+                link_dest = os.path.join(customer_dir, target_name)
+
+                # Calculate relative path from customer_dir to src_path
+                # so symlinks resolve identically inside Docker (/app/data/...)
+                # and on the host Samba network share (/opt/SistemPhoto/data/...)!
+                try:
+                    rel_src = os.path.relpath(src_path, start=customer_dir)
+                except Exception:
+                    rel_src = src_path
+
+                symlink_ok = False
+                try:
                     if os.path.lexists(link_dest):
                         os.remove(link_dest)
-            except OSError as e_sym:
-                logger.warning(f"Could not create symlink {link_dest} -> {rel_src}: {e_sym}")
+                    os.symlink(rel_src, link_dest)
+                    if os.path.exists(link_dest):
+                        created_symlinks.append(link_dest)
+                        symlink_ok = True
+                    else:
+                        if os.path.lexists(link_dest):
+                            os.remove(link_dest)
+                except OSError as e_sym:
+                    logger.warning(f"Could not create symlink {link_dest} -> {rel_src}: {e_sym}")
 
-            # Fallback to physical copy if symlink failed
-            if not symlink_ok:
-                try:
-                    shutil.copy2(src_path, link_dest)
-                    created_symlinks.append(link_dest)
-                except OSError as e_cp:
-                    logger.error(f"Could not copy photo {src_path} -> {link_dest}: {e_cp}")
-
-            # Attach preview URL pointing specifically to the matched customer faces
-            matched_vids = [str(f["vector_id"]) for f in item.get("matched_faces", [])]
-            matched_vids_param = ",".join(matched_vids)
-            best_vid = item.get("best_vector_id")
-
-            if matched_vids_param:
-                item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={matched_vids_param}"
-            else:
-                item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
-
-            if best_vid:
-                item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
-            else:
-                item["crop_url"] = f"/api/photos/{item['photo_id']}/crop"
-
-        # Write audit summary into the customer result folder
-        summary_data = {
-            "customer_id": customer_folder_name,
-            "guest_name": (guest_name or "").strip(),
-            "guest_phone": (guest_phone or "").strip(),
-            "search_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "similarity_threshold": float(threshold),
-            "query_time_ms": float(elapsed_ms),
-            "total_matches": len(matched_photos),
-            "total_members": total_members,
-            "together_matches": together_count,
-            "single_matches": single_count,
-            "files": [
-                {
-                    "file_name": p["file_name"],
-                    "original_path": p["file_path"],
-                    "max_similarity_score": float(p["max_score"]),
-                    "matched_member_count": int(p.get("matched_member_count", 1))
-                }
-                for p in matched_photos
-            ]
-        }
-        try:
-            with open(os.path.join(customer_dir, "search_summary.json"), "w", encoding="utf-8") as f:
-                json.dump(summary_data, f, indent=2)
-        except Exception as e_sum:
-            logger.warning(f"Could not write search_summary.json: {e_sum}")
-
-        # Format Samba path dynamically using the accessed server IP / hostname
-        host = request.headers.get("host", "").split(":")[0] or "10.12.2.150"
-        samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
-
-        for item in matched_photos:
-            item["samba_file_path"] = format_samba_unc(
-                SAMBA_PREFIX, f"{customer_folder_name}\\{item['file_name']}", fallback_host=host
-            )
-
-        # Record guest visit and calculate stay duration
-        visit_record = None
-        if (guest_name and guest_name.strip()) or guest_crm_id:
-            try:
-                # Auto-resolve check-in time from Cloud CRM if not provided by client
-                if not guest_registered_at and ((guest_phone and guest_phone.strip()) or (guest_name and guest_name.strip())):
+                # Fallback to physical copy if symlink failed
+                if not symlink_ok:
                     try:
-                        lookup_kw = (guest_phone or guest_name).strip()
-                        crm_res = await search_crm_guests(q=lookup_kw, limit=10)
-                        if crm_res and crm_res.get("success") and crm_res.get("guests"):
-                            matched_crm = None
-                            if guest_phone:
-                                clean_ph = re.sub(r'\D', '', guest_phone)
-                                for g in crm_res["guests"]:
-                                    g_ph = re.sub(r'\D', '', g.get("phone") or "")
-                                    if clean_ph and (clean_ph in g_ph or g_ph in clean_ph):
-                                        matched_crm = g
-                                        break
-                            if not matched_crm and guest_name:
-                                t_name = guest_name.strip().lower()
-                                for g in crm_res["guests"]:
-                                    if (g.get("name") or "").strip().lower() == t_name:
-                                        matched_crm = g
-                                        break
-                            if matched_crm:
-                                guest_crm_id = matched_crm.get("id") or guest_crm_id
-                                guest_registered_at = matched_crm.get("submitted_at")
-                                logger.info(f"Auto-matched CRM guest registration: {matched_crm.get('name')} -> {guest_registered_at}")
-                    except Exception as e_lookup:
-                        logger.warning(f"Could not auto-lookup guest from CRM: {e_lookup}")
+                        shutil.copy2(src_path, link_dest)
+                        created_symlinks.append(link_dest)
+                    except OSError as e_cp:
+                        logger.error(f"Could not copy photo {src_path} -> {link_dest}: {e_cp}")
 
-                visit_record = db_manager.record_guest_visit(
-                    crm_guest_id=guest_crm_id,
-                    guest_name=(guest_name or "Tamu").strip(),
-                    guest_phone=guest_phone,
-                    registered_at=guest_registered_at,
-                    photo_count=len(matched_photos),
-                    customer_folder=customer_folder_name
+                # Attach preview URL pointing specifically to the matched customer faces
+                matched_vids = [str(f["vector_id"]) for f in item.get("matched_faces", [])]
+                matched_vids_param = ",".join(matched_vids)
+                best_vid = item.get("best_vector_id")
+
+                if matched_vids_param:
+                    item["preview_url"] = f"/api/photos/{item['photo_id']}/preview?matched_vid={matched_vids_param}"
+                else:
+                    item["preview_url"] = f"/api/photos/{item['photo_id']}/preview"
+
+                if best_vid:
+                    item["crop_url"] = f"/api/photos/{item['photo_id']}/crop?matched_vid={best_vid}"
+                else:
+                    item["crop_url"] = f"/api/photos/{item['photo_id']}/crop"
+
+            # Write audit summary into the customer result folder
+            summary_data = {
+                "customer_id": customer_folder_name,
+                "guest_name": (guest_name or "").strip(),
+                "guest_phone": (guest_phone or "").strip(),
+                "search_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "similarity_threshold": float(threshold),
+                "query_time_ms": float(elapsed_ms),
+                "total_matches": len(matched_photos),
+                "total_members": total_members,
+                "together_matches": together_count,
+                "single_matches": single_count,
+                "files": [
+                    {
+                        "file_name": p["file_name"],
+                        "original_path": p["file_path"],
+                        "max_similarity_score": float(p["max_score"]),
+                        "matched_member_count": int(p.get("matched_member_count", 1))
+                    }
+                    for p in matched_photos
+                ]
+            }
+            try:
+                with open(os.path.join(customer_dir, "search_summary.json"), "w", encoding="utf-8") as f:
+                    json.dump(summary_data, f, indent=2)
+            except Exception as e_sum:
+                logger.warning(f"Could not write search_summary.json: {e_sum}")
+
+            # Format Samba path dynamically using the accessed server IP / hostname
+            host = request.headers.get("host", "").split(":")[0] or "10.12.2.150"
+            samba_path = format_samba_unc(SAMBA_PREFIX, customer_folder_name, fallback_host=host)
+
+            for item in matched_photos:
+                item["samba_file_path"] = format_samba_unc(
+                    SAMBA_PREFIX, f"{customer_folder_name}\\{item['file_name']}", fallback_host=host
                 )
-                if guest_crm_id:
-                    threading.Thread(
-                        target=_sync_visit_to_crm,
-                        args=(visit_record,),
-                        daemon=True
-                    ).start()
-            except Exception as e_visit:
-                logger.error(f"Failed to record guest visit: {e_visit}")
 
-        # Pre-warm thumbnails in background for instant browser display
-        def _prewarm_matched_thumbnails(photos_to_warm):
-            for p_item in photos_to_warm[:16]:
-                pid = p_item["photo_id"]
-                b_path = os.path.join(THUMBNAILS_DIR, f"base_{pid}.jpg")
-                m_path = os.path.join(THUMBNAILS_DIR, f"base_{pid}.json")
-                if not os.path.exists(b_path) or not os.path.exists(m_path):
-                    f_src = p_item.get("file_path")
-                    if f_src and os.path.exists(f_src):
+            # Record guest visit and calculate stay duration
+            visit_record = None
+            if (guest_name and guest_name.strip()) or guest_crm_id:
+                try:
+                    # Auto-resolve check-in time from Cloud CRM if not provided by client
+                    if not guest_registered_at and ((guest_phone and guest_phone.strip()) or (guest_name and guest_name.strip())):
                         try:
-                            with Image.open(f_src) as meta_raw:
-                                meta_trans = ImageOps.exif_transpose(meta_raw)
-                                orig_w, orig_h = meta_trans.size
-                            with Image.open(f_src) as raw_img:
-                                raw_img.draft("RGB", (800, 800))
-                                img = ImageOps.exif_transpose(raw_img)
-                                if img.mode != "RGB":
-                                    img = img.convert("RGB")
-                                img.thumbnail((800, 800), Image.Resampling.BILINEAR)
-                                img.save(b_path, format="JPEG", quality=85)
-                                with open(m_path, "w", encoding="utf-8") as mf:
-                                    json.dump({"w": orig_w, "h": orig_h, "tw": img.width, "th": img.height}, mf)
-                        except Exception:
-                            pass
+                            lookup_kw = (guest_phone or guest_name).strip()
+                            crm_res = await search_crm_guests(q=lookup_kw, limit=10)
+                            if crm_res and crm_res.get("success") and crm_res.get("guests"):
+                                matched_crm = None
+                                if guest_phone:
+                                    clean_ph = re.sub(r'\D', '', guest_phone)
+                                    for g in crm_res["guests"]:
+                                        g_ph = re.sub(r'\D', '', g.get("phone") or "")
+                                        if clean_ph and (clean_ph in g_ph or g_ph in clean_ph):
+                                            matched_crm = g
+                                            break
+                                if not matched_crm and guest_name:
+                                    t_name = guest_name.strip().lower()
+                                    for g in crm_res["guests"]:
+                                        if (g.get("name") or "").strip().lower() == t_name:
+                                            matched_crm = g
+                                            break
+                                if matched_crm:
+                                    guest_crm_id = matched_crm.get("id") or guest_crm_id
+                                    guest_registered_at = matched_crm.get("submitted_at")
+                                    logger.info(f"Auto-matched CRM guest registration: {matched_crm.get('name')} -> {guest_registered_at}")
+                        except Exception as e_lookup:
+                            logger.warning(f"Could not auto-lookup guest from CRM: {e_lookup}")
 
-        if matched_photos:
-            threading.Thread(target=_prewarm_matched_thumbnails, args=(matched_photos,), daemon=True).start()
+                    visit_record = db_manager.record_guest_visit(
+                        crm_guest_id=guest_crm_id,
+                        guest_name=(guest_name or "Tamu").strip(),
+                        guest_phone=guest_phone,
+                        registered_at=guest_registered_at,
+                        photo_count=len(matched_photos),
+                        customer_folder=customer_folder_name
+                    )
+                    if guest_crm_id:
+                        threading.Thread(
+                            target=_sync_visit_to_crm,
+                            args=(visit_record,),
+                            daemon=True
+                        ).start()
+                except Exception as e_visit:
+                    logger.error(f"Failed to record guest visit: {e_visit}")
 
-        return {
-            "success": True,
-            "customer_id": customer_folder_name,
-            "guest_name": (guest_name or "").strip(),
-            "guest_phone": (guest_phone or "").strip(),
-            "result_dir": customer_dir,
-            "samba_path": samba_path,
-            "match_count": len(matched_photos),
-            "query_time_ms": elapsed_ms,
-            "threshold": threshold,
-            "total_members": total_members,
-            "together_count": together_count,
-            "single_count": single_count,
-            "matches": matched_photos,
-            "visit": visit_record
-        }
+            # Pre-warm thumbnails in background for instant browser display
+            def _prewarm_matched_thumbnails(photos_to_warm):
+                for p_item in photos_to_warm[:16]:
+                    pid = p_item["photo_id"]
+                    b_path = os.path.join(THUMBNAILS_DIR, f"base_{pid}.jpg")
+                    m_path = os.path.join(THUMBNAILS_DIR, f"base_{pid}.json")
+                    if not os.path.exists(b_path) or not os.path.exists(m_path):
+                        f_src = p_item.get("file_path")
+                        if f_src and os.path.exists(f_src):
+                            try:
+                                with Image.open(f_src) as meta_raw:
+                                    meta_trans = ImageOps.exif_transpose(meta_raw)
+                                    orig_w, orig_h = meta_trans.size
+                                with Image.open(f_src) as raw_img:
+                                    raw_img.draft("RGB", (800, 800))
+                                    img = ImageOps.exif_transpose(raw_img)
+                                    if img.mode != "RGB":
+                                        img = img.convert("RGB")
+                                    img.thumbnail((800, 800), Image.Resampling.BILINEAR)
+                                    img.save(b_path, format="JPEG", quality=85)
+                                    with open(m_path, "w", encoding="utf-8") as mf:
+                                        json.dump({"w": orig_w, "h": orig_h, "tw": img.width, "th": img.height}, mf)
+                            except Exception:
+                                pass
+
+            if matched_photos:
+                threading.Thread(target=_prewarm_matched_thumbnails, args=(matched_photos,), daemon=True).start()
+
+            return {
+                "success": True,
+                "customer_id": customer_folder_name,
+                "guest_name": (guest_name or "").strip(),
+                "guest_phone": (guest_phone or "").strip(),
+                "result_dir": customer_dir,
+                "samba_path": samba_path,
+                "match_count": len(matched_photos),
+                "query_time_ms": elapsed_ms,
+                "threshold": threshold,
+                "total_members": total_members,
+                "together_count": together_count,
+                "single_count": single_count,
+                "matches": matched_photos,
+                "visit": visit_record
+            }
+        finally:
+            face_engine.end_search_priority()
 
     except Exception as e:
         logger.error(f"Search request failed: {e}\n{traceback.format_exc()}")
