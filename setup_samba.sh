@@ -16,9 +16,14 @@ echo -e "${BLUE}   Mengaktifkan Windows File Sharing (Samba) di Server    ${NC}"
 echo -e "${BLUE}==========================================================${NC}"
 
 # 1. Pastikan paket Samba terpasang
-echo -e "\n${YELLOW}[1/4] Menginstal paket Samba...${NC}"
-sudo apt-get update -y
-sudo apt-get install -y samba
+echo -e "\n${YELLOW}[1/4] Memeriksa paket Samba...${NC}"
+if ! command -v smbd &>/dev/null; then
+    echo -e "${YELLOW}Menginstal paket Samba dari repository...${NC}"
+    sudo apt-get update -y
+    sudo apt-get install -y samba
+else
+    echo -e "${GREEN}Paket Samba sudah terinstal di server.${NC}"
+fi
 
 # 2. Buat direktori data fisik dan pastikan izin 777
 DATA_DIR="/opt/SistemPhoto/data"
@@ -32,8 +37,8 @@ if mount | grep -q "$DATA_DIR/raw"; then
 fi
 
 sudo mkdir -p "$DATA_DIR/raw" "$DATA_DIR/results" "$DATA_DIR/db"
-sudo chown -R "$CURRENT_USER":"$CURRENT_USER" "$DATA_DIR"
-sudo chmod -R 777 "$DATA_DIR"
+sudo chown "$CURRENT_USER":"$CURRENT_USER" "$DATA_DIR" "$DATA_DIR/raw" "$DATA_DIR/results" "$DATA_DIR/db"
+sudo chmod 777 "$DATA_DIR" "$DATA_DIR/raw" "$DATA_DIR/results" "$DATA_DIR/db"
 
 # Buat symlink kompatibilitas /app di host sebagai backup kompatibilitas untuk path absolut container
 if [ ! -d "/app" ] && [ ! -L "/app" ]; then
