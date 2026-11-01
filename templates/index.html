@@ -3132,7 +3132,7 @@
 
         if (data.valid) {
           sessionStorage.setItem('lodge_kiosk_unlocked', 'true');
-          localStorage.setItem('lodge_kiosk_unlocked', 'true');
+          localStorage.removeItem('lodge_kiosk_unlocked');
           if (data.role === 'admin') {
             unlockOperatorMode();
           }
@@ -3152,7 +3152,7 @@
         const fallbackPins = ['1234', localStorage.getItem('lodge_operator_pin')];
         if (fallbackPins.includes(pin)) {
           sessionStorage.setItem('lodge_kiosk_unlocked', 'true');
-          localStorage.setItem('lodge_kiosk_unlocked', 'true');
+          localStorage.removeItem('lodge_kiosk_unlocked');
           unlockKioskScreen();
         } else {
           if (err) {
@@ -3394,8 +3394,11 @@
         });
       }
 
+      // Clear legacy permanent localStorage flag so closing browser always requires PIN
+      localStorage.removeItem('lodge_kiosk_unlocked');
+
       if (REQUIRE_PIN_GATE) {
-        const isUnlocked = localStorage.getItem('lodge_kiosk_unlocked') === 'true' || sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';
+        const isUnlocked = sessionStorage.getItem('lodge_kiosk_unlocked') === 'true';
         if (!isUnlocked) {
           const lockScreen = document.getElementById('kiosk-lock-screen');
           if (lockScreen) {
