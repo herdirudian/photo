@@ -119,6 +119,71 @@ def heal_customer_symlinks():
         logger.warning(f"Error checking customer symlinks: {e}")
 
 
+def cleanup_results_folder(purge_all: bool = False) -> int:
+    """
+    Remove customer result folders from RESULTS_DIR.
+    If purge_all is True, removes all customer folders.
+    If purge_all is False, removes folders whose modification date is older than today.
+    Customer records and dwell time analytics in SQLite are 100% preserved.
+    """
+    if not os.path.exists(RESULTS_DIR):
+        return 0
+
+    today = datetime.date.today()
+    deleted_count = 0
+
+    try:
+        for entry in os.listdir(RESULTS_DIR):
+            entry_path = os.path.join(RESULTS_DIR, entry)
+            should_delete = False
+            if purge_all:
+                should_delete = True
+            else:
+                try:
+                    st = os.stat(entry_path)
+                    mtime_date = datetime.date.fromtimestamp(st.st_mtime)
+                    if mtime_date < today:
+                        should_delete = True
+                except Exception:
+                    should_delete = True
+
+            if should_delete:
+                try:
+                    if os.path.islink(entry_path) or os.path.isfile(entry_path):
+                        os.unlink(entry_path)
+                        deleted_count += 1
+                    elif os.path.isdir(entry_path):
+                        shutil.rmtree(entry_path)
+                        deleted_count += 1
+                except Exception as e_del:
+                    logger.warning(f"Could not remove old result folder {entry_path}: {e_del}")
+    except Exception as e:
+        logger.error(f"Error reading RESULTS_DIR during cleanup: {e}")
+
+    return deleted_count
+
+
+results_cleanup_stop_event = threading.Event()
+
+
+def _daily_results_cleanup_worker():
+    """Background worker monitoring day rollover at midnight (00:00:00) to auto-purge results."""
+    last_date = datetime.date.today()
+    logger.info(f"Daily results auto-cleaner active. Monitoring day rollover from: {last_date}")
+    while not results_cleanup_stop_event.is_set():
+        if results_cleanup_stop_event.wait(60.0):
+            break
+        current_date = datetime.date.today()
+        if current_date != last_date:
+            logger.info(f"Day rollover detected ({last_date} -> {current_date}). Starting automated purge of previous day result folders...")
+            try:
+                purged = cleanup_results_folder(purge_all=False)
+                logger.info(f"Daily rollover cleanup complete: {purged} result folder(s) removed. Customer history preserved.")
+                last_date = current_date
+            except Exception as e:
+                logger.error(f"Error during rollover results cleanup: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start watchdog folder monitoring on application launch, and stop on shutdown."""
@@ -128,10 +193,20 @@ async def lifespan(app: FastAPI):
         db_manager.purge_invalid_face_boxes()
     except Exception as e_purge:
         logger.warning(f"Could not purge invalid face boxes on startup: {e_purge}")
+    try:
+        startup_purged = cleanup_results_folder(purge_all=False)
+        if startup_purged > 0:
+            logger.info(f"Startup maintenance: Purged {startup_purged} result folder(s) from previous days.")
+    except Exception as e_clean:
+        logger.warning(f"Startup results cleanup error: {e_clean}")
     indexer.start()
+    results_cleanup_stop_event.clear()
+    cleanup_thread = threading.Thread(target=_daily_results_cleanup_worker, daemon=True, name="DailyResultsCleaner")
+    cleanup_thread.start()
     yield
     logger.info("Shutting down Photo Retrieval Engine...")
     indexer.stop()
+    results_cleanup_stop_event.set()
 
 
 app = FastAPI(
@@ -611,6 +686,18 @@ async def purge_stale_records(request: Request):
     """Manually trigger purging of photos missing from disk."""
     require_admin(request)
     return db_manager.purge_missing_photos(RAW_DIR)
+
+
+@app.post("/api/admin/results/cleanup")
+async def manual_cleanup_results(request: Request, all_folders: bool = Query(False)):
+    """Manually purge customer result folders (all or older than today)."""
+    require_admin(request)
+    deleted = cleanup_results_folder(purge_all=all_folders)
+    return {
+        "success": True,
+        "deleted_folders": deleted,
+        "message": f"Berhasil membersihkan {deleted} folder hasil tamu dari disk."
+    }
 
 
 @app.post("/api/admin/reset-database")
