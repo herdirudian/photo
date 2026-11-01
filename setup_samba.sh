@@ -76,8 +76,10 @@ sudo bash -c "cat >> /etc/samba/smb.conf" << EOL
    force create mode = 0777
    force directory mode = 0777
    follow symlinks = yes
-   wide links = yes
-   unix extensions = no
+   wide links = no
+   unix extensions = yes
+   veto files = /db/.git/*.db/settings.json/
+   hide files = /db/.git/*.db/settings.json/
    strict allocate = no
    allocation roundup size = 0
    aio read size = 1

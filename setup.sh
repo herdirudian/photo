@@ -85,5 +85,5 @@ IP_ADDR=$(hostname -I | awk '{print $1}')
 echo -e "\nSistem Photo siap digunakan:"
 echo -e "  🌐 Layar Tamu / Kiosk : ${GREEN}http://${IP_ADDR}:8000/${NC}"
 echo -e "  ⚙️  Dashboard Admin    : ${GREEN}http://${IP_ADDR}:8000/admin${NC}"
-echo -e "  🔑 PIN Keamanan Default : ${YELLOW}BI5mill4h@@@${NC} atau ${YELLOW}1234${NC}\n"
+echo -e "  🔑 PIN Keamanan Default : ${YELLOW}1234${NC} (Dapat diubah di Dashboard Admin)\n"
 

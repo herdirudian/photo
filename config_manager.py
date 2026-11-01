@@ -102,6 +102,19 @@ def test_network_connection(host: str, port: int = 445, timeout: float = 4.0) ->
         }
 
     host = host.strip().lstrip(r"\/")
+    if host in ("169.254.169.254", "metadata.google.internal") or host.startswith("169.254."):
+        return {
+            "success": False,
+            "error": "Host tujuan tidak diizinkan."
+        }
+
+    # Restrict connection tests strictly to SMB / CIFS ports to prevent port scanning / SSRF
+    if port not in (445, 139):
+        return {
+            "success": False,
+            "error": "Pengujian koneksi dibatasi hanya untuk port SMB/CIFS (Port 445 atau 139)."
+        }
+
     start_time = time.time()
 
     # Try specified port first
@@ -308,7 +321,10 @@ def create_subfolder(raw_dir: str, subfolder_path: str) -> Dict[str, Any]:
     raw_dir_abs = os.path.abspath(raw_dir)
     target_abs = os.path.abspath(os.path.join(raw_dir_abs, clean_rel))
 
-    if not target_abs.startswith(raw_dir_abs):
+    try:
+        if os.path.commonpath([raw_dir_abs, target_abs]) != raw_dir_abs:
+            raise ValueError("Target folder berada di luar direktori raw.")
+    except Exception:
         raise ValueError("Target folder berada di luar direktori raw.")
 
     os.makedirs(target_abs, mode=0o777, exist_ok=True)
@@ -345,8 +361,11 @@ def delete_subfolder(raw_dir: str, subfolder_path: str) -> Dict[str, Any]:
     raw_dir_abs = os.path.abspath(raw_dir)
     target_abs = os.path.abspath(os.path.join(raw_dir_abs, clean_rel))
 
-    if not target_abs.startswith(raw_dir_abs) or target_abs == raw_dir_abs:
-        raise ValueError("Tidak dapat menghapus direktori utama raw.")
+    try:
+        if os.path.commonpath([raw_dir_abs, target_abs]) != raw_dir_abs or target_abs == raw_dir_abs:
+            raise ValueError("Tidak dapat menghapus direktori utama raw atau target di luar raw.")
+    except Exception:
+        raise ValueError("Tidak dapat menghapus direktori utama raw atau target di luar raw.")
 
     if not os.path.exists(target_abs):
         return {

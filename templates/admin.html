@@ -2210,6 +2210,9 @@
         const data = await res.json();
         if (data.valid) {
           sessionStorage.setItem('lodge_admin_authenticated', 'true');
+          if (data.token) {
+            sessionStorage.setItem('lodge_admin_token', data.token);
+          }
           const modal = document.getElementById('admin-pin-modal');
           if (modal) modal.classList.add('hidden');
           if (err) err.classList.add('hidden');
@@ -2227,7 +2230,7 @@
           }
         }
       } catch (e) {
-        if (pin === '1234' || pin === 'BI5mill4h@@@') {
+        if (pin === '1234') {
           sessionStorage.setItem('lodge_admin_authenticated', 'true');
           const modal = document.getElementById('admin-pin-modal');
           if (modal) modal.classList.add('hidden');

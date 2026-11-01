@@ -17,6 +17,10 @@ import threading
 import re
 import datetime
 import asyncio
+import secrets
+import hmac
+import hashlib
+import tempfile
 from contextlib import asynccontextmanager
 from typing import Optional, List
 import numpy as np
@@ -379,27 +383,105 @@ async def serve_admin_dashboard(request: Request):
 
 
 # ==========================================
+# SECURITY & AUTHENTICATION UTILITIES
+# ==========================================
+
+SECRET_KEY_PATH = os.path.join(DB_DIR, ".secret_key")
+
+def _get_or_create_secret_key() -> str:
+    if os.path.exists(SECRET_KEY_PATH):
+        try:
+            with open(SECRET_KEY_PATH, "r", encoding="utf-8") as f:
+                k = f.read().strip()
+                if len(k) >= 32:
+                    return k
+        except Exception:
+            pass
+    k = secrets.token_hex(32)
+    try:
+        with open(SECRET_KEY_PATH, "w", encoding="utf-8") as f:
+            f.write(k)
+        os.chmod(SECRET_KEY_PATH, 0o600)
+    except Exception:
+        pass
+    return k
+
+APP_SECRET_KEY = _get_or_create_secret_key()
+
+def create_admin_token() -> str:
+    now = int(time.time())
+    data = f"admin:{now}"
+    sig = hmac.new(APP_SECRET_KEY.encode(), data.encode(), hashlib.sha256).hexdigest()
+    return f"{data}:{sig}"
+
+def verify_admin_token(token: str) -> bool:
+    if not token or ":" not in token:
+        return False
+    parts = token.split(":")
+    if len(parts) != 3:
+        return False
+    role, timestamp_str, sig = parts
+    if role != "admin":
+        return False
+    try:
+        ts = int(timestamp_str)
+        if time.time() - ts > 86400 * 7 or time.time() < ts - 60:
+            return False
+    except ValueError:
+        return False
+    data = f"{role}:{timestamp_str}"
+    expected_sig = hmac.new(APP_SECRET_KEY.encode(), data.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected_sig)
+
+def require_admin(request: Request):
+    token = request.cookies.get("lodge_admin_session") or request.headers.get("x-admin-token")
+    if not token or not verify_admin_token(token):
+        raise HTTPException(
+            status_code=401,
+            detail="Akses ditolak: Sesi Admin tidak valid atau telah kedaluwarsa. Silakan masukkan PIN Admin."
+        )
+    return True
+
+
+# ==========================================
 # ADMIN CONFIGURATION & NETWORK STORAGE APIS
 # ==========================================
 
 @app.get("/api/admin/settings")
-async def get_admin_settings():
+async def get_admin_settings(request: Request):
     """Retrieve current system and network storage settings."""
+    token = request.cookies.get("lodge_admin_session") or request.headers.get("x-admin-token")
+    is_authenticated = verify_admin_token(token) if token else False
+
     cfg = config_manager.load_settings()
     safe_cfg = dict(cfg)
     if safe_cfg.get("smb_password"):
         safe_cfg["smb_password"] = "••••••••"
+
+    # Only authenticated admin sees the real PINs and CRM API keys
+    if not is_authenticated:
+        safe_cfg["admin_pin"] = "••••"
+        safe_cfg["operator_pin"] = "••••"
+        safe_cfg["crm_guest_api_key"] = "••••••••"
     return safe_cfg
 
 
 @app.post("/api/admin/settings")
 async def update_admin_settings(request: Request):
     """Save new system and network storage configuration."""
+    require_admin(request)
     data = await request.json()
     existing = config_manager.load_settings()
-    # Preserve existing password if user didn't change masked string
+
+    # Preserve existing secrets if masked string or empty is sent
     if data.get("smb_password") in ["••••••••", "", None]:
         data["smb_password"] = existing.get("smb_password", "")
+    if data.get("admin_pin") in ["••••", "", None]:
+        data["admin_pin"] = existing.get("admin_pin", "1234")
+    if data.get("operator_pin") in ["••••", "", None]:
+        data["operator_pin"] = existing.get("operator_pin", "1234")
+    if data.get("crm_guest_api_key") in ["••••••••", "", None]:
+        data["crm_guest_api_key"] = existing.get("crm_guest_api_key", "")
 
     updated = config_manager.save_settings(data)
     if "polling_interval" in updated:
@@ -420,6 +502,7 @@ async def update_admin_settings(request: Request):
 @app.post("/api/admin/test-connection")
 async def test_admin_connection(request: Request):
     """Test direct TCP connectivity to SMB server host on port 445."""
+    require_admin(request)
     data = await request.json()
     host = data.get("host", "").strip()
     port = int(data.get("port", 445))
@@ -454,6 +537,7 @@ async def get_admin_subfolders():
 @app.post("/api/admin/subfolders")
 async def create_new_subfolder(request: Request):
     """Create a new ride subfolder in raw storage."""
+    require_admin(request)
     data = await request.json()
     folder_name = data.get("folder_name") or data.get("path") or data.get("name") or ""
     try:
@@ -475,6 +559,7 @@ async def create_new_subfolder(request: Request):
 @app.delete("/api/admin/subfolders")
 async def delete_existing_subfolder(request: Request):
     """Safely delete a ride subfolder from disk and immediately purge database/FAISS records."""
+    require_admin(request)
     data = await request.json()
     folder_path = data.get("folder_path") or data.get("folder_name") or data.get("path") or ""
     try:
@@ -504,6 +589,7 @@ async def delete_existing_subfolder(request: Request):
 @app.post("/api/admin/subfolders/scan")
 async def scan_specific_subfolder(request: Request):
     """Trigger indexing scan on a specific subfolder."""
+    require_admin(request)
     data = await request.json()
     folder_path = data.get("folder_path") or data.get("path") or ""
     try:
@@ -521,18 +607,20 @@ async def scan_specific_subfolder(request: Request):
 
 
 @app.post("/api/admin/purge-stale")
-async def purge_stale_records():
+async def purge_stale_records(request: Request):
     """Manually trigger purging of photos missing from disk."""
+    require_admin(request)
     return db_manager.purge_missing_photos(RAW_DIR)
 
 
 @app.post("/api/admin/reset-database")
 async def reset_database(request: Request):
     """Reset and empty SQLite photos and FAISS vector index."""
+    require_admin(request)
     data = await request.json()
     cfg = config_manager.load_settings()
-    admin_pin = cfg.get("admin_pin", "1234")
-    if data.get("pin") != admin_pin:
+    admin_pin = str(cfg.get("admin_pin", "1234")).strip()
+    if str(data.get("pin", "")).strip() != admin_pin:
         raise HTTPException(status_code=403, detail="PIN Admin tidak valid.")
     db_manager.reset_all_data()
     # Clear thumbnail cache
@@ -548,30 +636,44 @@ async def reset_database(request: Request):
 
 
 @app.post("/api/admin/verify-pin")
-async def verify_admin_pin(request: Request):
-    """Verify administrator PIN."""
+async def verify_admin_pin(request: Request, response: Response):
+    """Verify administrator PIN and issue secure admin session token."""
     data = await request.json()
     cfg = config_manager.load_settings()
     admin_pin = str(cfg.get("admin_pin", "1234")).strip()
     entered_pin = str(data.get("pin", "")).strip()
-    is_valid = bool(entered_pin and entered_pin in {admin_pin, "1234", "BI5mill4h@@@"})
-    return {"valid": is_valid}
+    is_valid = bool(entered_pin and entered_pin == admin_pin)
+    if is_valid:
+        token = create_admin_token()
+        response.set_cookie(
+            key="lodge_admin_session",
+            value=token,
+            httponly=True,
+            samesite="lax",
+            max_age=86400 * 7
+        )
+        return {"valid": True, "token": token, "message": "Akses Admin berhasil diverifikasi."}
+    return {"valid": False, "message": "PIN Admin salah."}
 
 
 @app.get("/api/admin/reports/dwell-time")
 async def get_dwell_time_report(
+    request: Request,
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format")
 ):
     """Retrieve daily visitor dwell time metrics and breakdown."""
+    require_admin(request)
     summary = db_manager.get_analytics_summary(date)
     return summary
 
 
 @app.get("/api/admin/reports/export-csv")
 async def export_dwell_time_csv(
+    request: Request,
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format or 'all'")
 ):
     """Download CSV report of guest dwell time and visits."""
+    require_admin(request)
     csv_str = db_manager.export_analytics_csv(date)
     target_date = date or datetime.date.today().strftime("%Y-%m-%d")
     filename = f"laporan-kunjungan-thelodge-{target_date}.csv"
@@ -585,7 +687,7 @@ async def export_dwell_time_csv(
 
 
 @app.post("/api/verify-access-pin")
-async def verify_access_pin(request: Request):
+async def verify_access_pin(request: Request, response: Response):
     """
     Verify operator or administrator PIN before opening the photo search page.
     """
@@ -598,15 +700,25 @@ async def verify_access_pin(request: Request):
     if not entered_pin:
         return {"valid": False, "message": "PIN tidak boleh kosong."}
 
-    valid_pins = {p for p in [operator_pin, admin_pin, "1234", "BI5mill4h@@@"] if p}
-    is_match = entered_pin in valid_pins
-    logger.info(f"[PIN CHECK] Entered: '{entered_pin}' | Allowed: {valid_pins} | Valid: {is_match}")
+    is_admin = (entered_pin == admin_pin)
+    is_operator = (entered_pin == operator_pin)
+    is_match = is_admin or is_operator
+    logger.info(f"[PIN CHECK] Attempt processed - Success: {is_match}")
 
     if is_match:
-        is_admin = (entered_pin in {admin_pin, "BI5mill4h@@@"})
+        role = "admin" if is_admin else "operator"
+        if is_admin:
+            token = create_admin_token()
+            response.set_cookie(
+                key="lodge_admin_session",
+                value=token,
+                httponly=True,
+                samesite="lax",
+                max_age=86400 * 7
+            )
         return {
             "valid": True,
-            "role": "admin" if is_admin else "operator",
+            "role": role,
             "message": "Akses diberikan."
         }
     return {"valid": False, "message": "PIN yang Anda masukkan salah."}
@@ -692,8 +804,6 @@ async def search_crm_guests(
         )
         
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         
         try:
             with urllib.request.urlopen(req, timeout=4.0, context=ctx) as resp:
@@ -766,8 +876,6 @@ def _sync_visit_to_crm(visit_record: dict):
             method="POST"
         )
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         with urllib.request.urlopen(req, timeout=5.0, context=ctx) as resp:
             logger.info(f"Successfully synced visit to CRM: HTTP {resp.status}")
     except Exception as e:
@@ -1457,27 +1565,62 @@ def crop_matched_face(
 async def download_results_zip(customer_id: str):
     """
     Package all matched raw photos into a single zip file for direct browser download by front-desk staff.
+    Streams via disk tempfile to avoid high RAM memory consumption and prevent OOM issues.
     """
     clean_id = os.path.basename(customer_id.strip())
-    customer_dir = os.path.join(RESULTS_DIR, clean_id)
+    customer_dir = os.path.abspath(os.path.join(RESULTS_DIR, clean_id))
+    results_dir_abs = os.path.abspath(RESULTS_DIR)
+
+    try:
+        if os.path.commonpath([results_dir_abs, customer_dir]) != results_dir_abs:
+            raise HTTPException(status_code=400, detail="Invalid customer ID.")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid customer ID.")
+
     if not os.path.exists(customer_dir) or not os.path.isdir(customer_dir):
         raise HTTPException(status_code=404, detail="Customer result folder not found.")
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for item in os.listdir(customer_dir):
-            item_path = os.path.join(customer_dir, item)
-            # Resolve symlink to actual file
-            real_path = os.path.realpath(item_path)
-            if os.path.isfile(real_path):
-                zip_file.write(real_path, arcname=item)
+    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    temp_zip_path = temp_zip.name
+    temp_zip.close()
 
-    zip_buffer.seek(0)
-    return StreamingResponse(
-        zip_buffer,
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={customer_id}_Photos.zip"}
-    )
+    try:
+        with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for item in os.listdir(customer_dir):
+                item_path = os.path.join(customer_dir, item)
+                real_path = os.path.realpath(item_path)
+                if os.path.isfile(real_path):
+                    zip_file.write(real_path, arcname=item)
+
+        def iterfile():
+            try:
+                with open(temp_zip_path, "rb") as f:
+                    while True:
+                        chunk = f.read(64 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                if os.path.exists(temp_zip_path):
+                    try:
+                        os.remove(temp_zip_path)
+                    except Exception:
+                        pass
+
+        safe_filename = re.sub(r'[^a-zA-Z0-9_\-]', '_', clean_id)
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{safe_filename}_Photos.zip"'}
+        )
+    except Exception as e:
+        if os.path.exists(temp_zip_path):
+            try:
+                os.remove(temp_zip_path)
+            except Exception:
+                pass
+        logger.error(f"Error packaging zip for {customer_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengemas file foto ZIP: {e}")
 
 
 @app.get("/api/setup-explorer-protocol")
@@ -1487,6 +1630,7 @@ async def download_explorer_protocol_reg():
     When installed (by double-clicking once on the client PC without admin rights),
     clicking 'Buka Folder di File Explorer' in Chrome/Edge will directly launch Windows File Explorer
     to the customer's UNC network folder.
+    Protected against command injection via argument parameterization and strict character whitelisting.
     """
     reg_path = os.path.join(STATIC_DIR, "Aktifkan_Buka_File_Explorer.reg")
     if os.path.exists(reg_path):
@@ -1503,7 +1647,7 @@ async def download_explorer_protocol_reg():
         "[HKEY_CURRENT_USER\\Software\\Classes\\lodge\\shell]\r\n\r\n"
         "[HKEY_CURRENT_USER\\Software\\Classes\\lodge\\shell\\open]\r\n\r\n"
         "[HKEY_CURRENT_USER\\Software\\Classes\\lodge\\shell\\open\\command]\r\n"
-        '@="powershell.exe -WindowStyle Hidden -NoProfile -Command \\"$u = [System.Uri]::UnescapeDataString(\'%1\') -replace \'^lodge:/?/?\',\'\' -replace \'/\',\'\\\\\\\\\'; & explorer.exe (\'\\\\\\\\\' + $u.TrimStart(\'\\\\\\\\\'))\\""\r\n'
+        '@="powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -Command \\"& { param($p); $u = [System.Uri]::UnescapeDataString($p) -replace \'^lodge:/?/?\',\'\' -replace \'/\',\'\\\\\\\\\'; if ($u -match \'^[a-zA-Z0-9_\\\\\\\\\\-\\.\\ :]+$\') { & explorer.exe (\'\\\\\\\\\' + $u.TrimStart(\'\\\\\\\\\')) } }\\" \\"%1\\""\r\n'
     )
     return StreamingResponse(
         io.BytesIO(reg_content.encode("utf-8")),

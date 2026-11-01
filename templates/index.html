@@ -3149,7 +3149,7 @@
         }
       } catch (errExp) {
         // Fallback offline validation
-        const fallbackPins = ['1234', 'BI5mill4h@@@', localStorage.getItem('lodge_operator_pin')];
+        const fallbackPins = ['1234', localStorage.getItem('lodge_operator_pin')];
         if (fallbackPins.includes(pin)) {
           sessionStorage.setItem('lodge_kiosk_unlocked', 'true');
           localStorage.setItem('lodge_kiosk_unlocked', 'true');
