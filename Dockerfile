@@ -32,16 +32,17 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN pip install --no-cache-dir git+https://github.com/ageitgey/face_recognition_models || true
 
 # Create application directories for storage, database, symlink results, and offline AI models
-RUN mkdir -p /app/data/raw /app/data/results /app/data/db /app/data/models/insightface /app/templates /app/static /app/img
+RUN mkdir -p /app/data/raw /app/data/results /app/data/db /app/data/models/insightface /app/templates /app/static /app/img && \
+    chmod -R 777 /app/data
 
 # Set InsightFace offline model root path
 ENV INSIGHTFACE_ROOT=/app/data/models/insightface
 
-# Copy application source code
-COPY . /app
-
-# Ensure data folders are writable
-RUN chmod -R 777 /app/data
+# Copy application source code explicitly (never copy data or database into the image)
+COPY main.py database.py indexer.py config_manager.py download_models.py /app/
+COPY templates/ /app/templates/
+COPY static/ /app/static/
+COPY img/ /app/img/
 
 EXPOSE 8000
 

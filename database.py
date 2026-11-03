@@ -11,10 +11,50 @@ import datetime
 import sqlite3
 import threading
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageOps
 import cv2
+
+# Known trash, recycle bin, metadata, and hidden directories to strictly ignore
+IGNORED_DIR_NAMES = {
+    ".trash-1000",
+    ".trash",
+    ".trashes",
+    "trash",
+    "#recycle",
+    ".recycle",
+    "@eadir",
+    ".smbdelete",
+    "$recycle.bin",
+    "system volume information",
+    ".git",
+    "__pycache__",
+    ".thumbnails",
+    ".cache",
+    ".ds_store",
+}
+
+
+def is_ignored_directory(dir_name: str) -> bool:
+    """Check if a directory name is hidden or a known trash/recycle folder."""
+    name = dir_name.lower().strip()
+    if name.startswith(".") or name.startswith("~"):
+        return True
+    return name in IGNORED_DIR_NAMES
+
+
+def is_ignored_path(file_path: str) -> bool:
+    """Check if any segment of a file path belongs to a hidden or trash/recycle directory."""
+    try:
+        parts = Path(file_path).parts
+        for part in parts:
+            if is_ignored_directory(part):
+                return True
+        return False
+    except Exception:
+        return True
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -1411,15 +1451,16 @@ class DatabaseManager:
             return None
 
         current_path = row["file_path"]
-        if os.path.isfile(current_path):
+        if os.path.isfile(current_path) and not is_ignored_path(current_path):
             return row, current_path
 
         # File not at recorded path; search raw_dir tree by filename
         filename = row["file_name"]
-        for root, _, files in os.walk(raw_dir):
+        for root, dirs, files in os.walk(raw_dir):
+            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
             if filename in files:
                 new_path = os.path.join(root, filename)
-                if os.path.isfile(new_path):
+                if os.path.isfile(new_path) and not is_ignored_path(new_path):
                     with self.lock, self._get_connection() as conn:
                         try:
                             st = os.stat(new_path)
@@ -1451,9 +1492,12 @@ class DatabaseManager:
 
             # Pre-index existing files on disk for fast lookup: filename -> list of paths
             disk_files_by_name: Dict[str, List[str]] = {}
-            for root, _, files in os.walk(raw_dir):
+            for root, dirs, files in os.walk(raw_dir):
+                dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
                 for f in files:
-                    disk_files_by_name.setdefault(f, []).append(os.path.join(root, f))
+                    p = os.path.join(root, f)
+                    if not is_ignored_path(p):
+                        disk_files_by_name.setdefault(f, []).append(p)
 
             stale_photo_ids: List[int] = []
             stale_vector_ids: List[int] = []
@@ -1465,11 +1509,12 @@ class DatabaseManager:
                     curr_path = r["file_path"]
                     f_name = r["file_name"]
 
-                    if os.path.isfile(curr_path):
+                    # If file exists and is NOT inside trash or hidden directory, it's valid
+                    if os.path.isfile(curr_path) and not is_ignored_path(curr_path):
                         continue
 
-                    # Attempt self-healing via subfolder search
-                    possible_paths = disk_files_by_name.get(f_name, [])
+                    # Attempt self-healing via subfolder search ONLY for valid non-trash paths
+                    possible_paths = [p for p in disk_files_by_name.get(f_name, []) if not is_ignored_path(p)]
                     if possible_paths:
                         new_path = possible_paths[0]
                         try:
@@ -1484,7 +1529,7 @@ class DatabaseManager:
                         except Exception:
                             pass
 
-                    # Truly missing photo
+                    # Truly missing or moved to trash -> PURGE!
                     stale_photo_ids.append(p_id)
                     v_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (p_id,)).fetchall()
                     for v in v_rows:

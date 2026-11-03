@@ -13,6 +13,8 @@ import logging
 import threading
 from typing import Dict, Any, List
 
+from database import is_ignored_directory, is_ignored_path
+
 logger = logging.getLogger("PhotoRetrieval.Config")
 
 CONFIG_FILE_PATH = os.path.join(os.getenv("DB_DIR", "/app/data/db"), "settings.json")
@@ -202,6 +204,8 @@ def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[st
     empty_stubs_count = 0
 
     def is_valid_disk_image(fname: str, fpath: str) -> bool:
+        if is_ignored_path(fpath):
+            return False
         base = os.path.basename(fname)
         if base.startswith(".") or base.startswith("~") or base.startswith("Thumbs"):
             return False
@@ -215,8 +219,10 @@ def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[st
             return False
 
     try:
-        # 1. Count root images directly in raw_dir
+        # 1. Count root images directly in raw_dir (skip hidden / trash files and dirs)
         for item in os.listdir(raw_dir):
+            if is_ignored_directory(item):
+                continue
             full_p = os.path.join(raw_dir, item)
             if os.path.isfile(full_p):
                 if is_valid_disk_image(item, full_p):
@@ -227,10 +233,15 @@ def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[st
 
         # 2. Recursively discover all subdirectories and count images in each
         for root, dirs, files in os.walk(raw_dir, followlinks=True):
+            # Prune hidden, trash, and system directories in-place so os.walk never descends into them
+            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
             if os.path.abspath(root) == os.path.abspath(raw_dir):
                 continue
 
             rel_path = os.path.relpath(root, raw_dir).replace("\\", "/")
+            if is_ignored_path(root):
+                continue
+
             valid_imgs = [f for f in files if is_valid_disk_image(f, os.path.join(root, f))]
             direct_imgs = len(valid_imgs)
             total_images += direct_imgs

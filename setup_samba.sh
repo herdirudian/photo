@@ -83,8 +83,8 @@ sudo bash -c "cat >> /etc/samba/smb.conf" << EOL
    follow symlinks = yes
    wide links = no
    unix extensions = yes
-   veto files = /db/.git/*.db/settings.json/
-   hide files = /db/.git/*.db/settings.json/
+   veto files = /db/.git/*.db/settings.json/.Trash*/#recycle/.recycle/.DS_Store/
+   hide files = /db/.git/*.db/settings.json/.Trash*/#recycle/.recycle/.DS_Store/
    strict allocate = no
    allocation roundup size = 0
    aio read size = 1
