@@ -39,6 +39,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "admin_pin": "1234",
     "operator_pin": "1234",
     "require_pin_to_access": True,
+    "raw_retention_days": 2,
     "samba_network_prefix": r"\\10.12.2.150\park-photos\results",
     "crm_guest_api_url": "https://submit.thelodgegroup.id/api/guests/search",
     "crm_guest_api_key": "thelodge-photo-secret-2026"

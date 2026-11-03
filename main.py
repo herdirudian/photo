@@ -32,7 +32,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from PIL import Image, ImageDraw, ImageOps
 
-from database import DatabaseManager, FaceEngine
+from database import DatabaseManager, FaceEngine, is_ignored_directory, is_ignored_path
 from indexer import PhotoIndexer
 import config_manager
 
@@ -163,25 +163,169 @@ def cleanup_results_folder(purge_all: bool = False) -> int:
     return deleted_count
 
 
+def try_parse_folder_date(folder_name: str) -> Optional[datetime.date]:
+    """Attempt parsing date from folder names (e.g. 2026-10-25, 2026_10_25, 25-10-2026, Ayunan_2026-10-25)."""
+    name = folder_name.strip()
+    for fmt in ("%Y-%m-%d", "%Y_%m_%d", "%Y.%m.%d", "%Y%m%d", "%d-%m-%Y", "%d_%m_%Y", "%d.%m.%Y"):
+        try:
+            return datetime.datetime.strptime(name, fmt).date()
+        except ValueError:
+            pass
+    m = re.search(r"(\d{4}[-_.]\d{2}[-_.]\d{2})", name)
+    if m:
+        d_str = m.group(1).replace("_", "-").replace(".", "-")
+        try:
+            return datetime.datetime.strptime(d_str, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    m2 = re.search(r"(\d{2}[-_.]\d{2}[-_.]\d{4})", name)
+    if m2:
+        d_str = m2.group(1).replace("_", "-").replace(".", "-")
+        try:
+            return datetime.datetime.strptime(d_str, "%d-%m-%Y").date()
+        except ValueError:
+            pass
+    return None
+
+
+def cleanup_raw_folder(max_age_days: int = 2) -> dict:
+    """
+    Automatically purge photo folders and image files in RAW_DIR that are older than max_age_days.
+    - Inspects top-level and nested subfolders for date-formatted names (e.g. 2026-10-25).
+    - If a folder represents a date older than max_age_days, deletes the entire folder via shutil.rmtree.
+    - If a folder does not have a date name (e.g. 'Ayunan'), inspects individual files and deletes those with mtime older than max_age_days.
+    - Removes empty subfolders left behind.
+    - Immediately purges SQLite records and FAISS vector index for deleted folders/files.
+    """
+    if not os.path.exists(RAW_DIR):
+        return {"deleted_folders": 0, "deleted_files": 0, "purged_photos": 0}
+
+    today = datetime.date.today()
+    deleted_folders = 0
+    deleted_files = 0
+
+    try:
+        # Step 1: Scan top-level and second-level subdirectories in RAW_DIR for date folders
+        folders_to_delete = []
+
+        try:
+            for item in os.listdir(RAW_DIR):
+                if is_ignored_directory(item) or item.startswith("."):
+                    continue
+                item_path = os.path.join(RAW_DIR, item)
+                if not os.path.isdir(item_path):
+                    continue
+
+                parsed_d = try_parse_folder_date(item)
+                if parsed_d is not None:
+                    age_days = (today - parsed_d).days
+                    if age_days >= max_age_days:
+                        folders_to_delete.append(item_path)
+                else:
+                    # Check nested subfolders (e.g. raw/Ayunan/2026-10-25)
+                    try:
+                        for sub in os.listdir(item_path):
+                            if is_ignored_directory(sub) or sub.startswith("."):
+                                continue
+                            sub_path = os.path.join(item_path, sub)
+                            if os.path.isdir(sub_path):
+                                sub_d = try_parse_folder_date(sub)
+                                if sub_d is not None:
+                                    sub_age = (today - sub_d).days
+                                    if sub_age >= max_age_days:
+                                        folders_to_delete.append(sub_path)
+                    except Exception as e_sub:
+                        logger.debug(f"Error scanning subfolder {item_path}: {e_sub}")
+        except Exception as e_ls:
+            logger.error(f"Error listing RAW_DIR: {e_ls}")
+
+        # Delete the identified date folders
+        for folder_path in folders_to_delete:
+            try:
+                if os.path.exists(folder_path):
+                    logger.info(f"Auto-cleanup: Removing raw photo folder older than {max_age_days} days: {folder_path}")
+                    shutil.rmtree(folder_path, ignore_errors=True)
+                    db_manager.delete_folder(folder_path)
+                    deleted_folders += 1
+            except Exception as e_fdel:
+                logger.error(f"Error removing old raw folder {folder_path}: {e_fdel}")
+
+        # Step 2: Delete individual files older than max_age_days in remaining non-date folders or root
+        for root, dirs, files in os.walk(RAW_DIR, topdown=False, followlinks=False):
+            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+            if is_ignored_path(root):
+                continue
+
+            for f in files:
+                if f.startswith(".") or f == ".gitkeep":
+                    continue
+                f_path = os.path.join(root, f)
+                try:
+                    st = os.stat(f_path)
+                    if (time.time() - st.st_mtime) >= (max_age_days * 86400):
+                        os.unlink(f_path)
+                        db_manager.delete_photo_by_path(f_path)
+                        deleted_files += 1
+                except Exception:
+                    pass
+
+            # If subfolder is now empty (and is not RAW_DIR itself), remove it
+            if os.path.abspath(root) != os.path.abspath(RAW_DIR):
+                try:
+                    remaining = [x for x in os.listdir(root) if not x.startswith(".")]
+                    if not remaining:
+                        os.rmdir(root)
+                        logger.debug(f"Removed now-empty subfolder: {root}")
+                except Exception:
+                    pass
+
+        # Step 3: Purge any remaining orphaned records from SQLite and FAISS
+        purge_stats = db_manager.purge_missing_photos(RAW_DIR)
+        purged_photos = purge_stats.get("purged_photos", 0)
+
+        logger.info(
+            f"Raw retention cleanup complete (older than {max_age_days} days): "
+            f"{deleted_folders} folder(s) deleted, {deleted_files} file(s) deleted, {purged_photos} database record(s) purged."
+        )
+
+        return {
+            "deleted_folders": deleted_folders,
+            "deleted_files": deleted_files,
+            "purged_photos": purged_photos
+        }
+
+    except Exception as e:
+        logger.error(f"Error during raw retention cleanup: {e}", exc_info=True)
+        return {"deleted_folders": deleted_folders, "deleted_files": deleted_files, "purged_photos": 0}
+
+
 results_cleanup_stop_event = threading.Event()
 
 
 def _daily_results_cleanup_worker():
-    """Background worker monitoring day rollover at midnight (00:00:00) to auto-purge results."""
+    """Background worker monitoring day rollover at midnight (00:00:00) to auto-purge results and raw folders."""
     last_date = datetime.date.today()
-    logger.info(f"Daily results auto-cleaner active. Monitoring day rollover from: {last_date}")
+    logger.info(f"Daily maintenance auto-cleaner active. Monitoring day rollover from: {last_date}")
     while not results_cleanup_stop_event.is_set():
         if results_cleanup_stop_event.wait(60.0):
             break
         current_date = datetime.date.today()
         if current_date != last_date:
-            logger.info(f"Day rollover detected ({last_date} -> {current_date}). Starting automated purge of previous day result folders...")
+            logger.info(f"Day rollover detected ({last_date} -> {current_date}). Starting automated daily maintenance...")
             try:
                 purged = cleanup_results_folder(purge_all=False)
                 logger.info(f"Daily rollover cleanup complete: {purged} result folder(s) removed. Customer history preserved.")
-                last_date = current_date
             except Exception as e:
                 logger.error(f"Error during rollover results cleanup: {e}")
+
+            try:
+                retention_days = int(config_manager.get_setting("raw_retention_days", 2))
+                raw_stats = cleanup_raw_folder(max_age_days=retention_days)
+                logger.info(f"Daily raw rollover cleanup complete (older than {retention_days} days): {raw_stats}")
+            except Exception as e_raw:
+                logger.error(f"Error during rollover raw cleanup: {e_raw}")
+
+            last_date = current_date
 
 
 @asynccontextmanager
@@ -199,6 +343,13 @@ async def lifespan(app: FastAPI):
             logger.info(f"Startup maintenance: Purged {startup_purged} result folder(s) from previous days.")
     except Exception as e_clean:
         logger.warning(f"Startup results cleanup error: {e_clean}")
+    try:
+        retention_days = int(config_manager.get_setting("raw_retention_days", 2))
+        startup_raw_stats = cleanup_raw_folder(max_age_days=retention_days)
+        if startup_raw_stats.get("deleted_folders", 0) > 0 or startup_raw_stats.get("deleted_files", 0) > 0:
+            logger.info(f"Startup raw maintenance: Cleaned photos older than {retention_days} days: {startup_raw_stats}")
+    except Exception as e_raw_clean:
+        logger.warning(f"Startup raw cleanup error: {e_raw_clean}")
     indexer.start()
     results_cleanup_stop_event.clear()
     cleanup_thread = threading.Thread(target=_daily_results_cleanup_worker, daemon=True, name="DailyResultsCleaner")
@@ -697,6 +848,21 @@ async def manual_cleanup_results(request: Request, all_folders: bool = Query(Fal
         "success": True,
         "deleted_folders": deleted,
         "message": f"Berhasil membersihkan {deleted} folder hasil tamu dari disk."
+    }
+
+
+@app.post("/api/admin/raw/cleanup")
+async def manual_cleanup_raw(request: Request, max_age_days: int = Query(2)):
+    """Manually trigger retention cleanup of raw photo folders older than max_age_days."""
+    require_admin(request)
+    stats = cleanup_raw_folder(max_age_days=max_age_days)
+    return {
+        "success": True,
+        "max_age_days": max_age_days,
+        "deleted_folders": stats.get("deleted_folders", 0),
+        "deleted_files": stats.get("deleted_files", 0),
+        "purged_photos": stats.get("purged_photos", 0),
+        "message": f"Berhasil membersihkan folder dan foto raw yang lebih dari {max_age_days} hari ({stats.get('deleted_folders', 0)} folder, {stats.get('deleted_files', 0)} file dihapus permanen)."
     }
 
 
