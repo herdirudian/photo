@@ -334,26 +334,35 @@ def _daily_results_cleanup_worker():
 async def lifespan(app: FastAPI):
     """Start watchdog folder monitoring on application launch, and stop on shutdown."""
     logger.info("Initializing Theme Park Photo Retrieval Engine...")
-    heal_customer_symlinks()
-    try:
-        db_manager.purge_invalid_face_boxes()
-    except Exception as e_purge:
-        logger.warning(f"Could not purge invalid face boxes on startup: {e_purge}")
-    try:
-        startup_purged = cleanup_results_folder(purge_all=False)
-        if startup_purged > 0:
-            logger.info(f"Startup maintenance: Purged {startup_purged} result folder(s) from previous days.")
-    except Exception as e_clean:
-        logger.warning(f"Startup results cleanup error: {e_clean}")
-    try:
-        retention_days = int(config_manager.get_setting("raw_retention_days", 2))
-        startup_raw_stats = cleanup_raw_folder(max_age_days=retention_days)
-        if startup_raw_stats.get("deleted_folders", 0) > 0 or startup_raw_stats.get("deleted_files", 0) > 0:
-            logger.info(f"Startup raw maintenance: Cleaned photos older than {retention_days} days: {startup_raw_stats}")
-    except Exception as e_raw_clean:
-        logger.warning(f"Startup raw cleanup error: {e_raw_clean}")
     indexer.start()
     results_cleanup_stop_event.clear()
+
+    # Run heavy startup maintenance (symlinks, purge invalid boxes, raw & result retentions)
+    # asynchronously in background thread so port 8000 opens INSTANTLY with zero 502 Bad Gateway!
+    def _startup_maintenance():
+        try:
+            heal_customer_symlinks()
+        except Exception as e_h:
+            logger.warning(f"Symlink healing error: {e_h}")
+        try:
+            db_manager.purge_invalid_face_boxes()
+        except Exception as e_purge:
+            logger.warning(f"Could not purge invalid face boxes on startup: {e_purge}")
+        try:
+            startup_purged = cleanup_results_folder(purge_all=False)
+            if startup_purged > 0:
+                logger.info(f"Startup maintenance: Purged {startup_purged} result folder(s) from previous days.")
+        except Exception as e_clean:
+            logger.warning(f"Startup results cleanup error: {e_clean}")
+        try:
+            retention_days = int(config_manager.get_setting("raw_retention_days", 2))
+            startup_raw_stats = cleanup_raw_folder(max_age_days=retention_days)
+            if startup_raw_stats.get("deleted_folders", 0) > 0 or startup_raw_stats.get("deleted_files", 0) > 0:
+                logger.info(f"Startup raw maintenance: Cleaned photos older than {retention_days} days: {startup_raw_stats}")
+        except Exception as e_raw_clean:
+            logger.warning(f"Startup raw cleanup error: {e_raw_clean}")
+
+    threading.Thread(target=_startup_maintenance, daemon=True, name="StartupMaintenanceWorker").start()
     cleanup_thread = threading.Thread(target=_daily_results_cleanup_worker, daemon=True, name="DailyResultsCleaner")
     cleanup_thread.start()
     yield

@@ -79,6 +79,12 @@ def load_settings() -> Dict[str, Any]:
     return settings
 
 
+def get_setting(key: str, default: Any = None) -> Any:
+    """Get a single setting value from settings.json with default fallback."""
+    cfg = load_settings()
+    return cfg.get(key, default)
+
+
 def save_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
     """Atomically save settings to persistent storage without recursion."""
     current = dict(DEFAULT_SETTINGS)
