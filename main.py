@@ -190,15 +190,16 @@ def try_parse_folder_date(folder_name: str) -> Optional[datetime.date]:
     return None
 
 
-def cleanup_raw_folder(max_age_days: int = 2) -> dict:
+def cleanup_raw_folder(max_age_days: int = 2, force: bool = False) -> dict:
     """
-    Automatically purge photo folders and image files in RAW_DIR that are older than max_age_days.
-    - Inspects top-level and nested subfolders for date-formatted names (e.g. 2026-10-25).
-    - If a folder represents a date older than max_age_days, deletes the entire folder via shutil.rmtree.
-    - If a folder does not have a date name (e.g. 'Ayunan'), inspects individual files and deletes those with mtime older than max_age_days.
-    - Removes empty subfolders left behind.
-    - Immediately purges SQLite records and FAISS vector index for deleted folders/files.
+    Purge photo folders and image files in RAW_DIR that are older than max_age_days.
+    NOTE: Automated deletion is 100% disabled by default (manual operator control).
+    Will only execute if force=True (manual admin trigger) or auto_delete_raw setting is explicitly set to True.
     """
+    if not force and not config_manager.get_setting("auto_delete_raw", False):
+        logger.info("Raw auto-delete is disabled (100% manual operator control). No raw photos deleted.")
+        return {"deleted_folders": 0, "deleted_files": 0, "purged_photos": 0}
+
     if not os.path.exists(RAW_DIR):
         return {"deleted_folders": 0, "deleted_files": 0, "purged_photos": 0}
 
@@ -271,8 +272,9 @@ def cleanup_raw_folder(max_age_days: int = 2) -> dict:
                 except Exception:
                     pass
 
-            # If subfolder is now empty (and is not RAW_DIR itself), remove it
-            if os.path.abspath(root) != os.path.abspath(RAW_DIR):
+            # ONLY remove empty date subfolders (depth >= 2), NEVER delete top-level wahana folders directly under RAW_DIR!
+            parent_dir = os.path.abspath(os.path.dirname(root))
+            if parent_dir != os.path.abspath(RAW_DIR) and os.path.abspath(root) != os.path.abspath(RAW_DIR):
                 try:
                     remaining = [x for x in os.listdir(root) if not x.startswith(".")]
                     if not remaining:
@@ -320,12 +322,14 @@ def _daily_results_cleanup_worker():
             except Exception as e:
                 logger.error(f"Error during rollover results cleanup: {e}")
 
-            try:
-                retention_days = int(config_manager.get_setting("raw_retention_days", 2))
-                raw_stats = cleanup_raw_folder(max_age_days=retention_days)
-                logger.info(f"Daily raw rollover cleanup complete (older than {retention_days} days): {raw_stats}")
-            except Exception as e_raw:
-                logger.error(f"Error during rollover raw cleanup: {e_raw}")
+            # Raw photo auto-delete is disabled (100% manual operator control)
+            if config_manager.get_setting("auto_delete_raw", False):
+                try:
+                    retention_days = int(config_manager.get_setting("raw_retention_days", 2))
+                    raw_stats = cleanup_raw_folder(max_age_days=retention_days)
+                    logger.info(f"Daily raw rollover cleanup complete (older than {retention_days} days): {raw_stats}")
+                except Exception as e_raw:
+                    logger.error(f"Error during rollover raw cleanup: {e_raw}")
 
             last_date = current_date
 
@@ -354,13 +358,15 @@ async def lifespan(app: FastAPI):
                 logger.info(f"Startup maintenance: Purged {startup_purged} result folder(s) from previous days.")
         except Exception as e_clean:
             logger.warning(f"Startup results cleanup error: {e_clean}")
-        try:
-            retention_days = int(config_manager.get_setting("raw_retention_days", 2))
-            startup_raw_stats = cleanup_raw_folder(max_age_days=retention_days)
-            if startup_raw_stats.get("deleted_folders", 0) > 0 or startup_raw_stats.get("deleted_files", 0) > 0:
-                logger.info(f"Startup raw maintenance: Cleaned photos older than {retention_days} days: {startup_raw_stats}")
-        except Exception as e_raw_clean:
-            logger.warning(f"Startup raw cleanup error: {e_raw_clean}")
+        # Raw photo auto-delete is disabled (100% manual operator control)
+        if config_manager.get_setting("auto_delete_raw", False):
+            try:
+                retention_days = int(config_manager.get_setting("raw_retention_days", 2))
+                startup_raw_stats = cleanup_raw_folder(max_age_days=retention_days)
+                if startup_raw_stats.get("deleted_folders", 0) > 0 or startup_raw_stats.get("deleted_files", 0) > 0:
+                    logger.info(f"Startup raw maintenance: Cleaned photos older than {retention_days} days: {startup_raw_stats}")
+            except Exception as e_raw_clean:
+                logger.warning(f"Startup raw cleanup error: {e_raw_clean}")
 
     threading.Thread(target=_startup_maintenance, daemon=True, name="StartupMaintenanceWorker").start()
     cleanup_thread = threading.Thread(target=_daily_results_cleanup_worker, daemon=True, name="DailyResultsCleaner")
@@ -866,7 +872,7 @@ async def manual_cleanup_results(request: Request, all_folders: bool = Query(Fal
 async def manual_cleanup_raw(request: Request, max_age_days: int = Query(2)):
     """Manually trigger retention cleanup of raw photo folders older than max_age_days."""
     require_admin(request)
-    stats = cleanup_raw_folder(max_age_days=max_age_days)
+    stats = cleanup_raw_folder(max_age_days=max_age_days, force=True)
     return {
         "success": True,
         "max_age_days": max_age_days,
