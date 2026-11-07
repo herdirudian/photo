@@ -98,7 +98,7 @@ except Exception:
     pass
 
 
-def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
+def read_image_exif_aware(img_source: Any, return_orientation: bool = False) -> Any:
     """
     Decodes an image file path or bytes into a BGR numpy array while honoring EXIF orientation.
     DSLR cameras frequently record portrait photos with EXIF Orientation tags (3, 6, or 8).
@@ -118,15 +118,14 @@ def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
 
             arr = cv2.imread(str(img_source), cv2.IMREAD_COLOR)
             if arr is not None:
-                if orientation == 1:
-                    return arr
-                elif orientation == 3:
-                    return cv2.rotate(arr, cv2.ROTATE_180)
+                rotated_arr = arr
+                if orientation == 3:
+                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_180)
                 elif orientation == 6:
-                    return cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
                 elif orientation == 8:
-                    return cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                return arr
+                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                return (rotated_arr, orientation) if return_orientation else rotated_arr
 
         elif isinstance(img_source, (bytes, bytearray)):
             orientation = 1
@@ -141,26 +140,29 @@ def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
             nparr = np.frombuffer(img_source, np.uint8)
             arr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if arr is not None:
-                if orientation == 1:
-                    return arr
-                elif orientation == 3:
-                    return cv2.rotate(arr, cv2.ROTATE_180)
+                rotated_arr = arr
+                if orientation == 3:
+                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_180)
                 elif orientation == 6:
-                    return cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
                 elif orientation == 8:
-                    return cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                return arr
+                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                return (rotated_arr, orientation) if return_orientation else rotated_arr
     except Exception:
         pass
 
     try:
         if isinstance(img_source, (str, os.PathLike)):
-            return cv2.imread(str(img_source), cv2.IMREAD_COLOR)
+            arr = cv2.imread(str(img_source), cv2.IMREAD_COLOR)
+            return (arr, 1) if return_orientation else arr
         elif isinstance(img_source, (bytes, bytearray)):
             nparr = np.frombuffer(img_source, np.uint8)
-            return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            arr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            return (arr, 1) if return_orientation else arr
     except Exception:
-        return None
+        return (None, 1) if return_orientation else None
+
+    return (None, 1) if return_orientation else None
 
 
 WIB = datetime.timezone(datetime.timedelta(hours=7))
@@ -730,13 +732,16 @@ class FaceEngine:
         Highly resilient against sunglasses, hats, masks, dappled tree shadows,
         and extreme face pose angles up to 60 degrees.
         """
+        is_exif_rotated = False
         if image_bgr is None:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Image not found at {file_path}")
-            image_bgr = read_image_exif_aware(file_path)
-            if image_bgr is None:
+            res = read_image_exif_aware(file_path, return_orientation=True)
+            if res is None or res[0] is None:
                 logger.error(f"Failed to read image file {file_path}")
                 return []
+            image_bgr, exif_orient = res
+            is_exif_rotated = (exif_orient in (3, 6, 8))
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
@@ -771,9 +776,9 @@ class FaceEngine:
                 return []
 
             # Multi-Orientation Fallback:
-            # Only run if zero faces were detected at 0°!
-            # If faces were already found upright, rotation is completely unnecessary.
-            if not all_raw_faces:
+            # Only run if zero faces were detected at 0° AND photo was not already oriented by camera EXIF!
+            # If camera already had EXIF orientation tag (3, 6, 8), the image is already oriented upright.
+            if not all_raw_faces and not is_exif_rotated:
                 for rot_code, rot_name in [
                     (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
                     (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
@@ -826,10 +831,10 @@ class FaceEngine:
 
             # 2. Targeted Ride Zone Crop:
             # High-resolution DSLR balloon ride photos pack 6 guests in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
-            # Optimize: Only execute crop inference if the photo belongs to a Balloon ride OR as fallback if 0 faces were found.
+            # Only execute crop inference if zero faces were detected in the global pass (or < 2 faces).
             p_lower = file_path.lower()
             is_balloon_ride = any(k in p_lower for k in ["balon", "balloon", "basket", "udara", "/bl/"])
-            if is_balloon_ride and max(orig_h, orig_w) > 1800:
+            if is_balloon_ride and len(all_raw_faces) < 2 and max(orig_h, orig_w) > 1800:
                 by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
                 basket_crop = proc_bgr[by1:by2, bx1:bx2]
                 if basket_crop.size > 0:
