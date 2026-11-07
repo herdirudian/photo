@@ -248,7 +248,7 @@ class FaceEngine:
         model: str = "buffalo_l",
         model_root: Optional[str] = None,
         det_thresh: float = 0.50,
-        det_size: Tuple[int, int] = (640, 640),
+        det_size: Tuple[int, int] = (1280, 1280),
         enable_raw_rotation: bool = False
     ):
         self.requested_engine = (engine or "insightface").lower()
@@ -766,9 +766,9 @@ class FaceEngine:
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
-        # Fast bilinear interpolation: scale high-res photos to 1600px (2.5x faster, 65% less RAM)
-        if max_dim > 1600:
-            scale_factor = 1600.0 / float(max_dim)
+        # Fast bilinear interpolation: scale high-res photos to 2400px (preserves fine facial details for 1280x1280 detection)
+        if max_dim > 2400:
+            scale_factor = 2400.0 / float(max_dim)
             proc_w = int(round(orig_w * scale_factor))
             proc_h = int(round(orig_h * scale_factor))
             proc_bgr = cv2.resize(image_bgr, (proc_w, proc_h), interpolation=cv2.INTER_LINEAR)

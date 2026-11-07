@@ -34,7 +34,7 @@ services:
       - INSIGHTFACE_ROOT=/app/data/models/insightface
       - AI_ENGINE=insightface
       - INSIGHTFACE_MODEL=buffalo_l
-      - INSIGHTFACE_DET_SIZE=640
+      - INSIGHTFACE_DET_SIZE=1280
       - DEFAULT_SIMILARITY_THRESHOLD=0.50
       - FACE_DETECTION_MODEL=hog
       # Samba network path displayed to operators for one-click copy-paste

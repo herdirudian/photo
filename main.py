@@ -53,7 +53,7 @@ AI_ENGINE = os.getenv("AI_ENGINE", app_settings.get("ai_engine", "insightface"))
 INSIGHTFACE_MODEL = os.getenv("INSIGHTFACE_MODEL", app_settings.get("insightface_model", "buffalo_l"))
 FACE_MODEL = os.getenv("FACE_DETECTION_MODEL", "hog")
 DEFAULT_THRESHOLD = float(app_settings.get("default_threshold", 0.50 if AI_ENGINE == "insightface" else 0.82))
-INSIGHTFACE_DET_SIZE = int(os.getenv("INSIGHTFACE_DET_SIZE", app_settings.get("insightface_det_size", 640)))
+INSIGHTFACE_DET_SIZE = int(os.getenv("INSIGHTFACE_DET_SIZE", app_settings.get("insightface_det_size", 1280)))
 INSIGHTFACE_DET_THRESH = float(os.getenv("INSIGHTFACE_DET_THRESH", app_settings.get("insightface_det_thresh", 0.50)))
 ENABLE_RAW_ROTATION = bool(os.getenv("ENABLE_RAW_ROTATION_CHECK", app_settings.get("enable_raw_rotation_check", False)))
 
