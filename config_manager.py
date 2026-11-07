@@ -33,7 +33,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "insightface_model": "buffalo_l",  # "buffalo_l" (ResNet-50 highest accuracy) or "buffalo_sc" (fast CPU)
     "insightface_det_thresh": 0.50,
     "insightface_det_size": 1280,  # 1280x1280 High Resolution Multi-Scale (Highest accuracy for wide park shots)
-    "enable_raw_rotation_check": False,  # False for fixed ride cameras, True if cameras are mounted sideways
     "default_threshold": 0.50,  # 0.50 for InsightFace 512-D; 0.82 for dlib 128-D
     "default_threshold_insightface": 0.50,
     "default_threshold_dlib": 0.82,
@@ -65,6 +64,15 @@ def load_settings() -> Dict[str, Any]:
                 saved = json.load(f)
                 settings.update(saved)
                 
+                # Auto-upgrade insightface_det_size to 1280 if older 640 setting was saved
+                if int(settings.get("insightface_det_size", 1280)) < 1280:
+                    logger.info("Auto-restoring insightface_det_size to 1280 for maximum biometric accuracy.")
+                    settings["insightface_det_size"] = 1280
+                    try:
+                        _write_settings_file(settings)
+                    except Exception:
+                        pass
+
                 # Intelligent threshold migration: if upgraded to insightface but old dlib threshold (0.82 or 0.86) is saved
                 if settings.get("ai_engine") == "insightface" and settings.get("default_threshold", 0.50) >= 0.80:
                     logger.info("Auto-adjusting similarity threshold from dlib (>=0.80) to InsightFace ArcFace 512-D standard (0.50)")

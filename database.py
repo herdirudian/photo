@@ -248,14 +248,12 @@ class FaceEngine:
         model: str = "buffalo_l",
         model_root: Optional[str] = None,
         det_thresh: float = 0.50,
-        det_size: Tuple[int, int] = (1280, 1280),
-        enable_raw_rotation: bool = False
+        det_size: Tuple[int, int] = (1280, 1280)
     ):
         self.requested_engine = (engine or "insightface").lower()
         self.model_name = model or "buffalo_l"
         self.det_thresh = det_thresh
         self.det_size = det_size
-        self.enable_raw_rotation = enable_raw_rotation
 
         # Model root path for offline cache
         if not model_root:
@@ -321,8 +319,8 @@ class FaceEngine:
                                 root=self.model_root,
                                 providers=providers
                             )
-                        self.search_insight_app.prepare(ctx_id=ctx_id, det_size=(640, 640))
-                        logger.info("Dedicated real-time search FaceAnalysis (640x640) initialized successfully.")
+                        self.search_insight_app.prepare(ctx_id=ctx_id, det_size=self.det_size)
+                        logger.info(f"Dedicated real-time search FaceAnalysis ({self.det_size[0]}x{self.det_size[1]}) initialized successfully.")
                     except Exception as e_s:
                         logger.warning(f"Could not load dedicated search instance ({e_s}), will share primary instance.")
                         self.search_insight_app = None
@@ -797,10 +795,9 @@ class FaceEngine:
                 return []
 
             # Multi-Orientation Fallback:
-            # Park ride DSLR cameras are permanently mounted upright on tripods/rigs.
-            # Bypassing 90°/270° rotation checks on ride photos saves 1.5s per empty/scenic photo.
-            # (Front-desk guest selfies still retain full rotation check in _extract_insightface_bytes).
-            if not all_raw_faces and getattr(self, "enable_raw_rotation", False):
+            # Only run if zero faces were detected at 0°!
+            # If faces were already found upright, rotation is completely unnecessary.
+            if not all_raw_faces:
                 for rot_code, rot_name in [
                     (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
                     (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
