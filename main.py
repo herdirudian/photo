@@ -523,15 +523,19 @@ def get_comprehensive_stats() -> dict:
     prog = indexer.get_progress()
     prog_is_indexing = bool(prog.get("is_indexing", False))
     queue_pending = prog.get("pending_in_queue", 0)
+    scan_total = prog.get("total_to_process", 0)
+    scan_processed = prog.get("current_processed", 0)
+    scan_pending = max(0, scan_total - scan_processed) if (prog_is_indexing and scan_total > 0) else 0
 
     total_indexed = stats.get("total_photos", 0)
     
-    # Calculate genuinely pending unindexed photos
+    # Calculate genuinely pending unindexed photos on disk
     disk_pending = max(0, total_disk_photos - total_indexed)
 
-    if prog_is_indexing or queue_pending > 0:
+    pending_photos = max(disk_pending, queue_pending, scan_pending)
+
+    if prog_is_indexing or queue_pending > 0 or scan_pending > 0:
         is_indexing = True
-        pending_photos = max(disk_pending, queue_pending)
     elif disk_pending > 0:
         # Disk has photos not yet in DB; trigger background scan and report active
         threading.Thread(target=indexer.enqueue_unindexed_files, daemon=True, name="AutoEnqueueWorker").start()
@@ -543,7 +547,12 @@ def get_comprehensive_stats() -> dict:
 
     effective_total_disk = max(total_disk_photos, total_indexed + pending_photos)
 
-    if not is_indexing or pending_photos == 0:
+    if not is_indexing:
+        pct = 100.0
+    elif scan_total > 0:
+        pct = round((scan_processed / scan_total * 100), 1)
+        pct = min(99.9, pct)
+    elif pending_photos == 0:
         pct = 100.0
     else:
         pct = round((total_indexed / effective_total_disk * 100), 1) if effective_total_disk > 0 else 100.0
@@ -558,6 +567,8 @@ def get_comprehensive_stats() -> dict:
         "total_disk": effective_total_disk,
         "pending": pending_photos,
         "percent": pct,
+        "current_processed": scan_processed,
+        "total_to_process": scan_total,
         "current_file": prog.get("current_file", ""),
         "last_completed_at": prog.get("last_completed_at")
     }
