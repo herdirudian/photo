@@ -532,15 +532,9 @@ def get_comprehensive_stats() -> dict:
     # Calculate genuinely pending unindexed photos on disk
     disk_pending = max(0, total_disk_photos - total_indexed)
 
-    pending_photos = max(disk_pending, queue_pending, scan_pending)
-
     if prog_is_indexing or queue_pending > 0 or scan_pending > 0:
         is_indexing = True
-    elif disk_pending > 0:
-        # Disk has photos not yet in DB; trigger background scan and report active
-        threading.Thread(target=indexer.enqueue_unindexed_files, daemon=True, name="AutoEnqueueWorker").start()
-        is_indexing = True
-        pending_photos = disk_pending
+        pending_photos = max(disk_pending, queue_pending, scan_pending)
     else:
         is_indexing = False
         pending_photos = 0
@@ -1033,7 +1027,7 @@ async def get_system_stats():
 
 
 @app.post("/api/reindex")
-async def trigger_reindex(force: bool = Query(True)):
+async def trigger_reindex(force: bool = Query(False)):
     """Trigger manual re-scan of raw photos directory in background thread."""
     try:
         threading.Thread(

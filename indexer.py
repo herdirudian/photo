@@ -285,6 +285,7 @@ class PhotoIndexer:
 
         # Real-time progress metrics
         self.is_indexing = False
+        self.is_scanning = False
         self.current_processed = 0
         self.total_to_process = 0
         self.newly_indexed_count = 0
@@ -363,7 +364,7 @@ class PhotoIndexer:
                         try:
                             stat = os.stat(full_path)
                             cached = indexed_map.get(full_path)
-                            if cached is not None and abs(cached[0] - stat.st_mtime) < 1e-4 and cached[1] == stat.st_size:
+                            if cached is not None and abs(cached[0] - stat.st_mtime) <= 1.0 and cached[1] == stat.st_size:
                                 continue
                             to_enqueue.append(full_path)
                         except OSError:
@@ -427,10 +428,11 @@ class PhotoIndexer:
         """Return real-time progress of ongoing directory indexing and queue metrics."""
         with self._queue_lock:
             q_size = self._queue.qsize()
-            is_busy = bool((self._active_workers > 0) or self.is_indexing or (q_size > 0) or self._scan_lock.locked())
+            is_busy = bool((self._active_workers > 0) or self.is_indexing or (q_size > 0))
             pending = q_size + self._active_workers
         return {
             "is_indexing": is_busy,
+            "is_scanning": getattr(self, "is_scanning", False),
             "queue_size": q_size,
             "pending_in_queue": pending,
             "current_processed": self.current_processed,
@@ -451,7 +453,8 @@ class PhotoIndexer:
             logger.info("Scan already in progress. Skipping concurrent request.")
             return {"status": "busy"}
 
-        self.is_indexing = True
+        self.is_scanning = True
+        self.is_indexing = False
         self.current_processed = 0
         self.total_to_process = 0
         self.newly_indexed_count = 0
@@ -503,6 +506,7 @@ class PhotoIndexer:
                 self.current_processed = 0
 
                 if files_to_index:
+                    self.is_indexing = True
                     from concurrent.futures import ThreadPoolExecutor, as_completed
 
                     def _scan_worker_task(item):
@@ -537,6 +541,7 @@ class PhotoIndexer:
         finally:
             self.db_manager.flush_faiss()
             self.is_indexing = False
+            self.is_scanning = False
             self.current_file = ""
             self.last_completed_at = time.time()
             self._scan_lock.release()

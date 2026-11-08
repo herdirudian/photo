@@ -1291,12 +1291,12 @@ class DatabaseManager:
             if row:
                 # If file previously had error or was 0 KB, only retry if file on disk changed (e.g. replaced/overwritten)
                 if row["status"] in ("error", "empty_file"):
-                    if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
+                    if abs(row["file_mtime"] - file_mtime) <= 1.0 and row["file_size"] == file_size:
                         return True
                     return False
 
                 # If modified or size changed, need re-indexing
-                if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
+                if abs(row["file_mtime"] - file_mtime) <= 1.0 and row["file_size"] == file_size:
                     # If photo has registered faces, ensure stored vector dimension matches current engine dimension
                     if row["num_faces"] > 0:
                         face_cur = conn.execute(

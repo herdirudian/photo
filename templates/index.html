@@ -3522,11 +3522,13 @@
 
         if (elFaces) elFaces.textContent = data.total_faces || 0;
 
-        if (isIndexing) {
-          // Sedang ada foto yang dalam antrian / proses scan / re-index
+        const prog = data.indexing_progress || {};
+        const hasWork = (prog.total_to_process && prog.total_to_process > 0) || pending > 0;
+
+        if (isIndexing && hasWork) {
+          // Sedang ada foto yang dalam antrian / proses re-index aktif
           wasIndexingPhotos = true;
 
-          const prog = data.indexing_progress || {};
           const pct = prog.percent !== undefined ? prog.percent : (totalDisk > 0 ? Math.round((totalIndexed / totalDisk) * 100) : 0);
 
           if (elPhotos) {
