@@ -1281,22 +1281,56 @@ class DatabaseManager:
                 logger.info("Flushed FAISS index to disk.")
 
     def is_photo_indexed(self, file_path: str, file_mtime: float, file_size: int) -> bool:
-        """Check if a file has already been indexed with matching modification time, size, and vector dimension."""
+        """
+        Check if a file has already been indexed with matching modification time, size, and vector dimension.
+        Resilient against path prefix discrepancies (e.g. /app/data/raw vs host /opt/SistemPhoto/data/raw vs relative).
+        Automatically self-heals stored SQLite path if a match is discovered via relative raw path.
+        """
+        norm_path = os.path.abspath(file_path).replace("\\", "/")
+        norm_bslash = norm_path.replace("/", "\\")
+
+        # Extract relative path under data/raw
+        rel_sub = None
+        if "/data/raw/" in norm_path:
+            rel_sub = norm_path.split("/data/raw/")[-1]
+        elif "data/raw/" in norm_path:
+            rel_sub = norm_path.split("data/raw/")[-1]
+
         with self.lock, self._get_connection() as conn:
+            # 1. Primary lookup by exact path or normalized path
             cursor = conn.execute(
-                "SELECT id, file_mtime, file_size, num_faces, status FROM photos WHERE file_path = ?",
-                (file_path,)
+                "SELECT id, file_path, file_mtime, file_size, num_faces, status FROM photos WHERE file_path = ? OR file_path = ? OR file_path = ? LIMIT 1",
+                (file_path, norm_path, norm_bslash)
             )
             row = cursor.fetchone()
+
+            # 2. Secondary fallback lookup by relative subpath under data/raw
+            if not row and rel_sub:
+                suffix_slash = "%/data/raw/" + rel_sub
+                suffix_bslash = "%\\data\\raw\\" + rel_sub.replace("/", "\\")
+                direct_suffix = "%/" + rel_sub
+                cursor = conn.execute(
+                    "SELECT id, file_path, file_mtime, file_size, num_faces, status FROM photos WHERE file_path LIKE ? OR file_path LIKE ? OR file_path LIKE ? LIMIT 1",
+                    (suffix_slash, suffix_bslash, direct_suffix)
+                )
+                row = cursor.fetchone()
+                if row:
+                    try:
+                        conn.execute("UPDATE photos SET file_path = ? WHERE id = ?", (norm_path, row["id"]))
+                        conn.commit()
+                        logger.debug(f"Self-healed photo path on check #{row['id']}: {row['file_path']} -> {norm_path}")
+                    except Exception:
+                        pass
+
             if row:
                 # If file previously had error or was 0 KB, only retry if file on disk changed (e.g. replaced/overwritten)
                 if row["status"] in ("error", "empty_file"):
-                    if abs(row["file_mtime"] - file_mtime) <= 1.0 and row["file_size"] == file_size:
+                    if abs(row["file_mtime"] - file_mtime) <= 2.0 and row["file_size"] == file_size:
                         return True
                     return False
 
                 # If modified or size changed, need re-indexing
-                if abs(row["file_mtime"] - file_mtime) <= 1.0 and row["file_size"] == file_size:
+                if abs(row["file_mtime"] - file_mtime) <= 2.0 and row["file_size"] == file_size:
                     # If photo has registered faces, ensure stored vector dimension matches current engine dimension
                     if row["num_faces"] > 0:
                         face_cur = conn.execute(
@@ -1312,17 +1346,31 @@ class DatabaseManager:
 
     def get_all_indexed_metadata(self) -> Dict[str, Tuple[float, int]]:
         """
-        High-performance batch check: returns {file_path: (file_mtime, file_size)}
-        in a single query across the entire database, eliminating thousands of individual SQLite queries.
+        High-performance batch check: returns mapping of indexed photos.
+        Indexes by full path, normalized path, and relative subpath from data/raw
+        to eliminate path format mismatches across environments.
         """
         with self._get_connection() as conn:
             cursor = conn.execute("SELECT file_path, file_mtime, file_size, status FROM photos")
             rows = cursor.fetchall()
-            return {
-                r["file_path"]: (float(r["file_mtime"]), int(r["file_size"]))
-                for r in rows
-                if r["status"] not in ("error", "empty_file")
-            }
+            metadata: Dict[str, Tuple[float, int]] = {}
+            for r in rows:
+                if r["status"] in ("error", "empty_file"):
+                    continue
+                fp = r["file_path"]
+                mtime = float(r["file_mtime"])
+                size = int(r["file_size"])
+                val = (mtime, size)
+                metadata[fp] = val
+                norm_fp = fp.replace("\\", "/")
+                metadata[norm_fp] = val
+                if "/data/raw/" in norm_fp:
+                    rel_sub = norm_fp.split("/data/raw/")[-1]
+                    metadata[rel_sub] = val
+                elif "data/raw/" in norm_fp:
+                    rel_sub = norm_fp.split("data/raw/")[-1]
+                    metadata[rel_sub] = val
+            return metadata
 
     def get_next_vector_id(self) -> int:
         """Generate a sequential unique vector ID for FAISS."""
@@ -1454,11 +1502,13 @@ class DatabaseManager:
 
         return None
 
-    def purge_missing_photos(self, raw_dir: str) -> Dict[str, int]:
+    def purge_missing_photos(self, raw_dir: str, auto_delete: bool = False) -> Dict[str, int]:
         """
         Scan database for photos whose physical files are no longer on disk.
-        Attempts self-healing first if photos were moved to a subfolder.
-        If truly missing, purges the records from SQLite and FAISS vector index.
+        Attempts self-healing first if photos were moved to a subfolder or path prefix changed
+        (e.g. host /opt/SistemPhoto/data/raw -> container /app/data/raw).
+        If auto_delete is True, purges truly missing records from SQLite and FAISS vector index.
+        If auto_delete is False (default for startup sync), safely heals paths without deleting data.
         Returns dict with counts of purged photos, purged faces, and updated paths.
         """
         with self.lock:
@@ -1468,9 +1518,9 @@ class DatabaseManager:
             if not rows:
                 return {"purged_photos": 0, "purged_faces": 0, "updated_paths": 0}
 
-            # Pre-index existing files on disk for fast lookup: filename -> list of paths
+            # Pre-index existing files on disk for fast lookup: filename -> list of paths (followlinks=True)
             disk_files_by_name: Dict[str, List[str]] = {}
-            for root, dirs, files in os.walk(raw_dir):
+            for root, dirs, files in os.walk(raw_dir, followlinks=True):
                 dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
                 for f in files:
                     p = os.path.join(root, f)
@@ -1487,11 +1537,31 @@ class DatabaseManager:
                     curr_path = r["file_path"]
                     f_name = r["file_name"]
 
-                    # If file exists and is NOT inside trash or hidden directory, it's valid
+                    # 1. If file exists and is NOT inside trash or hidden directory, it's valid
                     if os.path.isfile(curr_path) and not is_ignored_path(curr_path):
                         continue
 
-                    # Attempt self-healing via subfolder search ONLY for valid non-trash paths
+                    # 2. Attempt self-healing via environment path prefix realignment (e.g. host /opt/SistemPhoto -> container /app)
+                    curr_clean = curr_path.replace("\\", "/")
+                    healed = False
+                    if "/data/raw/" in curr_clean:
+                        rel_candidate = curr_clean.split("/data/raw/")[-1]
+                        container_candidate = os.path.join(raw_dir, rel_candidate)
+                        if os.path.isfile(container_candidate) and not is_ignored_path(container_candidate):
+                            try:
+                                st = os.stat(container_candidate)
+                                conn.execute(
+                                    "UPDATE photos SET file_path = ?, file_mtime = ?, file_size = ? WHERE id = ?",
+                                    (container_candidate, st.st_mtime, st.st_size, p_id)
+                                )
+                                updated_count += 1
+                                logger.info(f"Self-healed environment path #{p_id}: {curr_path} -> {container_candidate}")
+                                healed = True
+                                continue
+                            except Exception:
+                                pass
+
+                    # 3. Attempt self-healing via subfolder search ONLY for valid non-trash paths
                     possible_paths = [p for p in disk_files_by_name.get(f_name, []) if not is_ignored_path(p)]
                     if possible_paths:
                         new_path = possible_paths[0]
@@ -1507,11 +1577,12 @@ class DatabaseManager:
                         except Exception:
                             pass
 
-                    # Truly missing or moved to trash -> PURGE!
-                    stale_photo_ids.append(p_id)
-                    v_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (p_id,)).fetchall()
-                    for v in v_rows:
-                        stale_vector_ids.append(v["vector_id"])
+                    # 4. Only purge if auto_delete is explicitly enabled (e.g. manual admin trigger)
+                    if auto_delete:
+                        stale_photo_ids.append(p_id)
+                        v_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (p_id,)).fetchall()
+                        for v in v_rows:
+                            stale_vector_ids.append(v["vector_id"])
 
                 # Remove stale records from SQLite (cascades to faces table)
                 if stale_photo_ids:

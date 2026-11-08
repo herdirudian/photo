@@ -363,8 +363,12 @@ class PhotoIndexer:
                                 continue
                         try:
                             stat = os.stat(full_path)
-                            cached = indexed_map.get(full_path)
-                            if cached is not None and abs(cached[0] - stat.st_mtime) <= 1.0 and cached[1] == stat.st_size:
+                            norm_path = full_path.replace("\\", "/")
+                            rel_sub = norm_path.split("/data/raw/")[-1] if "/data/raw/" in norm_path else None
+                            cached = indexed_map.get(full_path) or indexed_map.get(norm_path)
+                            if cached is None and rel_sub:
+                                cached = indexed_map.get(rel_sub)
+                            if cached is not None and abs(cached[0] - stat.st_mtime) <= 2.0 and cached[1] == stat.st_size:
                                 continue
                             to_enqueue.append(full_path)
                         except OSError:
@@ -469,8 +473,8 @@ class PhotoIndexer:
 
             logger.info(f"Starting directory scan on: {scan_dir} (force={force})")
 
-            # Step 1: Self-heal moved photos, purge deleted photos, and clean invalid face detections
-            purge_stats = self.db_manager.purge_missing_photos(self.raw_dir)
+            # Step 1: Self-heal moved photos and path prefix differences (safe: auto_delete=False never deletes records on startup)
+            purge_stats = self.db_manager.purge_missing_photos(self.raw_dir, auto_delete=False)
             if purge_stats["purged_photos"] > 0:
                 logger.info(f"Cleaned up {purge_stats['purged_photos']} missing photos.")
             if purge_stats.get("purged_invalid_faces", 0) > 0:

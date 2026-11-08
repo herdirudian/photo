@@ -287,7 +287,7 @@ def cleanup_raw_folder(max_age_days: int = 2, force: bool = False) -> dict:
                     pass
 
         # Step 3: Purge any remaining orphaned records from SQLite and FAISS
-        purge_stats = db_manager.purge_missing_photos(RAW_DIR)
+        purge_stats = db_manager.purge_missing_photos(RAW_DIR, auto_delete=True)
         purged_photos = purge_stats.get("purged_photos", 0)
 
         logger.info(
@@ -861,7 +861,7 @@ async def scan_specific_subfolder(request: Request):
 async def purge_stale_records(request: Request):
     """Manually trigger purging of photos missing from disk."""
     require_admin(request)
-    return db_manager.purge_missing_photos(RAW_DIR)
+    return db_manager.purge_missing_photos(RAW_DIR, auto_delete=True)
 
 
 @app.post("/api/admin/results/cleanup")
