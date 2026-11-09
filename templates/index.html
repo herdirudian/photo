@@ -3518,25 +3518,18 @@
         const totalIndexed = data.total_photos || 0;
         const totalDisk = data.total_disk_photos !== undefined ? data.total_disk_photos : totalIndexed;
         const pending = data.pending_photos !== undefined ? data.pending_photos : 0;
-        const isIndexing = Boolean(data.is_indexing);
+        const isIndexing = Boolean(data.is_indexing && pending > 0);
 
         if (elFaces) elFaces.textContent = data.total_faces || 0;
 
-        const prog = data.indexing_progress || {};
-        const hasWork = (prog.total_to_process && prog.total_to_process > 0) || pending > 0;
-
-        if (isIndexing && hasWork) {
-          // Sedang ada foto yang dalam antrian / proses re-index aktif
+        if (isIndexing && pending > 0) {
+          // Sedang ada foto yang dalam antrian / proses masuk
           wasIndexingPhotos = true;
 
-          const pct = prog.percent !== undefined ? prog.percent : (totalDisk > 0 ? Math.round((totalIndexed / totalDisk) * 100) : 0);
+          const pct = data.indexing_progress ? data.indexing_progress.percent : (totalDisk > 0 ? Math.round((totalIndexed / totalDisk) * 100) : 0);
 
           if (elPhotos) {
-            if (prog.total_to_process && prog.total_to_process > 0) {
-              elPhotos.textContent = `${prog.current_processed || 0} / ${prog.total_to_process} foto`;
-            } else {
-              elPhotos.textContent = `${totalIndexed} / ${totalDisk} foto`;
-            }
+            elPhotos.textContent = `${totalIndexed} / ${totalDisk} foto`;
           }
           if (elDot) {
             elDot.className = "w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/20 animate-pulse shrink-0 transition-colors";
@@ -3547,29 +3540,36 @@
           if (spinner) spinner.classList.remove('hidden');
           if (check) check.classList.add('hidden');
           if (elPending) {
-            if (prog.total_to_process && prog.total_to_process > 0) {
-              elPending.textContent = `${prog.current_processed || 0}/${prog.total_to_process}`;
-            } else if (pending > 0) {
-              elPending.textContent = `${pending} antrian`;
-            } else {
-              elPending.textContent = "Memindai...";
-            }
+            elPending.textContent = `${pending} antrian`;
           }
 
           // Update Progress Strip
           if (strip) strip.classList.remove('hidden');
-          if (stripText) {
-            if (prog.total_to_process && prog.total_to_process > 0) {
-              stripText.textContent = `Memproses foto: ${prog.current_processed || 0} / ${prog.total_to_process} (${pct}%)`;
-            } else {
-              stripText.textContent = `${totalIndexed} / ${totalDisk} foto`;
-            }
-          }
-          if (stripPending) stripPending.textContent = pending > 0 ? pending : (prog.total_to_process ? (prog.total_to_process - (prog.current_processed || 0)) : 0);
+          if (stripText) stripText.textContent = `${totalIndexed} / ${totalDisk} foto`;
+          if (stripPending) stripPending.textContent = pending;
           if (stripBar) stripBar.style.width = `${pct}%`;
           if (stripPct) stripPct.textContent = `${pct}%`;
 
           // Polling cepat tiap 1.5 detik saat memproses
+          scheduleNextStatsRefresh(1500);
+        } else if (isIndexing) {
+          // Sedang memindai / memverifikasi
+          wasIndexingPhotos = true;
+
+          if (elPhotos) elPhotos.textContent = `${totalIndexed} foto`;
+          if (elDot) {
+            elDot.className = "w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/20 animate-pulse shrink-0 transition-colors";
+          }
+          if (elBadge) {
+            elBadge.className = "inline-flex items-center gap-1 font-medium text-amber-300";
+          }
+          if (spinner) spinner.classList.remove('hidden');
+          if (check) check.classList.add('hidden');
+          if (elPending) {
+            elPending.textContent = "Memindai...";
+          }
+          if (strip) strip.classList.remove('hidden');
+
           scheduleNextStatsRefresh(1500);
         } else {
           // Seluruh foto sudah selesai terindeks (Terupdate)

@@ -12,7 +12,7 @@ from typing import Set, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent, FileDeletedEvent
 
-from database import DatabaseManager, FaceEngine, is_ignored_directory, is_ignored_path
+from database import DatabaseManager, FaceEngine
 
 # Configure logging
 logger = logging.getLogger("PhotoRetrieval.Indexer")
@@ -21,9 +21,7 @@ SUPPORTED_EXTENSIONS: Set[str] = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".ti
 
 
 def is_valid_image(file_path: str) -> bool:
-    """Check if the file has a supported image extension and is not a hidden/trash/system metadata file."""
-    if is_ignored_path(file_path):
-        return False
+    """Check if the file has a supported image extension and is not a hidden or system metadata file."""
     base = os.path.basename(file_path)
     if base.startswith(".") or base.startswith("~") or base.startswith("Thumbs"):
         return False
@@ -190,20 +188,17 @@ class RawPhotoEventHandler(FileSystemEventHandler):
         """
         Recursively scan and index all valid photos in a newly created or moved directory.
         """
-        if not os.path.isdir(dir_path) or is_ignored_path(dir_path):
+        if not os.path.isdir(dir_path):
             return
         logger.info(f"Scanning directory recursively for photos: {dir_path}")
         time.sleep(0.5)
-        for root, dirs, files in os.walk(dir_path, followlinks=True):
-            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+        for root, _, files in os.walk(dir_path, followlinks=True):
             for filename in sorted(files):
                 full_path = os.path.join(root, filename)
                 if is_valid_image(full_path):
                     self.process_file(full_path, force=force)
 
     def on_created(self, event):
-        if is_ignored_path(event.src_path):
-            return
         if self.indexer:
             self.indexer.enqueue_path(event.src_path)
         else:
@@ -218,8 +213,6 @@ class RawPhotoEventHandler(FileSystemEventHandler):
                 self.process_file(event.src_path)
 
     def on_modified(self, event):
-        if is_ignored_path(event.src_path):
-            return
         if not event.is_directory and is_valid_image(event.src_path):
             if self.indexer:
                 self.indexer.enqueue_file(event.src_path)
@@ -229,25 +222,21 @@ class RawPhotoEventHandler(FileSystemEventHandler):
     def on_moved(self, event):
         if event.is_directory:
             self.db_manager.delete_folder(event.src_path)
-            # Only enqueue destination if it's not moved to a trash / recycle folder
-            if not is_ignored_path(event.dest_path):
-                if self.indexer:
-                    self.indexer.enqueue_path(event.dest_path)
-                else:
-                    threading.Thread(
-                        target=self.process_directory,
-                        args=(event.dest_path,),
-                        daemon=True,
-                        name=f"DirMove-{os.path.basename(event.dest_path)}"
-                    ).start()
+            if self.indexer:
+                self.indexer.enqueue_path(event.dest_path)
+            else:
+                threading.Thread(
+                    target=self.process_directory,
+                    args=(event.dest_path,),
+                    daemon=True,
+                    name=f"DirMove-{os.path.basename(event.dest_path)}"
+                ).start()
         else:
             self.db_manager.delete_photo_by_path(event.src_path)
-            # Only enqueue destination file if not moved to trash
-            if not is_ignored_path(event.dest_path):
-                if self.indexer:
-                    self.indexer.enqueue_file(event.dest_path)
-                else:
-                    self.process_file(event.dest_path)
+            if self.indexer:
+                self.indexer.enqueue_file(event.dest_path)
+            else:
+                self.process_file(event.dest_path)
 
     def on_deleted(self, event):
         if event.is_directory:
@@ -285,7 +274,6 @@ class PhotoIndexer:
 
         # Real-time progress metrics
         self.is_indexing = False
-        self.is_scanning = False
         self.current_processed = 0
         self.total_to_process = 0
         self.newly_indexed_count = 0
@@ -321,12 +309,11 @@ class PhotoIndexer:
 
     def enqueue_directory(self, dir_path: str, force: bool = False):
         """Recursively discover and enqueue photos from a directory."""
-        if not os.path.isdir(dir_path) or is_ignored_path(dir_path):
+        if not os.path.isdir(dir_path):
             return
         logger.info(f"Scanning directory to enqueue photos: {dir_path}")
         time.sleep(0.3)
-        for root, dirs, files in os.walk(dir_path, followlinks=True):
-            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+        for root, _, files in os.walk(dir_path, followlinks=True):
             for filename in sorted(files):
                 full_path = os.path.join(root, filename)
                 if is_valid_image(full_path):
@@ -353,8 +340,7 @@ class PhotoIndexer:
                 indexed_map = {}
 
             to_enqueue = []
-            for root, dirs, files in os.walk(self.raw_dir, followlinks=True):
-                dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+            for root, _, files in os.walk(self.raw_dir, followlinks=True):
                 for filename in files:
                     full_path = os.path.abspath(os.path.join(root, filename))
                     if is_valid_image(full_path):
@@ -363,12 +349,8 @@ class PhotoIndexer:
                                 continue
                         try:
                             stat = os.stat(full_path)
-                            norm_path = full_path.replace("\\", "/")
-                            rel_sub = norm_path.split("/data/raw/")[-1] if "/data/raw/" in norm_path else None
-                            cached = indexed_map.get(full_path) or indexed_map.get(norm_path)
-                            if cached is None and rel_sub:
-                                cached = indexed_map.get(rel_sub)
-                            if cached is not None and abs(cached[0] - stat.st_mtime) <= 2.0 and cached[1] == stat.st_size:
+                            cached = indexed_map.get(full_path)
+                            if cached is not None and abs(cached[0] - stat.st_mtime) < 1e-4 and cached[1] == stat.st_size:
                                 continue
                             to_enqueue.append(full_path)
                         except OSError:
@@ -432,11 +414,10 @@ class PhotoIndexer:
         """Return real-time progress of ongoing directory indexing and queue metrics."""
         with self._queue_lock:
             q_size = self._queue.qsize()
-            is_busy = bool((self._active_workers > 0) or self.is_indexing or (q_size > 0))
+            is_busy = bool((self._active_workers > 0) or self.is_indexing or (q_size > 0) or self._scan_lock.locked())
             pending = q_size + self._active_workers
         return {
             "is_indexing": is_busy,
-            "is_scanning": getattr(self, "is_scanning", False),
             "queue_size": q_size,
             "pending_in_queue": pending,
             "current_processed": self.current_processed,
@@ -457,8 +438,7 @@ class PhotoIndexer:
             logger.info("Scan already in progress. Skipping concurrent request.")
             return {"status": "busy"}
 
-        self.is_scanning = True
-        self.is_indexing = False
+        self.is_indexing = True
         self.current_processed = 0
         self.total_to_process = 0
         self.newly_indexed_count = 0
@@ -473,8 +453,8 @@ class PhotoIndexer:
 
             logger.info(f"Starting directory scan on: {scan_dir} (force={force})")
 
-            # Step 1: Self-heal moved photos and path prefix differences (safe: auto_delete=False never deletes records on startup)
-            purge_stats = self.db_manager.purge_missing_photos(self.raw_dir, auto_delete=False)
+            # Step 1: Self-heal moved photos, purge deleted photos, and clean invalid face detections
+            purge_stats = self.db_manager.purge_missing_photos(self.raw_dir)
             if purge_stats["purged_photos"] > 0:
                 logger.info(f"Cleaned up {purge_stats['purged_photos']} missing photos.")
             if purge_stats.get("purged_invalid_faces", 0) > 0:
@@ -489,8 +469,7 @@ class PhotoIndexer:
 
             if os.path.exists(scan_dir):
                 files_to_check = []
-                for root, dirs, files in os.walk(scan_dir, followlinks=True):
-                    dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+                for root, _, files in os.walk(scan_dir, followlinks=True):
                     for filename in files:
                         full_path = os.path.join(root, filename)
                         if is_valid_image(full_path):
@@ -510,7 +489,6 @@ class PhotoIndexer:
                 self.current_processed = 0
 
                 if files_to_index:
-                    self.is_indexing = True
                     from concurrent.futures import ThreadPoolExecutor, as_completed
 
                     def _scan_worker_task(item):
@@ -545,7 +523,6 @@ class PhotoIndexer:
         finally:
             self.db_manager.flush_faiss()
             self.is_indexing = False
-            self.is_scanning = False
             self.current_file = ""
             self.last_completed_at = time.time()
             self._scan_lock.release()

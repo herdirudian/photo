@@ -9,22 +9,8 @@ venv/
 .git
 .gitignore
 .env
-data
 data/
 data/**
-**/data/**
 *.log
 .DS_Store
-.Trash*
-.trashes*
-.recycle*
-#recycle*
-*.db
-*.db-wal
-*.db-shm
-*.bin
-*.tar.gz
-*.zip
-*.tar
-
 

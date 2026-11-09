@@ -13,8 +13,6 @@ import logging
 import threading
 from typing import Dict, Any, List
 
-from database import is_ignored_directory, is_ignored_path
-
 logger = logging.getLogger("PhotoRetrieval.Config")
 
 CONFIG_FILE_PATH = os.path.join(os.getenv("DB_DIR", "/app/data/db"), "settings.json")
@@ -32,14 +30,13 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "ai_engine": "insightface",  # "insightface" (ArcFace 512-D) or "dlib" (ResNet-34 128-D)
     "insightface_model": "buffalo_l",  # "buffalo_l" (ResNet-50 highest accuracy) or "buffalo_sc" (fast CPU)
     "insightface_det_thresh": 0.50,
-    "insightface_det_size": 1280,  # 1280x1280 High Resolution Multi-Scale (Highest accuracy for wide park shots)
+    "insightface_det_size": 1280,  # 1280x1280 High Resolution Multi-Scale (Dell R740 Xeon), 640 for legacy
     "default_threshold": 0.50,  # 0.50 for InsightFace 512-D; 0.82 for dlib 128-D
     "default_threshold_insightface": 0.50,
     "default_threshold_dlib": 0.82,
     "admin_pin": "1234",
     "operator_pin": "1234",
     "require_pin_to_access": True,
-    "auto_delete_raw": False,  # 100% manual operator control; never automatically delete raw park photos
     "samba_network_prefix": r"\\10.12.2.150\park-photos\results",
     "crm_guest_api_url": "https://submit.thelodgegroup.id/api/guests/search",
     "crm_guest_api_key": "thelodge-photo-secret-2026"
@@ -64,15 +61,6 @@ def load_settings() -> Dict[str, Any]:
                 saved = json.load(f)
                 settings.update(saved)
                 
-                # Auto-upgrade insightface_det_size to 1280 if older 640 setting was saved
-                if int(settings.get("insightface_det_size", 1280)) < 1280:
-                    logger.info("Auto-restoring insightface_det_size to 1280 for maximum biometric accuracy.")
-                    settings["insightface_det_size"] = 1280
-                    try:
-                        _write_settings_file(settings)
-                    except Exception:
-                        pass
-
                 # Intelligent threshold migration: if upgraded to insightface but old dlib threshold (0.82 or 0.86) is saved
                 if settings.get("ai_engine") == "insightface" and settings.get("default_threshold", 0.50) >= 0.80:
                     logger.info("Auto-adjusting similarity threshold from dlib (>=0.80) to InsightFace ArcFace 512-D standard (0.50)")
@@ -85,12 +73,6 @@ def load_settings() -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error saving initial {CONFIG_FILE_PATH}: {e}")
     return settings
-
-
-def get_setting(key: str, default: Any = None) -> Any:
-    """Get a single setting value from settings.json with default fallback."""
-    cfg = load_settings()
-    return cfg.get(key, default)
 
 
 def save_settings(new_settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -220,8 +202,6 @@ def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[st
     empty_stubs_count = 0
 
     def is_valid_disk_image(fname: str, fpath: str) -> bool:
-        if is_ignored_path(fpath):
-            return False
         base = os.path.basename(fname)
         if base.startswith(".") or base.startswith("~") or base.startswith("Thumbs"):
             return False
@@ -235,10 +215,8 @@ def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[st
             return False
 
     try:
-        # 1. Count root images directly in raw_dir (skip hidden / trash files and dirs)
+        # 1. Count root images directly in raw_dir
         for item in os.listdir(raw_dir):
-            if is_ignored_directory(item):
-                continue
             full_p = os.path.join(raw_dir, item)
             if os.path.isfile(full_p):
                 if is_valid_disk_image(item, full_p):
@@ -249,15 +227,10 @@ def inspect_storage_status(raw_dir: str, force_refresh: bool = False) -> Dict[st
 
         # 2. Recursively discover all subdirectories and count images in each
         for root, dirs, files in os.walk(raw_dir, followlinks=True):
-            # Prune hidden, trash, and system directories in-place so os.walk never descends into them
-            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
             if os.path.abspath(root) == os.path.abspath(raw_dir):
                 continue
 
             rel_path = os.path.relpath(root, raw_dir).replace("\\", "/")
-            if is_ignored_path(root):
-                continue
-
             valid_imgs = [f for f in files if is_valid_disk_image(f, os.path.join(root, f))]
             direct_imgs = len(valid_imgs)
             total_images += direct_imgs

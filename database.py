@@ -11,50 +11,10 @@ import datetime
 import sqlite3
 import threading
 import logging
-from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageOps
 import cv2
-
-# Known trash, recycle bin, metadata, and hidden directories to strictly ignore
-IGNORED_DIR_NAMES = {
-    ".trash-1000",
-    ".trash",
-    ".trashes",
-    "trash",
-    "#recycle",
-    ".recycle",
-    "@eadir",
-    ".smbdelete",
-    "$recycle.bin",
-    "system volume information",
-    ".git",
-    "__pycache__",
-    ".thumbnails",
-    ".cache",
-    ".ds_store",
-}
-
-
-def is_ignored_directory(dir_name: str) -> bool:
-    """Check if a directory name is hidden or a known trash/recycle folder."""
-    name = dir_name.lower().strip()
-    if name.startswith(".") or name.startswith("~"):
-        return True
-    return name in IGNORED_DIR_NAMES
-
-
-def is_ignored_path(file_path: str) -> bool:
-    """Check if any segment of a file path belongs to a hidden or trash/recycle directory."""
-    try:
-        parts = Path(file_path).parts
-        for part in parts:
-            if is_ignored_directory(part):
-                return True
-        return False
-    except Exception:
-        return True
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -98,7 +58,7 @@ except Exception:
     pass
 
 
-def read_image_exif_aware(img_source: Any, return_orientation: bool = False) -> Any:
+def read_image_exif_aware(img_source: Any) -> Optional[np.ndarray]:
     """
     Decodes an image file path or bytes into a BGR numpy array while honoring EXIF orientation.
     DSLR cameras frequently record portrait photos with EXIF Orientation tags (3, 6, or 8).
@@ -118,14 +78,15 @@ def read_image_exif_aware(img_source: Any, return_orientation: bool = False) -> 
 
             arr = cv2.imread(str(img_source), cv2.IMREAD_COLOR)
             if arr is not None:
-                rotated_arr = arr
-                if orientation == 3:
-                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_180)
+                if orientation == 1:
+                    return arr
+                elif orientation == 3:
+                    return cv2.rotate(arr, cv2.ROTATE_180)
                 elif orientation == 6:
-                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                    return cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
                 elif orientation == 8:
-                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                return (rotated_arr, orientation) if return_orientation else rotated_arr
+                    return cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                return arr
 
         elif isinstance(img_source, (bytes, bytearray)):
             orientation = 1
@@ -140,29 +101,26 @@ def read_image_exif_aware(img_source: Any, return_orientation: bool = False) -> 
             nparr = np.frombuffer(img_source, np.uint8)
             arr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if arr is not None:
-                rotated_arr = arr
-                if orientation == 3:
-                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_180)
+                if orientation == 1:
+                    return arr
+                elif orientation == 3:
+                    return cv2.rotate(arr, cv2.ROTATE_180)
                 elif orientation == 6:
-                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                    return cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
                 elif orientation == 8:
-                    rotated_arr = cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                return (rotated_arr, orientation) if return_orientation else rotated_arr
+                    return cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                return arr
     except Exception:
         pass
 
     try:
         if isinstance(img_source, (str, os.PathLike)):
-            arr = cv2.imread(str(img_source), cv2.IMREAD_COLOR)
-            return (arr, 1) if return_orientation else arr
+            return cv2.imread(str(img_source), cv2.IMREAD_COLOR)
         elif isinstance(img_source, (bytes, bytearray)):
             nparr = np.frombuffer(img_source, np.uint8)
-            arr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            return (arr, 1) if return_orientation else arr
+            return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     except Exception:
-        return (None, 1) if return_orientation else None
-
-    return (None, 1) if return_orientation else None
+        return None
 
 
 WIB = datetime.timezone(datetime.timedelta(hours=7))
@@ -270,8 +228,10 @@ class FaceEngine:
         self.engine_name = "insightface"
         self.dimension = 512
         self.insight_app = None
+        self.search_insight_app = None
         self.model = "hog"
         self.inference_lock = threading.RLock()
+        self.search_inference_lock = threading.Lock()
         self._search_active_counter = 0
         self._search_active_lock = threading.Lock()
 
@@ -303,6 +263,28 @@ class FaceEngine:
                         )
                     ctx_id = 0 if ('CUDAExecutionProvider' in providers) else -1
                     self.insight_app.prepare(ctx_id=ctx_id, det_size=self.det_size)
+
+                    # Dedicated real-time search instance (640x640) for zero lock contention with background indexer
+                    try:
+                        try:
+                            self.search_insight_app = FaceAnalysis(
+                                name=self.model_name,
+                                root=self.model_root,
+                                providers=providers,
+                                allowed_modules=['detection', 'recognition']
+                            )
+                        except TypeError:
+                            self.search_insight_app = FaceAnalysis(
+                                name=self.model_name,
+                                root=self.model_root,
+                                providers=providers
+                            )
+                        self.search_insight_app.prepare(ctx_id=ctx_id, det_size=(640, 640))
+                        logger.info("Dedicated real-time search FaceAnalysis (640x640) initialized successfully.")
+                    except Exception as e_s:
+                        logger.warning(f"Could not load dedicated search instance ({e_s}), will share primary instance.")
+                        self.search_insight_app = None
+
                     self.engine_name = "insightface"
                     self.dimension = 512
                     logger.info(f"InsightFace ArcFace 512-D initialized successfully with {providers[0]}")
@@ -732,20 +714,17 @@ class FaceEngine:
         Highly resilient against sunglasses, hats, masks, dappled tree shadows,
         and extreme face pose angles up to 60 degrees.
         """
-        is_exif_rotated = False
         if image_bgr is None:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Image not found at {file_path}")
-            res = read_image_exif_aware(file_path, return_orientation=True)
-            if res is None or res[0] is None:
+            image_bgr = read_image_exif_aware(file_path)
+            if image_bgr is None:
                 logger.error(f"Failed to read image file {file_path}")
                 return []
-            image_bgr, exif_orient = res
-            is_exif_rotated = (exif_orient in (3, 6, 8))
 
         orig_h, orig_w = image_bgr.shape[:2]
         max_dim = max(orig_h, orig_w)
-        # Fast bilinear interpolation: scale high-res photos to 2400px (preserves fine facial details for 1280x1280 detection)
+        # Fast bilinear interpolation: scale high-res photos to 2400px (1.8x faster, 50% less CPU & RAM)
         if max_dim > 2400:
             scale_factor = 2400.0 / float(max_dim)
             proc_w = int(round(orig_w * scale_factor))
@@ -776,9 +755,9 @@ class FaceEngine:
                 return []
 
             # Multi-Orientation Fallback:
-            # Only run if zero faces were detected at 0° AND photo was not already oriented by camera EXIF!
-            # If camera already had EXIF orientation tag (3, 6, 8), the image is already oriented upright.
-            if not all_raw_faces and not is_exif_rotated:
+            # Only run if zero faces were detected at 0°!
+            # If faces were already found upright, rotation is completely unnecessary.
+            if not all_raw_faces:
                 for rot_code, rot_name in [
                     (cv2.ROTATE_90_CLOCKWISE, "90° CW"),
                     (cv2.ROTATE_90_COUNTERCLOCKWISE, "270° CW")
@@ -831,10 +810,10 @@ class FaceEngine:
 
             # 2. Targeted Ride Zone Crop:
             # High-resolution DSLR balloon ride photos pack 6 guests in the basket (y in [0.60, 0.98], x in [0.15, 0.85]).
-            # Only execute crop inference if zero faces were detected in the global pass (or < 2 faces).
+            # Optimize: Only execute crop inference if the photo belongs to a Balloon ride OR as fallback if 0 faces were found.
             p_lower = file_path.lower()
             is_balloon_ride = any(k in p_lower for k in ["balon", "balloon", "basket", "udara", "/bl/"])
-            if is_balloon_ride and len(all_raw_faces) < 2 and max(orig_h, orig_w) > 1800:
+            if is_balloon_ride and max(orig_h, orig_w) > 1800:
                 by1, bx1, by2, bx2 = int(h * 0.60), int(w * 0.15), int(h * 0.98), int(w * 0.85)
                 basket_crop = proc_bgr[by1:by2, bx1:bx2]
                 if basket_crop.size > 0:
@@ -975,9 +954,9 @@ class FaceEngine:
     def extract_faces_from_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
         Extract face locations and encodings from in-memory bytes for guest reference selfies.
-        Uses priority preemption to execute immediately without queueing behind indexers.
+        Uses dedicated search model instance and lock to execute immediately without queueing behind indexers.
         """
-        if self.engine_name == "insightface" and self.insight_app is not None:
+        if self.engine_name == "insightface" and (self.search_insight_app is not None or self.insight_app is not None):
             return self._extract_insightface_bytes(image_bytes)
         with self.inference_lock:
             return self._extract_dlib_bytes(image_bytes)
@@ -985,7 +964,7 @@ class FaceEngine:
     def _extract_insightface_bytes(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
         Extract 512-d ArcFace embedding from in-memory selfie upload using InsightFace.
-        Accelerated with fast reference scaling (max 1280px).
+        Accelerated with fast reference scaling (max 1280px) and dedicated search session.
         """
         image_bgr = read_image_exif_aware(image_bytes)
         if image_bgr is None:
@@ -1002,16 +981,19 @@ class FaceEngine:
         else:
             h, w = orig_h, orig_w
 
-        with self.inference_lock:
-            raw_faces = self.insight_app.get(image_bgr)
+        app_to_use = self.search_insight_app or self.insight_app
+        lock_to_use = self.search_inference_lock if self.search_insight_app else self.inference_lock
+
+        with lock_to_use:
+            raw_faces = app_to_use.get(image_bgr)
 
         # Fallback multi-orientation check for selfies taken sideways on smartphones
         if not raw_faces:
             for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]:
                 try:
                     rotated_bgr = cv2.rotate(image_bgr, rot_code)
-                    with self.inference_lock:
-                        rot_faces = self.insight_app.get(rotated_bgr)
+                    with lock_to_use:
+                        rot_faces = app_to_use.get(rotated_bgr)
                     if rot_faces:
                         image_bgr = rotated_bgr
                         h, w = image_bgr.shape[:2]
@@ -1022,8 +1004,8 @@ class FaceEngine:
 
         # Fallback with relaxed det_thresh if tricky webcam lighting
         if not raw_faces and self.det_thresh > 0.35:
-            with self.inference_lock:
-                raw_faces = [f for f in self.insight_app.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
+            with lock_to_use:
+                raw_faces = [f for f in app_to_use.get(image_bgr) if getattr(f, "det_score", 1.0) >= 0.30]
 
         results = []
         for face in raw_faces:
@@ -1281,56 +1263,22 @@ class DatabaseManager:
                 logger.info("Flushed FAISS index to disk.")
 
     def is_photo_indexed(self, file_path: str, file_mtime: float, file_size: int) -> bool:
-        """
-        Check if a file has already been indexed with matching modification time, size, and vector dimension.
-        Resilient against path prefix discrepancies (e.g. /app/data/raw vs host /opt/SistemPhoto/data/raw vs relative).
-        Automatically self-heals stored SQLite path if a match is discovered via relative raw path.
-        """
-        norm_path = os.path.abspath(file_path).replace("\\", "/")
-        norm_bslash = norm_path.replace("/", "\\")
-
-        # Extract relative path under data/raw
-        rel_sub = None
-        if "/data/raw/" in norm_path:
-            rel_sub = norm_path.split("/data/raw/")[-1]
-        elif "data/raw/" in norm_path:
-            rel_sub = norm_path.split("data/raw/")[-1]
-
+        """Check if a file has already been indexed with matching modification time, size, and vector dimension."""
         with self.lock, self._get_connection() as conn:
-            # 1. Primary lookup by exact path or normalized path
             cursor = conn.execute(
-                "SELECT id, file_path, file_mtime, file_size, num_faces, status FROM photos WHERE file_path = ? OR file_path = ? OR file_path = ? LIMIT 1",
-                (file_path, norm_path, norm_bslash)
+                "SELECT id, file_mtime, file_size, num_faces, status FROM photos WHERE file_path = ?",
+                (file_path,)
             )
             row = cursor.fetchone()
-
-            # 2. Secondary fallback lookup by relative subpath under data/raw
-            if not row and rel_sub:
-                suffix_slash = "%/data/raw/" + rel_sub
-                suffix_bslash = "%\\data\\raw\\" + rel_sub.replace("/", "\\")
-                direct_suffix = "%/" + rel_sub
-                cursor = conn.execute(
-                    "SELECT id, file_path, file_mtime, file_size, num_faces, status FROM photos WHERE file_path LIKE ? OR file_path LIKE ? OR file_path LIKE ? LIMIT 1",
-                    (suffix_slash, suffix_bslash, direct_suffix)
-                )
-                row = cursor.fetchone()
-                if row:
-                    try:
-                        conn.execute("UPDATE photos SET file_path = ? WHERE id = ?", (norm_path, row["id"]))
-                        conn.commit()
-                        logger.debug(f"Self-healed photo path on check #{row['id']}: {row['file_path']} -> {norm_path}")
-                    except Exception:
-                        pass
-
             if row:
                 # If file previously had error or was 0 KB, only retry if file on disk changed (e.g. replaced/overwritten)
                 if row["status"] in ("error", "empty_file"):
-                    if abs(row["file_mtime"] - file_mtime) <= 2.0 and row["file_size"] == file_size:
+                    if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
                         return True
                     return False
 
                 # If modified or size changed, need re-indexing
-                if abs(row["file_mtime"] - file_mtime) <= 2.0 and row["file_size"] == file_size:
+                if abs(row["file_mtime"] - file_mtime) < 1e-4 and row["file_size"] == file_size:
                     # If photo has registered faces, ensure stored vector dimension matches current engine dimension
                     if row["num_faces"] > 0:
                         face_cur = conn.execute(
@@ -1346,31 +1294,17 @@ class DatabaseManager:
 
     def get_all_indexed_metadata(self) -> Dict[str, Tuple[float, int]]:
         """
-        High-performance batch check: returns mapping of indexed photos.
-        Indexes by full path, normalized path, and relative subpath from data/raw
-        to eliminate path format mismatches across environments.
+        High-performance batch check: returns {file_path: (file_mtime, file_size)}
+        in a single query across the entire database, eliminating thousands of individual SQLite queries.
         """
         with self._get_connection() as conn:
             cursor = conn.execute("SELECT file_path, file_mtime, file_size, status FROM photos")
             rows = cursor.fetchall()
-            metadata: Dict[str, Tuple[float, int]] = {}
-            for r in rows:
-                if r["status"] in ("error", "empty_file"):
-                    continue
-                fp = r["file_path"]
-                mtime = float(r["file_mtime"])
-                size = int(r["file_size"])
-                val = (mtime, size)
-                metadata[fp] = val
-                norm_fp = fp.replace("\\", "/")
-                metadata[norm_fp] = val
-                if "/data/raw/" in norm_fp:
-                    rel_sub = norm_fp.split("/data/raw/")[-1]
-                    metadata[rel_sub] = val
-                elif "data/raw/" in norm_fp:
-                    rel_sub = norm_fp.split("data/raw/")[-1]
-                    metadata[rel_sub] = val
-            return metadata
+            return {
+                r["file_path"]: (float(r["file_mtime"]), int(r["file_size"]))
+                for r in rows
+                if r["status"] not in ("error", "empty_file")
+            }
 
     def get_next_vector_id(self) -> int:
         """Generate a sequential unique vector ID for FAISS."""
@@ -1477,16 +1411,15 @@ class DatabaseManager:
             return None
 
         current_path = row["file_path"]
-        if os.path.isfile(current_path) and not is_ignored_path(current_path):
+        if os.path.isfile(current_path):
             return row, current_path
 
         # File not at recorded path; search raw_dir tree by filename
         filename = row["file_name"]
-        for root, dirs, files in os.walk(raw_dir):
-            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+        for root, _, files in os.walk(raw_dir):
             if filename in files:
                 new_path = os.path.join(root, filename)
-                if os.path.isfile(new_path) and not is_ignored_path(new_path):
+                if os.path.isfile(new_path):
                     with self.lock, self._get_connection() as conn:
                         try:
                             st = os.stat(new_path)
@@ -1502,13 +1435,11 @@ class DatabaseManager:
 
         return None
 
-    def purge_missing_photos(self, raw_dir: str, auto_delete: bool = False) -> Dict[str, int]:
+    def purge_missing_photos(self, raw_dir: str) -> Dict[str, int]:
         """
         Scan database for photos whose physical files are no longer on disk.
-        Attempts self-healing first if photos were moved to a subfolder or path prefix changed
-        (e.g. host /opt/SistemPhoto/data/raw -> container /app/data/raw).
-        If auto_delete is True, purges truly missing records from SQLite and FAISS vector index.
-        If auto_delete is False (default for startup sync), safely heals paths without deleting data.
+        Attempts self-healing first if photos were moved to a subfolder.
+        If truly missing, purges the records from SQLite and FAISS vector index.
         Returns dict with counts of purged photos, purged faces, and updated paths.
         """
         with self.lock:
@@ -1518,14 +1449,11 @@ class DatabaseManager:
             if not rows:
                 return {"purged_photos": 0, "purged_faces": 0, "updated_paths": 0}
 
-            # Pre-index existing files on disk for fast lookup: filename -> list of paths (followlinks=True)
+            # Pre-index existing files on disk for fast lookup: filename -> list of paths
             disk_files_by_name: Dict[str, List[str]] = {}
-            for root, dirs, files in os.walk(raw_dir, followlinks=True):
-                dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+            for root, _, files in os.walk(raw_dir):
                 for f in files:
-                    p = os.path.join(root, f)
-                    if not is_ignored_path(p):
-                        disk_files_by_name.setdefault(f, []).append(p)
+                    disk_files_by_name.setdefault(f, []).append(os.path.join(root, f))
 
             stale_photo_ids: List[int] = []
             stale_vector_ids: List[int] = []
@@ -1537,32 +1465,11 @@ class DatabaseManager:
                     curr_path = r["file_path"]
                     f_name = r["file_name"]
 
-                    # 1. If file exists and is NOT inside trash or hidden directory, it's valid
-                    if os.path.isfile(curr_path) and not is_ignored_path(curr_path):
+                    if os.path.isfile(curr_path):
                         continue
 
-                    # 2. Attempt self-healing via environment path prefix realignment (e.g. host /opt/SistemPhoto -> container /app)
-                    curr_clean = curr_path.replace("\\", "/")
-                    healed = False
-                    if "/data/raw/" in curr_clean:
-                        rel_candidate = curr_clean.split("/data/raw/")[-1]
-                        container_candidate = os.path.join(raw_dir, rel_candidate)
-                        if os.path.isfile(container_candidate) and not is_ignored_path(container_candidate):
-                            try:
-                                st = os.stat(container_candidate)
-                                conn.execute(
-                                    "UPDATE photos SET file_path = ?, file_mtime = ?, file_size = ? WHERE id = ?",
-                                    (container_candidate, st.st_mtime, st.st_size, p_id)
-                                )
-                                updated_count += 1
-                                logger.info(f"Self-healed environment path #{p_id}: {curr_path} -> {container_candidate}")
-                                healed = True
-                                continue
-                            except Exception:
-                                pass
-
-                    # 3. Attempt self-healing via subfolder search ONLY for valid non-trash paths
-                    possible_paths = [p for p in disk_files_by_name.get(f_name, []) if not is_ignored_path(p)]
+                    # Attempt self-healing via subfolder search
+                    possible_paths = disk_files_by_name.get(f_name, [])
                     if possible_paths:
                         new_path = possible_paths[0]
                         try:
@@ -1577,12 +1484,11 @@ class DatabaseManager:
                         except Exception:
                             pass
 
-                    # 4. Only purge if auto_delete is explicitly enabled (e.g. manual admin trigger)
-                    if auto_delete:
-                        stale_photo_ids.append(p_id)
-                        v_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (p_id,)).fetchall()
-                        for v in v_rows:
-                            stale_vector_ids.append(v["vector_id"])
+                    # Truly missing photo
+                    stale_photo_ids.append(p_id)
+                    v_rows = conn.execute("SELECT vector_id FROM faces WHERE photo_id = ?", (p_id,)).fetchall()
+                    for v in v_rows:
+                        stale_vector_ids.append(v["vector_id"])
 
                 # Remove stale records from SQLite (cascades to faces table)
                 if stale_photo_ids:
