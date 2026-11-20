@@ -685,7 +685,7 @@ async def scan_specific_subfolder(request: Request):
 async def purge_stale_records(request: Request):
     """Manually trigger purging of photos missing from disk."""
     require_admin(request)
-    return db_manager.purge_missing_photos(RAW_DIR)
+    return db_manager.purge_missing_photos(RAW_DIR, auto_delete=True)
 
 
 @app.post("/api/admin/results/cleanup")
@@ -836,7 +836,7 @@ async def get_system_stats():
 
 
 @app.post("/api/reindex")
-async def trigger_reindex(force: bool = Query(True)):
+async def trigger_reindex(force: bool = Query(False)):
     """Trigger manual re-scan of raw photos directory in background thread."""
     try:
         threading.Thread(
