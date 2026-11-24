@@ -979,7 +979,8 @@ async def search_guest_photos(
     guest_name: Optional[str] = Form(None),
     guest_phone: Optional[str] = Form(None),
     guest_crm_id: Optional[str] = Form(None),
-    guest_registered_at: Optional[str] = Form(None)
+    guest_registered_at: Optional[str] = Form(None),
+    entry_time: Optional[str] = Form(None)
 ):
     """
     Search endpoint:
@@ -995,8 +996,9 @@ async def search_guest_photos(
         clean_name = (guest_name or "").strip()
         clean_phone = (guest_phone or "").strip()
         clean_crm = (guest_crm_id or "").strip()
+        clean_entry_time = (entry_time or "").strip()
 
-        if not clean_name and not clean_phone and not clean_crm:
+        if not clean_name and not clean_phone and not clean_crm and not clean_entry_time:
             logger.warning("Pencarian foto ditolak: Data identitas tamu wajib diisi.")
             return JSONResponse(
                 status_code=422,
@@ -1120,7 +1122,10 @@ async def search_guest_photos(
                 clean_guest_name = re.sub(r'_+', '_', clean_guest_name).strip('_')
 
             phone_suffix = ""
-            if guest_phone and guest_phone.strip():
+            if entry_time and entry_time.strip():
+                time_digits = re.sub(r'\D', '', entry_time.strip())
+                phone_suffix = time_digits or ""
+            elif guest_phone and guest_phone.strip():
                 digits = re.sub(r'\D', '', guest_phone.strip())
                 if len(digits) >= 4:
                     phone_suffix = digits[-4:]
@@ -1258,10 +1263,14 @@ async def search_guest_photos(
 
             # Record guest visit and calculate stay duration
             visit_record = None
-            if (guest_name and guest_name.strip()) or guest_crm_id:
+            if (guest_name and guest_name.strip()) or guest_crm_id or entry_time:
                 try:
+                    # If entry_time is provided (from receipt on manual walk-in), resolve registered_at
+                    if entry_time and not guest_registered_at:
+                        guest_registered_at = entry_time.strip()
+
                     # Auto-resolve check-in time from Cloud CRM if not provided by client
-                    if not guest_registered_at and ((guest_phone and guest_phone.strip()) or (guest_name and guest_name.strip())):
+                    if not guest_registered_at and not entry_time and ((guest_phone and guest_phone.strip()) or (guest_name and guest_name.strip())):
                         try:
                             lookup_kw = (guest_phone or guest_name).strip()
                             crm_res = await search_crm_guests(q=lookup_kw, limit=10)
@@ -1293,9 +1302,11 @@ async def search_guest_photos(
                         guest_phone=guest_phone,
                         registered_at=guest_registered_at,
                         photo_count=len(matched_photos),
-                        customer_folder=customer_folder_name
+                        customer_folder=customer_folder_name,
+                        entry_time=entry_time
                     )
-                    if guest_crm_id:
+                    # Sync to Cloud CRM at submit.thelodgegroup.id for both CRM and manual walk-in guests
+                    if visit_record:
                         threading.Thread(
                             target=_sync_visit_to_crm,
                             args=(visit_record,),

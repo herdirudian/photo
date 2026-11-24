@@ -145,6 +145,15 @@ def parse_datetime_flexible(val: Any) -> Optional[datetime.datetime]:
     if not s or s.lower() in ("none", "null"):
         return None
     try:
+        # Time-only input from walk-in guest receipts (e.g. 10:30, 10:30:00, 10.30)
+        for time_fmt in ("%H:%M", "%H:%M:%S", "%H.%M", "%H.%M.%S"):
+            try:
+                t_obj = datetime.datetime.strptime(s, time_fmt).time()
+                today_wib = get_now_wib().date()
+                return datetime.datetime.combine(today_wib, t_obj, tzinfo=WIB)
+            except ValueError:
+                pass
+
         if s.endswith("Z"):
             dt = datetime.datetime.fromisoformat(s[:-1] + "+00:00")
             return dt.astimezone(WIB)
@@ -1972,11 +1981,13 @@ class DatabaseManager:
         registered_at: Optional[str] = None,
         claimed_at: Optional[datetime.datetime] = None,
         photo_count: int = 0,
-        customer_folder: Optional[str] = None
+        customer_folder: Optional[str] = None,
+        entry_time: Optional[str] = None
     ) -> Dict[str, Any]:
         """Record guest visit and calculate stay duration."""
         claimed_dt = claimed_at if (isinstance(claimed_at, datetime.datetime) and claimed_at.tzinfo is not None) else get_now_wib()
-        reg_dt = parse_datetime_flexible(registered_at)
+        reg_input = registered_at or entry_time
+        reg_dt = parse_datetime_flexible(reg_input)
 
         if reg_dt is not None:
             dwell_time_seconds = max(0, int((claimed_dt - reg_dt).total_seconds()))
@@ -1998,6 +2009,15 @@ class DatabaseManager:
                 cur = conn.execute(
                     "SELECT id FROM guest_visits WHERE crm_guest_id = ? AND date_key = ?",
                     (str(crm_guest_id).strip(), date_key)
+                )
+                row = cur.fetchone()
+                if row:
+                    existing_id = row[0]
+
+            if not existing_id and customer_folder:
+                cur = conn.execute(
+                    "SELECT id FROM guest_visits WHERE customer_folder = ? AND date_key = ?",
+                    (customer_folder, date_key)
                 )
                 row = cur.fetchone()
                 if row:
@@ -2026,7 +2046,7 @@ class DatabaseManager:
                 """, (
                     claimed_str,
                     dwell_time_seconds, dwell_time_seconds,
-                    reg_str, dwell_time_formatted,
+                    dwell_time_formatted, dwell_time_formatted,
                     photo_count,
                     customer_folder,
                     crm_guest_id,
@@ -2055,6 +2075,11 @@ class DatabaseManager:
                     photo_count, customer_folder, date_key
                 ))
                 visit_id = cur.lastrowid
+
+                if not crm_guest_id:
+                    crm_guest_id = f"walkin_{visit_id}"
+                    conn.execute("UPDATE guest_visits SET crm_guest_id = ? WHERE id = ?", (crm_guest_id, visit_id))
+
             conn.commit()
 
         return {

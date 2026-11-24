@@ -377,7 +377,7 @@
                   <input 
                     type="text" 
                     id="guest-search-input" 
-                    placeholder="Ketik nama atau 4 digit No. HP (misal: Herdi atau 7890)..." 
+                    placeholder="Ketik nama tamu di Form Online (misal: Herdi)..." 
                     autocomplete="off"
                     class="w-full pl-9 pr-9 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 outline-none transition"
                     oninput="handleGuestSearchInput(event)"
@@ -460,23 +460,33 @@
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Tamu <span class="text-rose-500">*</span></label>
+                    <label for="manual-guest-name-input" class="block text-xs font-semibold text-slate-700 mb-1">Nama Tamu <span class="text-rose-500">*</span></label>
                     <input 
                       type="text" 
                       id="manual-guest-name-input" 
                       placeholder="Contoh: Herdi Rudian" 
-                      class="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 focus:outline-none transition"
+                      class="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 focus:outline-none transition min-h-[44px]"
                       oninput="updateManualFolderPreview()"
                     />
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">4 Digit No HP / Catatan</label>
+                    <div class="flex items-center justify-between mb-1">
+                      <label for="manual-guest-time-input" class="block text-xs font-semibold text-slate-700">
+                        Jam Masuk (Sesuai Struk) <span class="text-rose-500">*</span>
+                      </label>
+                      <button 
+                        type="button" 
+                        onclick="setCurrentTimeForManualGuest(true)" 
+                        class="text-[11px] font-medium text-lodge-700 hover:text-lodge-900 focus-ring rounded px-1.5 py-0.5"
+                      >
+                        Jam Sekarang
+                      </button>
+                    </div>
                     <input 
-                      type="text" 
-                      id="manual-guest-phone-input" 
-                      maxlength="15" 
-                      placeholder="Contoh: 7890" 
-                      class="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 focus:outline-none transition font-mono"
+                      type="time" 
+                      id="manual-guest-time-input" 
+                      step="60"
+                      class="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:border-lodge-600 focus:ring-2 focus:ring-lodge-600/20 focus:outline-none transition font-mono min-h-[44px]"
                       oninput="updateManualFolderPreview()"
                     />
                   </div>
@@ -1634,21 +1644,33 @@
     let guestSearchDebounceTimer = null;
     let isManualGuestMode = false;
 
+    function setCurrentTimeForManualGuest(force = false) {
+      const timeInput = document.getElementById('manual-guest-time-input');
+      if (!timeInput) return;
+      if (!force && timeInput.value) return;
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      timeInput.value = `${hours}:${minutes}`;
+      updateManualFolderPreview();
+    }
+
     function getActiveGuestInfo() {
       if (isManualGuestMode) {
         const manualName = (document.getElementById('manual-guest-name-input')?.value || '').trim();
-        const manualPhone = (document.getElementById('manual-guest-phone-input')?.value || '').trim();
-        return { name: manualName, phone: manualPhone };
+        const manualTime = (document.getElementById('manual-guest-time-input')?.value || '').trim();
+        return { name: manualName, entryTime: manualTime, phone: '' };
       }
       if (activeGuest) {
-        return { name: activeGuest.name, phone: activeGuest.phone };
+        return { name: activeGuest.name, phone: activeGuest.phone, submitted_at: activeGuest.submitted_at };
       }
-      return { name: '', phone: '' };
+      return { name: '', phone: '', entryTime: '' };
     }
 
     function validateGuestData() {
       if (isManualGuestMode) {
         const manualName = (document.getElementById('manual-guest-name-input')?.value || '').trim();
+        const manualTime = (document.getElementById('manual-guest-time-input')?.value || '').trim();
         if (!manualName) {
           return {
             valid: false,
@@ -1656,7 +1678,14 @@
             targetElementId: 'manual-guest-name-input'
           };
         }
-        return { valid: true, name: manualName };
+        if (!manualTime) {
+          return {
+            valid: false,
+            message: 'Jam masuk sesuai struk tamu wajib diisi.',
+            targetElementId: 'manual-guest-time-input'
+          };
+        }
+        return { valid: true, name: manualName, entryTime: manualTime };
       } else {
         if (activeGuest && activeGuest.name) {
           return { valid: true, name: activeGuest.name };
@@ -1665,7 +1694,7 @@
         if (!searchVal) {
           return {
             valid: false,
-            message: 'Data tamu wajib diisi. Silakan cari nama atau No. HP di Form Online atau klik "Input Manual (Walk-in)".',
+            message: 'Data tamu wajib diisi. Silakan cari nama di Form Online atau gunakan opsi "Input Manual (Walk-in)".',
             targetElementId: 'guest-search-input'
           };
         }
@@ -1684,7 +1713,7 @@
       const wrapper = document.getElementById('guest-section-wrapper');
 
       const isFilled = isManualGuestMode
-        ? !!(document.getElementById('manual-guest-name-input')?.value || '').trim()
+        ? (!!(document.getElementById('manual-guest-name-input')?.value || '').trim() && !!(document.getElementById('manual-guest-time-input')?.value || '').trim())
         : !!activeGuest;
 
       if (badge) {
@@ -1747,6 +1776,10 @@
         selectedContainer?.classList.add('hidden');
         manualContainer?.classList.remove('hidden');
         if (toggleBtn) toggleBtn.textContent = 'Cari di Form Online';
+        const timeInput = document.getElementById('manual-guest-time-input');
+        if (timeInput && !timeInput.value) {
+          setCurrentTimeForManualGuest(true);
+        }
         updateManualFolderPreview();
       } else {
         manualContainer?.classList.add('hidden');
@@ -1764,13 +1797,13 @@
 
     function updateManualFolderPreview() {
       const nameInput = document.getElementById('manual-guest-name-input')?.value || '';
-      const phoneInput = document.getElementById('manual-guest-phone-input')?.value || '';
+      const timeInput = document.getElementById('manual-guest-time-input')?.value || '';
       const previewEl = document.getElementById('manual-folder-preview');
       if (!previewEl) return;
 
       const cleanName = nameInput.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-      const digits = phoneInput.replace(/\D/g, '');
-      const suffix = digits.length >= 4 ? digits.slice(-4) : (digits || 'XXXX');
+      const timeDigits = timeInput.replace(/\D/g, '');
+      const suffix = timeDigits || 'WalkIn';
 
       if (cleanName) {
         previewEl.textContent = `${cleanName}_${suffix}`;
@@ -2455,14 +2488,23 @@
       if (guestInfo.phone) {
         formData.append('guest_phone', guestInfo.phone);
       }
-      if (!isManualGuestMode && activeGuest) {
+      if (isManualGuestMode) {
+        if (guestInfo.entryTime) {
+          formData.append('entry_time', guestInfo.entryTime);
+          const now = new Date();
+          const yyyy = now.getFullYear();
+          const mm = String(now.getMonth() + 1).padStart(2, '0');
+          const dd = String(now.getDate()).padStart(2, '0');
+          formData.append('guest_registered_at', `${yyyy}-${mm}-${dd} ${guestInfo.entryTime}:00`);
+        }
+      } else if (activeGuest) {
         if (activeGuest.id) {
           formData.append('guest_crm_id', activeGuest.id);
         }
         if (activeGuest.submitted_at) {
           formData.append('guest_registered_at', activeGuest.submitted_at);
         }
-      } else if (!isManualGuestMode && !activeGuest) {
+      } else {
         // Fallback: If operator typed in the CRM search box without clicking autocomplete dropdown
         const rawSearchVal = (document.getElementById('guest-search-input')?.value || '').trim();
         if (rawSearchVal && !guestInfo.name) {
